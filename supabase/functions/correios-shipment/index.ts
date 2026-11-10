@@ -11,7 +11,7 @@ import { buildOwnLabel, ownLabelsToA4, readOfficialDataMatrix, dataMatrixProblem
 const BUCKET = 'correios-labels';
 const ACTIVE = '(cancelada,erro)';
 const body = z.discriminatedUnion('action', [
-  z.object({ action: z.literal('create'), sale_id: z.string().uuid(), dry_run: z.boolean().optional(), simulate_service_code: z.string().regex(/^\d{5}$/).optional() }),
+  z.object({ action: z.literal('create'), sale_id: z.string().uuid(), dry_run: z.boolean().optional(), simulate_service_code: z.string().regex(/^\d{5}$/).optional(), only_nfe_chave: z.string().regex(/^\d{44}$/).optional() }),
   z.object({ action: z.literal('label'), shipment_id: z.string().uuid(), format: z.enum(['propria_10x15', 'propria_a4', 'oficial_10x15', 'oficial_a4']).optional() }),
   z.object({ action: z.literal('cancel'), shipment_id: z.string().uuid(), reason: z.string().trim().min(3).max(200) }),
   z.object({ action: z.literal('list'), sale_ids: z.array(z.string().uuid()).min(1).max(200) }),
@@ -212,13 +212,19 @@ Deno.serve(withAccessLog("correios-shipment", async (req) => {
         if (b.dry_run) return reply({ dry_run: true, ok: false, problems: [msg], summary: { ...summaryBase, nfes: [...nfeMap.values()].map((d) => ({ numero: d.numero, chave: d.chave_acesso })), nfe_faltantes: missingNfe.map((s) => s.id) } });
         throw fail(msg);
       }
-      const nfes = ids.map((id) => summarize(nfeMap.get(id)));
+      // Legacy unified shipment whose NF-es came from different issuers: staff may pick ONE note for the label (the other travels inside the box).
+      let labelIds = ids;
+      if (b.only_nfe_chave) {
+        labelIds = ids.filter((id) => nfeMap.get(id)?.chave_acesso === b.only_nfe_chave);
+        if (!labelIds.length) throw fail('Essa NF-e não pertence a este envio');
+      }
+      const nfes = labelIds.map((id) => summarize(nfeMap.get(id)));
       const settings = await loadCorreiosSettings(db);
       if (!settings.enabled) throw fail('Integração Correios desativada no Admin');
       const companyIds = [...new Set(ids.map((id) => nfeMap.get(id)?.company_id).filter(Boolean))];
       const { data: companies, error: compErr } = companyIds.length ? await db.from('companies').select('id,cnpj').in('id', companyIds) : { data: [], error: null };
       if (compErr) throw new Error('Não foi possível ler a empresa emitente da NF-e');
-      const issuer = ids.map((id) => (companies || []).find((c: any) => c.id === nfeMap.get(id)?.company_id)?.cnpj);
+      const issuer = labelIds.map((id) => (companies || []).find((c: any) => c.id === nfeMap.get(id)?.company_id)?.cnpj);
       const resolved = resolveLabelSender(settings.remetente as any, issuer);
       if (!resolved.sender) { if (b.dry_run) return reply({ dry_run: true, ok: false, problems: [resolved.problem], summary: { ...summaryBase, nfes: nfes.map((n) => ({ numero: n.numero, serie: n.serie, chave: n.chave })) } }); throw fail(resolved.problem || 'Emitente não encontrado'); }
       const { payload, problems } = buildPrePostagemPayload({ sender: resolved.sender, sale, serviceCode: String(option.service_code), pkg: quote.package as any, nfes, reference: sale.id.slice(0, 8) });

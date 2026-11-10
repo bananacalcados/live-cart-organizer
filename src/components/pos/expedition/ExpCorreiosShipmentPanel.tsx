@@ -37,8 +37,9 @@ export function ExpCorreiosShipmentPanel({ saleId, refreshKey, onTracking, print
 
   const run = async <T,>(fn: () => Promise<T>) => { if (busy) return; setBusy(true); setError(''); try { return await fn(); } catch (e) { setError(e instanceof Error ? e.message : 'Falha'); } finally { setBusy(false); } };
   const apply = (s: CorreiosShipment) => { setShipment(s); if (s.codigo_objeto) onTracking?.(s.codigo_objeto); if (s.error_message) setError(s.error_message); };
-  const openPreview = () => run(async () => setPreview(await freightCall<Summary>('correios-shipment', { action: 'create', sale_id: saleId, dry_run: true })));
-  const create = () => run(async () => { const r = await freightCall<{ shipment: CorreiosShipment }>('correios-shipment', { action: 'create', sale_id: saleId }); setPreview(null); apply(r.shipment); if (r.shipment.codigo_objeto) toast.success('Etiqueta Correios gerada'); });
+  const [onlyNfe, setOnlyNfe] = useState<string | null>(null);
+  const openPreview = (only: string | null = null) => run(async () => { setOnlyNfe(only); setPreview(await freightCall<Summary>('correios-shipment', { action: 'create', sale_id: saleId, dry_run: true, ...(only ? { only_nfe_chave: only } : {}) })); });
+  const create = () => run(async () => { const r = await freightCall<{ shipment: CorreiosShipment }>('correios-shipment', { action: 'create', sale_id: saleId, ...(onlyNfe ? { only_nfe_chave: onlyNfe } : {}) }); setPreview(null); apply(r.shipment); if (r.shipment.codigo_objeto) toast.success('Etiqueta Correios gerada'); });
   const open = (format: CorreiosLabelFormat) => run(async () => {
     if (!shipment) return;
     const tab = reserveCorreiosPrintTab();
@@ -58,7 +59,7 @@ export function ExpCorreiosShipmentPanel({ saleId, refreshKey, onTracking, print
   return <div className="space-y-3 rounded-md border border-border p-3">
     <p className="font-bold flex items-center gap-2"><Tag className="h-4 w-4" />Correios (contrato)</p>
     {error && <p role="alert" className="text-sm text-destructive break-words">{error}</p>}
-    {!shipment && !preview && <Button onClick={openPreview} disabled={busy}>{busy ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Tag className="h-4 w-4 mr-2" />}Gerar etiqueta Correios</Button>}
+    {!shipment && !preview && <Button onClick={() => openPreview()} disabled={busy}>{busy ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Tag className="h-4 w-4 mr-2" />}Gerar etiqueta Correios</Button>}
     {!shipment && preview && <div className="space-y-2 text-sm">
       <p><b>Serviço:</b> {preview.summary.servico} · {Number(preview.summary.price).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p>
       <p><b>Pacote:</b> {preview.summary.package.peso_g} g · {preview.summary.package.c}×{preview.summary.package.l}×{preview.summary.package.a} cm</p>
@@ -66,7 +67,9 @@ export function ExpCorreiosShipmentPanel({ saleId, refreshKey, onTracking, print
       <p><b>NF-e:</b> {preview.summary.nfes.length ? preview.summary.nfes.map((n) => `Nº ${n.numero}`).join(', ') : 'nenhuma encontrada'}</p>
       {preview.summary.remetente && <p><b>Remetente:</b> {preview.summary.remetente.nome} · CNPJ {preview.summary.remetente.cnpj.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, '$1.$2.$3/$4-$5')}</p>}
       {preview.problems.map((p) => <p key={p} role="alert" className="text-destructive break-words">{p}</p>)}
-      <div className="flex flex-wrap gap-2"><Button onClick={create} disabled={busy || !preview.ok}>{busy && <Loader2 className="h-4 w-4 animate-spin mr-2" />}Confirmar e gerar</Button><Button variant="outline" onClick={() => setPreview(null)} disabled={busy}>Voltar</Button></div>
+      {!onlyNfe && preview.problems.some((p) => p.includes('emitentes diferentes')) && preview.summary.nfes.length > 1 && <div className="space-y-1"><p>Gerar uma etiqueta só, com apenas uma nota (a outra nota vai impressa dentro da caixa):</p><div className="flex flex-wrap gap-2">{preview.summary.nfes.map((n) => <Button key={n.chave} size="sm" variant="secondary" disabled={busy} onClick={() => openPreview(n.chave)}>Usar só a NF-e nº {n.numero}</Button>)}</div></div>}
+      {onlyNfe && <p className="text-muted-foreground">Etiqueta com apenas uma nota. Coloque a outra nota impressa dentro da caixa.</p>}
+      <div className="flex flex-wrap gap-2"><Button onClick={create} disabled={busy || !preview.ok}>{busy && <Loader2 className="h-4 w-4 animate-spin mr-2" />}Confirmar e gerar</Button><Button variant="outline" onClick={() => { setPreview(null); setOnlyNfe(null); }} disabled={busy}>Voltar</Button></div>
     </div>}
     {shipment && <div className="space-y-2">
       <div className="flex flex-wrap items-center gap-2"><Badge variant="secondary">{STATUS[shipment.status] || shipment.status}</Badge>{shipment.servico_nome && <Badge variant="outline">{shipment.servico_nome}</Badge>}
