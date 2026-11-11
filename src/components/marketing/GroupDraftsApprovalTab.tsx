@@ -269,7 +269,7 @@ export function GroupDraftsApprovalTab() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setApprove(null)}>Cancelar</Button>
-            <Button disabled={working || (pastChecked.length > 0 && !pastOk)} onClick={doApprove}>
+            <Button disabled={working || (pastChecked.length > 0 && !pastOk) || !(approve || []).some(c => buildApproval(c, checked))} onClick={doApprove}>
               {working && <Loader2 className="h-4 w-4 mr-1 animate-spin" />}Confirmar aprovação
             </Button>
           </DialogFooter>
