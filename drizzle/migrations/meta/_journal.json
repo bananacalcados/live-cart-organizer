@@ -1289,6 +1289,13 @@
       "when": 1794406195217,
       "tag": "0183_fix_approve_group_drafts_synced",
       "breakpoints": true
+    },
+    {
+      "idx": 184,
+      "version": "7",
+      "when": 1794407214343,
+      "tag": "0184_group_drafts_central_tab",
+      "breakpoints": true
     }
   ]
 }
