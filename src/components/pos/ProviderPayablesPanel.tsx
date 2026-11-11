@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { SignedReceiptLink } from "@/components/pos/SignedReceiptImage";
 import { Truck, Loader2, DollarSign, Printer, FileText, Plus, CheckCircle, History, ChevronRight, Paperclip } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -236,9 +237,9 @@ export function ProviderPayablesPanel({ storeId, cashRegisterId, onPaid }: Props
                 </div>
                 <span className="text-sm font-bold text-pos-orange">{brl(Number(h.total_amount || 0))}</span>
                 {h.proof_file_url ? (
-                  <a href={h.proof_file_url} target="_blank" rel="noreferrer" className="text-green-400 hover:text-green-300" title="Ver recibo assinado">
+                  <SignedReceiptLink url={h.proof_file_url} target="_blank" rel="noreferrer" className="text-green-400 hover:text-green-300" title="Ver recibo assinado">
                     <FileText className="h-4 w-4" />
-                  </a>
+                  </SignedReceiptLink>
                 ) : (
                   <Button variant="ghost" size="icon" className="h-8 w-8 text-pos-white/60 hover:text-pos-orange" title="Anexar recibo assinado" onClick={() => { setUploadingFor(h.id); uploadRef.current?.click(); }}>
                     {uploadingFor === h.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Paperclip className="h-4 w-4" />}

@@ -1352,6 +1352,20 @@
       "when": 1794428516693,
       "tag": "0192_fiscal_one_exit_note_and_sale_cpf",
       "breakpoints": true
+    },
+    {
+      "idx": 193,
+      "version": "7",
+      "when": 1794434385857,
+      "tag": "0193_security_rls_forms_storage",
+      "breakpoints": true
+    },
+    {
+      "idx": 194,
+      "version": "7",
+      "when": 1794434474784,
+      "tag": "0194_fix_public_form_checks",
+      "breakpoints": true
     }
   ]
 }

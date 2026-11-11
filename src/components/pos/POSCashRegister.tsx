@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { SignedReceiptImage } from "@/components/pos/SignedReceiptImage";
 import { DollarSign, Lock, Unlock, ArrowDown, ArrowUp, Calculator, Clock, Search, Loader2, Receipt, Camera, CreditCard, Smartphone, Trash2, Image, Eye, List, FileText, Printer, Wallet } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -658,7 +659,7 @@ export function POSCashRegister({ storeId, sellerId }: Props) {
                 {receipts.map(r => (
                   <div key={r.id} className="flex items-center gap-3 p-3 rounded-xl bg-pos-white/5 border border-pos-orange/10 hover:border-pos-orange/30 transition-colors">
                     <button onClick={() => setPreviewImage(r.receipt_image_url)} className="h-14 w-14 rounded-lg overflow-hidden bg-pos-white/10 flex-shrink-0 hover:ring-2 ring-pos-orange transition-all">
-                      <img src={r.receipt_image_url} alt="Comprovante" className="h-full w-full object-cover" />
+                      <SignedReceiptImage url={r.receipt_image_url} alt="Comprovante" className="h-full w-full object-cover" />
                     </button>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-0.5">
@@ -886,7 +887,7 @@ export function POSCashRegister({ storeId, sellerId }: Props) {
             <DialogTitle className="text-pos-white">Comprovante</DialogTitle>
           </DialogHeader>
           {previewImage && (
-            <img src={previewImage} alt="Comprovante" className="w-full max-h-[70vh] object-contain rounded-lg" />
+            <SignedReceiptImage url={previewImage} alt="Comprovante" className="w-full max-h-[70vh] object-contain rounded-lg" />
           )}
         </DialogContent>
       </Dialog>

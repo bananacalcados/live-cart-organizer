@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
+import { SignedReceiptImage } from "@/components/pos/SignedReceiptImage";
 import { Calendar, Loader2, Printer, Download, DollarSign, ArrowUp, ArrowDown, Receipt, Image as ImageIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -500,7 +501,7 @@ ${receipts.map(r => `<tr><td>${dt(r.created_at)}</td><td>${methodLabel(r.payment
           ) : receipts.map(r => (
             <div key={r.id} className="flex items-center gap-3 p-3 rounded-xl bg-pos-white/5 border border-pos-orange/10">
               <button onClick={() => setPreviewImage(r.receipt_image_url)} className="h-12 w-12 rounded-lg overflow-hidden bg-pos-white/10 flex-shrink-0 hover:ring-2 ring-pos-orange transition-all">
-                <img src={r.receipt_image_url} alt={`Comprovante ${methodLabel(r.payment_method)}`} className="h-full w-full object-cover" loading="lazy" />
+                <SignedReceiptImage url={r.receipt_image_url} alt={`Comprovante ${methodLabel(r.payment_method)}`} className="h-full w-full object-cover" loading="lazy" />
               </button>
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2">
@@ -517,7 +518,7 @@ ${receipts.map(r => `<tr><td>${dt(r.created_at)}</td><td>${methodLabel(r.payment
 
       <Dialog open={!!previewImage} onOpenChange={() => setPreviewImage(null)}>
         <DialogContent className="bg-pos-black border-pos-orange/30 max-w-3xl">
-          {previewImage && <img src={previewImage} alt="Comprovante ampliado" className="w-full rounded-lg" />}
+          {previewImage && <SignedReceiptImage url={previewImage} alt="Comprovante ampliado" className="w-full rounded-lg" />}
         </DialogContent>
       </Dialog>
     </div>
