@@ -200,7 +200,7 @@ export function GroupDraftsApprovalTab() {
               <Checkbox checked={!!selected[card.card_key]} onCheckedChange={v => setSelected(s => ({ ...s, [card.card_key]: !!v }))} />
               {card.draft_batch && <Badge variant="outline">{card.draft_batch}</Badge>}
               <Badge variant="secondary">{card.created_by?.toLowerCase().includes('claude') ? 'Claude' : (card.created_by || 'Equipe')}</Badge>
-              {card.copies.some(c => c.content_differs) && <Badge variant="outline" className="border-warning text-warning"><AlertTriangle className="h-3 w-3 mr-1" />conteúdo diferente</Badge>}
+              {card.copies.some(c => c.content_differs) && <Badge variant="outline" className="border-accent text-accent"><AlertTriangle className="h-3 w-3 mr-1" />conteúdo diferente</Badge>}
               <div className="ml-auto flex gap-1">
                 {status === 'past' && <Button size="sm" variant="ghost" onClick={() => setConfirmDelete([card])}><Trash2 className="h-3.5 w-3.5" /></Button>}
                 <Button size="sm" onClick={() => openApprove([card])}><CheckCircle className="h-3.5 w-3.5 mr-1" />Aprovar</Button>
@@ -212,7 +212,7 @@ export function GroupDraftsApprovalTab() {
                 return (
                   <DropdownMenu key={cp.id}>
                     <DropdownMenuTrigger asChild>
-                      <button className={`text-xs rounded-full border px-2 py-0.5 flex items-center gap-1 ${st === 'blocked' ? 'border-destructive text-destructive' : st === 'differs' ? 'border-warning text-warning' : 'border-primary/40 text-foreground'}`}>
+                      <button className={`text-xs rounded-full border px-2 py-0.5 flex items-center gap-1 ${st === 'blocked' ? 'border-destructive text-destructive' : st === 'differs' ? 'border-accent text-accent' : 'border-primary/40 text-foreground'}`}>
                         {st === 'blocked' ? <XCircle className="h-3 w-3" /> : <CheckCircle className="h-3 w-3" />}
                         {cp.campaign_name || 'Campanha'} {fmtTime(cp.scheduled_at)} · {st === 'blocked' ? reasonLabel(cp.reason!) : st === 'differs' ? 'conteúdo diferente' : 'pronta'}
                         {past && <span className="flex items-center gap-0.5 text-muted-foreground"><Clock className="h-3 w-3" />passado</span>}
@@ -254,14 +254,14 @@ export function GroupDraftsApprovalTab() {
                       <Checkbox checked={!!checked[cp.id]} onCheckedChange={v => setChecked(s => ({ ...s, [cp.id]: !!v }))} />}
                     <span>{cp.campaign_name || 'Campanha'} · {fmtTime(cp.scheduled_at)}</span>
                     {cp.reason && <span className="text-destructive text-xs">{reasonLabel(cp.reason)}</span>}
-                    {!cp.reason && cp.content_differs && <span className="text-warning text-xs">conteúdo diferente</span>}
+                    {!cp.reason && cp.content_differs && <span className="text-accent text-xs">conteúdo diferente</span>}
                     {isPast(cp) && <span className="text-muted-foreground text-xs">horário passado</span>}
                   </label>
                 ))}
               </div>
             ))}
             {pastChecked.length > 0 && (
-              <label className="flex items-start gap-2 rounded border border-warning p-2 text-sm">
+              <label className="flex items-start gap-2 rounded border border-accent p-2 text-sm">
                 <Checkbox checked={pastOk} onCheckedChange={v => setPastOk(!!v)} />
                 <span>Entendi: {pastChecked.length} cópia(s) com horário no passado serão enviadas assim que aprovadas.</span>
               </label>
@@ -346,7 +346,7 @@ function EditBlockDialog({ card, block, onClose, onSave }: {
               <label key={c.campaign_id} className="flex items-center gap-2 text-sm">
                 <Checkbox checked={!!camps[c.campaign_id]} onCheckedChange={v => setCamps(s => ({ ...s, [c.campaign_id]: !!v }))} />
                 {c.campaign_name || 'Campanha'} · {fmtTime(c.scheduled_at)}
-                {c.content_differs && <span className="text-warning text-xs">conteúdo diferente</span>}
+                {c.content_differs && <span className="text-accent text-xs">conteúdo diferente</span>}
               </label>
             ))}
             <p className="text-[11px] text-muted-foreground">O horário de cada campanha não muda.</p>
