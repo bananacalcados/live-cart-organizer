@@ -105,7 +105,9 @@ export function LiveShownProductsPanel({ eventId, compact = false }: { eventId: 
   const [savingOffer, setSavingOffer] = useState(false);
   const [selectedCodes, setSelectedCodes] = useState<string[]>([]);
   const [bulkOpen, setBulkOpen] = useState(false);
+  const [bulkPriceMode, setBulkPriceMode] = useState<"fixed" | "discount">("fixed");
   const [bulkOfferPrice, setBulkOfferPrice] = useState("");
+  const [bulkSkipExisting, setBulkSkipExisting] = useState(true);
   const [bulkFreeShipping, setBulkFreeShipping] = useState<"keep" | "yes" | "no">("keep");
   const [savingBulk, setSavingBulk] = useState(false);
   const lastKey = useRef("");
@@ -351,31 +353,73 @@ export function LiveShownProductsPanel({ eventId, compact = false }: { eventId: 
   const toggleSelected = (code: string, checked: boolean) => {
     setSelectedCodes((current) => checked ? [...new Set([...current, code])] : current.filter((item) => item !== code));
   };
+  const bulkTargetRows = selectedRows.filter((row) => !bulkSkipExisting || (row.offer_price == null && !row.promotion_id));
+  const bulkMaintainedCount = selectedRows.length - bulkTargetRows.length;
   const openBulk = () => {
+    setBulkPriceMode("fixed");
     setBulkOfferPrice("");
+    setBulkSkipExisting(true);
     setBulkFreeShipping("keep");
     setBulkOpen(true);
   };
   const saveBulk = async () => {
-    let patch: { offer_price?: number; free_shipping?: boolean };
-    try { patch = buildBulkPresenterPatch({ offerPrice: bulkOfferPrice, freeShipping: bulkFreeShipping }); }
-    catch (error: any) { toast.error(error.message); return; }
-    if (!Object.keys(patch).length) { toast.warning("Escolha um preço ou uma opção de frete"); return; }
-    if (patch.offer_price != null) {
-      const invalid = selectedRows.find((row) => row.sale_price != null && patch.offer_price! >= Number(row.sale_price));
+    let basePatch: { offer_price?: number; free_shipping?: boolean };
+    let discountPercent: number | null = null;
+    try {
+      if (bulkPriceMode === "discount") {
+        const rawDiscount = bulkOfferPrice.trim();
+        if (rawDiscount) {
+          discountPercent = Number(rawDiscount.replace(/\./g, "").replace(",", "."));
+          if (!Number.isFinite(discountPercent) || discountPercent < 1 || discountPercent > 90) {
+            throw new Error("Informe um desconto entre 1% e 90%");
+          }
+        }
+        basePatch = buildBulkPresenterPatch({ offerPrice: "", freeShipping: bulkFreeShipping });
+      } else {
+        basePatch = buildBulkPresenterPatch({ offerPrice: bulkOfferPrice, freeShipping: bulkFreeShipping });
+      }
+    } catch (error: any) { toast.error(error.message); return; }
+    if (!Object.keys(basePatch).length && discountPercent == null) {
+      toast.warning("Escolha um preço, desconto ou uma opção de frete"); return;
+    }
+    if (!bulkTargetRows.length) { toast.info("Todos os produtos selecionados serão mantidos"); return; }
+    if (basePatch.offer_price != null) {
+      const invalid = bulkTargetRows.find((row) => row.sale_price != null && basePatch.offer_price! >= Number(row.sale_price));
       if (invalid) { toast.error(`A oferta precisa ser menor que o preço cheio de ${invalid.code}`); return; }
     }
-    const changedRows = selectedRows.filter((row) => presenterConditionsChanged(row, patch));
-    if (!changedRows.length) { toast.info("Os produtos selecionados já estão com essas condições"); return; }
+    if (discountPercent != null) {
+      const withoutPrice = bulkTargetRows.find((row) => row.sale_price == null || Number(row.sale_price) <= 0);
+      if (withoutPrice) { toast.error(`Não foi possível calcular o desconto de ${withoutPrice.code}: preço cheio indisponível`); return; }
+    }
+    const updates = bulkTargetRows.map((row) => {
+      const patch = { ...basePatch };
+      if (discountPercent != null) {
+        patch.offer_price = Math.round((Number(row.sale_price) * (1 - discountPercent / 100) + Number.EPSILON) * 100) / 100;
+      }
+      return { row, patch };
+    }).filter(({ row, patch }) => presenterConditionsChanged(row, patch));
+    if (!updates.length) { toast.info("Os produtos selecionados já estão com essas condições"); return; }
+
     setSavingBulk(true);
-    const { error } = await db.from("live_presenter_products")
-      .update({ ...patch, updated_at: new Date().toISOString() })
-      .in("id", changedRows.map((row) => row.preparedId));
+    const failures: string[] = [];
+    let succeeded = 0;
+    for (let index = 0; index < updates.length; index += 10) {
+      await Promise.all(updates.slice(index, index + 10).map(async ({ row, patch }) => {
+        const { error } = await db.from("live_presenter_products")
+          .update({ ...patch, updated_at: new Date().toISOString() })
+          .eq("id", row.preparedId);
+        if (error) failures.push(row.code);
+        else succeeded += 1;
+      }));
+    }
     setSavingBulk(false);
-    if (error) { toast.error("Não foi possível salvar em grupo: " + error.message); return; }
-    toast.success(`Condições aplicadas a ${changedRows.length} produtos`);
-    setBulkOpen(false);
-    setSelectedCodes([]);
+    if (failures.length) {
+      toast.error(`${succeeded} produto(s) atualizados. Falharam: ${failures.join(", ")}`);
+    } else {
+      toast.success(`Condições aplicadas a ${succeeded} produtos`);
+      setBulkOpen(false);
+      setSelectedCodes([]);
+    }
     load();
   };
 
@@ -581,8 +625,26 @@ export function LiveShownProductsPanel({ eventId, compact = false }: { eventId: 
           <div className="space-y-4">
             <p className="text-sm text-muted-foreground">Somente os campos escolhidos abaixo serão alterados. Numerações, parcelas e promoções continuam como estão.</p>
             <div className="space-y-1">
-              <Label htmlFor="bulk-offer">Preço promocional para todos os selecionados</Label>
-              <Input id="bulk-offer" inputMode="decimal" placeholder="Vazio = não alterar" value={bulkOfferPrice} onChange={(event) => setBulkOfferPrice(event.target.value)} />
+              <Label>Modo do preço</Label>
+              <Select value={bulkPriceMode} onValueChange={(value) => setBulkPriceMode(value as "fixed" | "discount")}>
+                <SelectTrigger aria-label="Modo do preço"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="fixed">Preço fixo (R$)</SelectItem>
+                  <SelectItem value="discount">Desconto (%)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="bulk-offer">{bulkPriceMode === "fixed" ? "Preço promocional para todos os selecionados" : "Desconto sobre o preço cheio (%)"}</Label>
+              <Input id="bulk-offer" inputMode="decimal" placeholder={bulkPriceMode === "fixed" ? "Vazio = não alterar" : "Ex.: 11"} value={bulkOfferPrice} onChange={(event) => setBulkOfferPrice(event.target.value)} />
+              {bulkPriceMode === "discount" && <p className="text-xs text-muted-foreground">De 1% a 90%. Cada produto terá seu próprio preço calculado e arredondado para 2 casas.</p>}
+            </div>
+            <div className="flex items-start gap-2">
+              <Checkbox id="bulk-skip-existing" checked={bulkSkipExisting} onCheckedChange={(checked) => setBulkSkipExisting(!!checked)} className="mt-0.5" />
+              <Label htmlFor="bulk-skip-existing" className="font-normal leading-snug">Não alterar produtos que já têm preço de oferta ou promoção progressiva</Label>
+            </div>
+            <div aria-live="polite" className="rounded-md bg-muted p-2 text-sm font-medium">
+              Vai alterar {bulkTargetRows.length} produtos · {bulkMaintainedCount} mantidos
             </div>
             <div className="space-y-1">
               <Label>Frete</Label>
