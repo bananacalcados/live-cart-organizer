@@ -11,14 +11,16 @@ import { ACTION, ETAPA, TRIAGE } from "./AutoSuggestionsPanel";
 
 interface Item {
   id: string; phone: string; channel: string; instance_name: string | null; last_incoming_at: string | null; customer_name: string | null;
-  conversation: { from: string; text: string; at: string }[] | null; triage_category: string | null; triage_confidence: number | null;
+  conversation: { from: string; text: string; at: string; instance?: string }[] | null; triage_category: string | null; triage_confidence: number | null;
   triage: { justificativa?: string } | null; agent_text: string | null; agent_actions: { acao: string; pedido: unknown; resultado: unknown }[] | null;
   decision: string | null; reason: string | null; handoff_summary: string | null; would_route_support: boolean | null;
   tracking_info: { etapa?: string; enviado_em?: string | null; url?: string | null } | null;
   review_class_ok: boolean | null; review_correct_category: string | null; review_reply_ok: boolean | null; review_comment: string | null; review_ideal_reply: string | null; reviewed_at: string | null;
+  replay_status?: string | null; replay_result?: { decision?: string; agent_text?: string; link_type?: string; conversation?: Item["conversation"]; other_instances?: { id: string; label: string }[]; cpf_different_phone?: boolean; tokens_in?: number; tokens_out?: number } | null;
 }
 interface Stats { total: number; ok: number; erro: number; pendente: number; por_tipo: Record<string, number>; suporte: number; amostra: number; revisadas: number; class_ok: number; class_err: number; reply_ok: number; reply_err: number }
-const DECISION: Record<string, string> = { enviar_link: "Mandar link", presencial: "Compra na loja", fila: "Passar para pessoa", conversa: "Seguir conversa" };
+const DECISION: Record<string, string> = { enviar_link: "Mandar link", presencial: "Compra na loja", fila: "Passar para pessoa", conversa: "Seguir conversa", consolidar_em_outra_instancia: "Manter no outro número" };
+interface Comparison { before: Record<string, number>; after: Record<string, number>; pending: number; tokens_in: number; tokens_out: number }
 const pct = (a: number, b: number) => (a + b ? `${Math.round((a / (a + b)) * 100)}%` : "—");
 
 function Review({ it, onSaved }: { it: Item; onSaved: () => void }) {
@@ -80,12 +82,18 @@ function ItemCard({ it, onSaved }: { it: Item; onSaved: () => void }) {
         <span className="ml-auto text-xs text-muted-foreground">{it.last_incoming_at ? new Date(it.last_incoming_at).toLocaleString("pt-BR") : ""}</span>
       </div>
       <div className="max-h-56 overflow-y-auto rounded bg-muted/40 p-2 space-y-1 text-sm">
-        {(it.conversation || []).map((m, i) => (
-          <div key={i} className={m.from === "cliente" ? "" : "text-right text-muted-foreground"}><b>{m.from === "cliente" ? "Cliente" : "Loja"}:</b> {m.text}</div>
+        {(it.replay_result?.conversation || it.conversation || []).map((m, i) => (
+          <div key={i} className={m.from === "cliente" ? "" : "text-right text-muted-foreground"}><b>{m.from === "cliente" ? "Cliente" : "Loja"}{m.instance ? ` · ${m.instance}` : ""}:</b> {m.text}</div>
         ))}
       </div>
       {it.triage?.justificativa && <p className="text-sm text-muted-foreground">Por quê: {it.triage.justificativa}</p>}
       {it.agent_text && <p className="text-sm"><b>Resposta sugerida:</b> {it.agent_text}</p>}
+      {it.replay_result && <div className="grid gap-3 border-y py-3 md:grid-cols-2 text-sm">
+        <div><h3 className="font-semibold">Antes · {DECISION[it.decision || ""] || "—"}</h3><p className="whitespace-pre-wrap break-words">{it.agent_text || "Sem resposta"}</p></div>
+        <div><h3 className="font-semibold">Depois · {it.replay_result.link_type ? `Link de ${it.replay_result.link_type === "troca" ? "troca" : "devolução"}` : DECISION[it.replay_result.decision || ""] || "—"}</h3><p className="whitespace-pre-wrap break-words">{it.replay_result.agent_text || "Sem resposta"}</p></div>
+      </div>}
+      {!!it.replay_result?.other_instances?.length && <p className="text-xs">Outros números: {it.replay_result.other_instances.map(i => i.label).join(" · ")}</p>}
+      {it.replay_result?.cpf_different_phone && <Badge variant="outline">Pedido localizado por CPF (telefone diferente)</Badge>}
       {it.handoff_summary && <p className="text-sm">Resumo para o atendente: {it.handoff_summary}</p>}
       {it.tracking_info && <p className="text-xs">Rastreio: {ETAPA[it.tracking_info.etapa || ""] || it.tracking_info.etapa}{it.tracking_info.enviado_em ? ` · enviado em ${it.tracking_info.enviado_em}` : ""}</p>}
       {it.would_route_support && <p className="text-xs">Moveria para a linha SUPORTE (não foi movida).</p>}
@@ -107,6 +115,7 @@ export function TrainingPanel() {
   const [pendingOnly, setPendingOnly] = useState(true);
   const [rows, setRows] = useState<Item[]>([]);
   const [stats, setStats] = useState<Stats | null>(null);
+  const [comparison, setComparison] = useState<Comparison | null>(null);
   const [loading, setLoading] = useState(false);
   const [hasMore, setHasMore] = useState(false);
 
@@ -114,7 +123,7 @@ export function TrainingPanel() {
     (supabase as any).from("support_training_runs").select("id,label,created_at,eligible_conversations,selected_conversations").order("created_at", { ascending: false }).limit(20)
       .then(({ data }: any) => { setRuns(data || []); if (data?.[0]) setRun(data[0].id); });
   }, []);
-  const loadStats = useCallback(() => { if (run) deskCall<Stats>("support_training_stats", { p_run: run }).then(setStats).catch(() => setStats(null)); }, [run]);
+  const loadStats = useCallback(() => { if (run) { deskCall<Stats>("support_training_stats", { p_run: run }).then(setStats).catch(() => setStats(null)); deskCall<Comparison>("support_training_comparison", { p_run: run }).then(setComparison).catch(() => setComparison(null)); } }, [run]);
   const load = useCallback(async (offset: number) => {
     if (!run) return;
     setLoading(true);
@@ -138,6 +147,12 @@ export function TrainingPanel() {
           {stats.pendente > 0 && <p className="text-muted-foreground">Ainda processando: {stats.pendente}</p>}
         </>}
       </div>
+      {comparison && <section className="border-y py-3 text-sm space-y-2">
+        <h2 className="font-semibold">Antes × depois</h2>
+        {[["link_troca", "Link de troca"], ["link_devolucao", "Link de devolução"], ["conversa", "Conversa"], ["fila", "Pessoa"], ["consolidar_em_outra_instancia", "Manter no outro número"], ["presencial", "Presencial"]].map(([key, label]) => <p key={key}>{label}: {comparison.before[key] || 0} → {comparison.after[key] || 0}</p>)}
+        <p>Tokens do reprocessamento: {comparison.tokens_in.toLocaleString("pt-BR")} de entrada · {comparison.tokens_out.toLocaleString("pt-BR")} de saída</p>
+        {comparison.pending > 0 && <p>Aguardando: {comparison.pending}</p>}
+      </section>}
       <div className="flex flex-wrap gap-2">
         <Button size="sm" variant={group === "suporte" ? "default" : "outline"} onClick={() => setGroup("suporte")}>Suporte ({stats?.suporte ?? 0})</Button>
         <Button size="sm" variant={group === "amostra_nao_suporte" ? "default" : "outline"} onClick={() => setGroup("amostra_nao_suporte")}>Amostra não-suporte ({stats?.amostra ?? 0})</Button>

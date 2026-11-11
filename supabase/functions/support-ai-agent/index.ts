@@ -44,6 +44,7 @@ Deno.serve(withAccessLog("support-ai-agent", async (req) => {
   const cfg = { apiKey, baseURL: "https://ai.gateway.lovable.dev/v1", timeoutMs: st.ai_timeout_ms ?? 30000 };
   try {
     const triage = await runTriage(cfg, st.ai_triage_model, conv, orders, log);
+    ctx.configure(triage.facts ?? {});
     const base = { triage, triage_category: triage.categoria, triage_confidence: triage.confianca, intent: triageToIntent(triage.categoria) };
     if (triageIgnores(triage.categoria)) {
       await flushLogs();
@@ -63,7 +64,8 @@ Deno.serve(withAccessLog("support-ai-agent", async (req) => {
 
     const dec = finalDecision(outcome, orders);
     const linkSale = outcome.link ? saleIds.get(outcome.link.ref) : null;
-    const linkOrder = outcome.link ? orders.find((o) => o.ref === outcome.link!.ref) : null;
+    const linkRef = outcome.link?.ref;
+    const linkOrder = linkRef ? orders.find((o) => o.ref === linkRef) : null;
     await flushLogs();
     await sb.from("support_auto_suggestions").update({
       ...base,
@@ -75,9 +77,11 @@ Deno.serve(withAccessLog("support-ai-agent", async (req) => {
       link_type: outcome.link?.tipo ?? null, customer_name: nome,
       would_route_support: shouldRouteSupport(triage.categoria, !!outcome.handoff),
       tracking_info: outcome.tracking ? { pedido: outcome.tracking.ref, ...outcome.tracking.info } : null,
+      other_instances: ctx.otherInstances, consolidation_target: outcome.consolidation ?? null,
+      cpf_different_phone: outcome.cpfDifferentPhone ?? false,
     }).eq("id", s.id).eq("status", "processando");
     // Linha SUPORTE: só move sozinho com o interruptor ligado e modo automático (checado no banco).
-    await sb.rpc("support_auto_route", { p_id: s.id });
+    // Shadow evaluation never moves a conversation, regardless of configuration.
     return json({ ok: true, decision: dec.decision });
   } catch (e) {
     await flushLogs();

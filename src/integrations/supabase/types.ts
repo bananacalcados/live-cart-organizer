@@ -25305,6 +25305,8 @@ export type Database = {
           ai_status: string | null
           auto_send_after: string | null
           channel: string
+          consolidation_target: Json | null
+          cpf_different_phone: boolean | null
           created_at: string
           customer_name: string | null
           decision: string
@@ -25319,6 +25321,7 @@ export type Database = {
           link_type: string | null
           message_row_id: string | null
           mode_at_creation: string
+          other_instances: Json | null
           phone: string
           reason: string
           routed_at: string | null
@@ -25348,6 +25351,8 @@ export type Database = {
           ai_status?: string | null
           auto_send_after?: string | null
           channel?: string
+          consolidation_target?: Json | null
+          cpf_different_phone?: boolean | null
           created_at?: string
           customer_name?: string | null
           decision: string
@@ -25362,6 +25367,7 @@ export type Database = {
           link_type?: string | null
           message_row_id?: string | null
           mode_at_creation: string
+          other_instances?: Json | null
           phone: string
           reason: string
           routed_at?: string | null
@@ -25391,6 +25397,8 @@ export type Database = {
           ai_status?: string | null
           auto_send_after?: string | null
           channel?: string
+          consolidation_target?: Json | null
+          cpf_different_phone?: boolean | null
           created_at?: string
           customer_name?: string | null
           decision?: string
@@ -25405,6 +25413,7 @@ export type Database = {
           link_type?: string | null
           message_row_id?: string | null
           mode_at_creation?: string
+          other_instances?: Json | null
           phone?: string
           reason?: string
           routed_at?: string | null
@@ -25427,6 +25436,51 @@ export type Database = {
           whatsapp_number_id?: string | null
           would_route_support?: boolean
           wrong_suggestion?: boolean
+        }
+        Relationships: []
+      }
+      support_cpf_attempts: {
+        Row: {
+          candidate_first_name: string | null
+          candidate_month: string | null
+          candidate_product: string | null
+          candidate_sale_id: string | null
+          confirmed: boolean
+          cpf_hash: string
+          cpf_mask: string
+          created_at: string
+          day: string
+          id: string
+          phone_key: string
+          source_key: string
+        }
+        Insert: {
+          candidate_first_name?: string | null
+          candidate_month?: string | null
+          candidate_product?: string | null
+          candidate_sale_id?: string | null
+          confirmed?: boolean
+          cpf_hash: string
+          cpf_mask: string
+          created_at?: string
+          day?: string
+          id?: string
+          phone_key: string
+          source_key: string
+        }
+        Update: {
+          candidate_first_name?: string | null
+          candidate_month?: string | null
+          candidate_product?: string | null
+          candidate_sale_id?: string | null
+          confirmed?: boolean
+          cpf_hash?: string
+          cpf_mask?: string
+          created_at?: string
+          day?: string
+          id?: string
+          phone_key?: string
+          source_key?: string
         }
         Relationships: []
       }
@@ -25647,6 +25701,9 @@ export type Database = {
           phone: string
           processed_at: string | null
           reason: string | null
+          replay_result: Json | null
+          replay_started_at: string | null
+          replay_status: string | null
           review_class_ok: boolean | null
           review_comment: string | null
           review_correct_category: string | null
@@ -25685,6 +25742,9 @@ export type Database = {
           phone: string
           processed_at?: string | null
           reason?: string | null
+          replay_result?: Json | null
+          replay_started_at?: string | null
+          replay_status?: string | null
           review_class_ok?: boolean | null
           review_comment?: string | null
           review_correct_category?: string | null
@@ -25723,6 +25783,9 @@ export type Database = {
           phone?: string
           processed_at?: string | null
           reason?: string | null
+          replay_result?: Json | null
+          replay_started_at?: string | null
+          replay_status?: string | null
           review_class_ok?: boolean | null
           review_comment?: string | null
           review_correct_category?: string | null
@@ -33401,6 +33464,10 @@ export type Database = {
       }
       support_auto_route: { Args: { p_id: string }; Returns: boolean }
       support_classify_intent: { Args: { p: string }; Returns: string }
+      support_cpf_candidate: {
+        Args: { p_cpf: string; p_phone: string; p_source_key: string }
+        Returns: Json
+      }
       support_normalize_text: { Args: { p: string }; Returns: string }
       support_route_settings_update: {
         Args: { p_auto_route: boolean }
@@ -33424,6 +33491,8 @@ export type Database = {
           ai_status: string | null
           auto_send_after: string | null
           channel: string
+          consolidation_target: Json | null
+          cpf_different_phone: boolean | null
           created_at: string
           customer_name: string | null
           decision: string
@@ -33438,6 +33507,7 @@ export type Database = {
           link_type: string | null
           message_row_id: string | null
           mode_at_creation: string
+          other_instances: Json | null
           phone: string
           reason: string
           routed_at: string | null
@@ -33489,6 +33559,9 @@ export type Database = {
           phone: string
           processed_at: string | null
           reason: string | null
+          replay_result: Json | null
+          replay_started_at: string | null
+          replay_status: string | null
           review_class_ok: boolean | null
           review_comment: string | null
           review_correct_category: string | null
@@ -33515,6 +33588,7 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      support_training_comparison: { Args: { p_run: string }; Returns: Json }
       support_training_list: {
         Args: {
           p_group?: string
@@ -33542,6 +33616,59 @@ export type Database = {
           phone: string
           processed_at: string | null
           reason: string | null
+          replay_result: Json | null
+          replay_started_at: string | null
+          replay_status: string | null
+          review_class_ok: boolean | null
+          review_comment: string | null
+          review_correct_category: string | null
+          review_group: string | null
+          review_ideal_reply: string | null
+          review_reply_ok: boolean | null
+          reviewed_at: string | null
+          reviewed_by: string | null
+          run_id: string
+          status: string
+          tokens_in: number | null
+          tokens_out: number | null
+          tracking_info: Json | null
+          triage: Json | null
+          triage_category: string | null
+          triage_confidence: number | null
+          whatsapp_number_id: string | null
+          would_route_support: boolean | null
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "support_training_items"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      support_training_replay_claim: {
+        Args: { p_n?: number; p_run: string }
+        Returns: {
+          agent_actions: Json | null
+          agent_text: string | null
+          attempts: number
+          channel: string
+          conversation: Json | null
+          created_at: string
+          customer_name: string | null
+          decision: string | null
+          error: string | null
+          handoff_summary: string | null
+          id: string
+          instance_name: string | null
+          is_support: boolean | null
+          last_incoming_at: string | null
+          orders_ctx: Json | null
+          phone: string
+          processed_at: string | null
+          reason: string | null
+          replay_result: Json | null
+          replay_started_at: string | null
+          replay_status: string | null
           review_class_ok: boolean | null
           review_comment: string | null
           review_correct_category: string | null
@@ -33580,6 +33707,10 @@ export type Database = {
         Returns: undefined
       }
       support_training_stats: { Args: { p_run: string }; Returns: Json }
+      support_unified_messages: {
+        Args: { p_limit?: number; p_phone: string; p_until?: string }
+        Returns: Json
+      }
       sync_lead_pix_data: {
         Args: {
           p_chosen_payment_method: string

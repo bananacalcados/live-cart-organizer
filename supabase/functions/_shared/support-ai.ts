@@ -3,12 +3,13 @@
 import { createOpenAI } from "npm:@ai-sdk/openai@4";
 import { jsonSchema, Output, stepCountIs, streamText, tool } from "npm:ai@7";
 import { createLovableAiGatewayRunIdFetch } from "./run-id.ts";
+import { CONSOLIDATION_TEXT, preferredLink, type SupportFacts } from "./support-policy.ts";
 
 export const TRIAGE_CATEGORIES = ["venda", "troca", "devolucao", "troca_ou_devolucao_ambiguo", "rastreio", "outro_suporte", "nada"] as const;
 export type TriageCategory = typeof TRIAGE_CATEGORIES[number];
-export type Triage = { categoria: TriageCategory; confianca: number; justificativa: string; motivo_tamanho: boolean };
+export type Triage = { categoria: TriageCategory; confianca: number; justificativa: string; motivo_tamanho: boolean; facts?: SupportFacts };
 
-export type ConvMessage = { from: "cliente" | "loja"; text: string; at: string };
+export type ConvMessage = { from: "cliente" | "loja"; text: string; at: string; instance_id?: string | null; instance?: string; human?: boolean };
 export type OrderItem = { item: string; produto: string; tamanho: string | null; quantidade: number };
 export type OrderCtx = {
   ref: string; // P1, P2… (o id real fica só no servidor)
@@ -32,7 +33,7 @@ export function firstName(name: string | null | undefined): string | null {
 }
 
 export function transcript(msgs: ConvMessage[]): string {
-  return msgs.map((m) => `${m.from === "cliente" ? "CLIENTE" : "LOJA"}: ${sanitizeText(m.text)}`).join("\n");
+  return msgs.map((m) => `${m.at} [${m.instance ?? "WhatsApp"}; id=${m.instance_id ?? "atual"}${m.human ? "; HUMANO" : ""}] ${m.from === "cliente" ? "CLIENTE" : "LOJA"}: ${sanitizeText(m.text)}`).join("\n");
 }
 
 /** Mapeia a triagem para a intenção antiga (contador por tipo e compatibilidade). */
@@ -47,24 +48,33 @@ export const triageIgnores = (c: TriageCategory) => c === "venda" || c === "nada
 
 const TRIAGE_SCHEMA = jsonSchema<Triage>({
   type: "object", additionalProperties: false,
-  required: ["categoria", "confianca", "justificativa", "motivo_tamanho"],
+  required: ["categoria", "confianca", "justificativa", "motivo_tamanho", "facts"],
   properties: {
     categoria: { type: "string", enum: [...TRIAGE_CATEGORIES] },
     confianca: { type: "number", description: "0 a 1" },
     justificativa: { type: "string", description: "uma frase curta" },
     motivo_tamanho: { type: "boolean", description: "a cliente cita tamanho/numeração/modelo/ficou pequeno ou grande" },
+    facts: { type: "object", additionalProperties: false, required: ["originality", "danger", "selected_ref", "insisted_return", "same_subject_instance", "confirmed_product"], properties: {
+      originality: { type: "boolean", description: "alegação ou suspeita de falsificado, réplica ou não original" },
+      danger: { type: "boolean", description: "defeito/avaria, irritação, Procon/Reclame Aqui, pedido de estorno/valor/dinheiro ou assunto não entendido. Simples pedido de devolução não é estorno financeiro" },
+      selected_ref: { type: ["string", "null"], description: "P1/P2 se cliente identificou inequivocamente o pedido; null se não" },
+      insisted_return: { type: "boolean", description: "insistiu na devolução depois de oferta humana de troca com link no histórico" },
+      same_subject_instance: { type: ["string", "null"], description: "id da OUTRA instância onde HUMANO respondeu nas últimas 72h SOBRE O MESMO assunto de suporte; não inferir por saudação ou venda diferente" },
+      confirmed_product: { type: ["string", "null"], description: "nome exato do produto que a cliente confirmou explicitamente após a pergunta de identificação por CPF; null antes da confirmação" },
+    } },
   },
 });
 
 const TRIAGE_INSTRUCTIONS = `Você classifica conversas de WhatsApp de uma loja de calçados. Não responda à cliente.
 Leia as últimas mensagens (a mais recente é a última) e o contexto de pedidos e escolha UMA categoria:
 - venda: quer comprar, preço, estoque para comprar, pagamento de compra nova.
-- troca: quer outro tamanho/modelo/cor, ou diz "devolver" mas o motivo é tamanho/numeração (isso é troca).
-- devolucao: quer o dinheiro de volta / devolver sem motivo de tamanho, ou insiste em devolver depois de oferecida a troca.
+- troca: pede explicitamente troca ou outro tamanho/modelo/cor.
+- devolucao: pede explicitamente devolução/devolver, inclusive por tamanho; a oferta de troca é feita pelo agente, não altere a intenção original.
 - troca_ou_devolucao_ambiguo: fala em trocar/devolver sem dar para saber qual.
 - rastreio: cadê meu pedido, código/link de rastreio, não chegou, quando chega, status da entrega.
 - outro_suporte: extravio, defeito, avaria, pagamento de pedido já feito, reclamação.
 - nada: saudação, agradecimento, assunto sem relação.
+Considere o histórico unificado e marque fatos do assunto ATUAL, não reclamações antigas já resolvidas. Indique outra instância só se uma pessoa respondeu sobre esse mesmo assunto nas últimas 72h; mensagens automáticas não contam.
 Seja conservador: na dúvida entre troca e devolução use troca_ou_devolucao_ambiguo.`;
 
 export type GatewayConfig = { apiKey: string; baseURL: string; timeoutMs: number };
@@ -128,6 +138,8 @@ export type AgentDeps = {
   sizesInStock: (ref: string, item: string) => Promise<{ tamanhos: string[] } | { erro: string }>;
   offersAlreadyMade: number;
   maxOffers: number;
+  consolidation?: { id: string; label: string } | null;
+  cpfLookup?: () => Promise<{ found?: boolean; error?: string; first_name?: string; product?: string; month?: string; confirmed?: boolean; different_phone?: boolean }>;
 };
 export type AgentAction = { acao: string; pedido: Record<string, unknown>; resultado: unknown };
 export type AgentOutcome = {
@@ -136,6 +148,8 @@ export type AgentOutcome = {
   handoff: { motivo: string; resumo: string } | null;
   exchangeOffered: boolean;
   tracking: { ref: string; info: TrackingInfo } | null;
+  consolidation?: { id: string; label: string } | null;
+  cpfDifferentPhone?: boolean;
 };
 
 export async function runAgent(cfg: GatewayConfig, model: string, script: string, nome: string | null, triage: Triage,
@@ -146,7 +160,35 @@ export async function runAgent(cfg: GatewayConfig, model: string, script: string
   const refOk = (ref: string) => deps.orders.find((o) => o.ref === ref);
   const tipoSchema = { type: "string", enum: ["troca", "devolucao"] };
 
+  if (deps.consolidation) return { ...out, text: CONSOLIDATION_TEXT, consolidation: deps.consolidation };
+  if (triage.facts?.danger) return { ...out, text: "Uma pessoa da nossa equipe vai continuar seu atendimento, tá bom?", handoff: { motivo: "situacao_sensivel", resumo: triage.justificativa } };
+  if (!deps.orders.length && deps.cpfLookup) {
+    const candidate = await deps.cpfLookup();
+    rec("buscar_pedido_por_cpf", {}, candidate);
+    if (!candidate.found) return { ...out, text: candidate.error ? "Uma pessoa da equipe vai ajudar a localizar sua compra." : "Pode me informar o CPF de quem fez a compra?", handoff: candidate.error ? { motivo: candidate.error, resumo: "CPF não confirmou identidade/pedido" } : null };
+    if (!candidate.confirmed) return { ...out, text: `Encontrei um pedido no nome de ${candidate.first_name}. É o do ${candidate.product} comprado em ${candidate.month}?` };
+    out.cpfDifferentPhone = candidate.different_phone;
+  }
+  const selected = deps.orders.length === 1 ? deps.orders[0] : deps.orders.find(o => o.ref === triage.facts?.selected_ref);
+  if (deps.orders.length > 1 && !selected) return { ...out, text: "Uma pessoa da equipe vai ajudar a identificar qual pedido você quer trocar ou devolver.", handoff: { motivo: "varios_pedidos_sem_identificacao", resumo: triage.justificativa } };
+  const wanted = preferredLink(triage.categoria, triage.facts ?? {}, deps.offersAlreadyMade);
+  if (selected?.canal === "online" && wanted) {
+    const eligibility = await deps.checkEligibility(selected.ref, wanted);
+    rec("checar_elegibilidade", { pedido: selected.ref, tipo: wanted }, eligibility);
+    if (eligibility.elegivel !== "eligible") return { ...out, text: "Uma pessoa da equipe vai continuar seu atendimento e conferir seu pedido.", handoff: { motivo: eligibility.motivo, resumo: triage.justificativa } };
+    out.link = { ref: selected.ref, tipo: wanted };
+    out.exchangeOffered = triage.categoria === "devolucao" && wanted === "troca";
+    rec("preparar_link", { pedido: selected.ref, tipo: wanted }, { ok: true });
+    out.text = wanted === "troca" ? "A gente troca pra você, é só registrar aqui e escolher: {{link}}. O código de postagem vem em seguida." : "Pode registrar sua devolução aqui: {{link}}. O código de postagem vem em seguida.";
+    return out;
+  }
+
   const tools = {
+    buscar_pedido_por_cpf: tool({
+      description: "Consulta o CPF detectado pelo servidor na conversa, sem receber nem revelar os dígitos. Antes de confirmar identidade devolve apenas primeiro nome, produto e mês.",
+      inputSchema: jsonSchema<Record<string, never>>({ type: "object", additionalProperties: false, properties: {}, required: [] }),
+      execute: async () => rec("buscar_pedido_por_cpf", {}, deps.cpfLookup ? await deps.cpfLookup() : { error: "indisponivel" }),
+    }),
     buscar_pedidos: tool({
       description: "Lista os pedidos da cliente dos últimos 60 dias (encontrados pelo telefone da conversa).",
       inputSchema: jsonSchema<Record<string, never>>({ type: "object", additionalProperties: false, properties: {}, required: [] }),
@@ -252,7 +294,8 @@ CONTEXTO DO SISTEMA (não invente nada além disso):
 }
 
 /** Decisão final é do sistema, a partir das ações validadas. */
-export function finalDecision(o: Pick<AgentOutcome, "link" | "handoff"> & { tracking?: AgentOutcome["tracking"] }, orders: OrderCtx[]): { decision: string; reason: string } {
+export function finalDecision(o: Pick<AgentOutcome, "link" | "handoff"> & { tracking?: AgentOutcome["tracking"]; consolidation?: AgentOutcome["consolidation"] }, orders: OrderCtx[]): { decision: string; reason: string } {
+  if (o.consolidation) return { decision: "consolidar_em_outra_instancia", reason: "atendimento_humano_mesmo_assunto:" + o.consolidation.id };
   if (o.handoff) return { decision: "fila", reason: "ia_escalou:" + o.handoff.motivo };
   if (o.link) return { decision: "enviar_link", reason: "um_pedido_elegivel" };
   if (o.tracking) {

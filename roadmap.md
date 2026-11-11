@@ -1,4 +1,5 @@
 # AustPay — duplicidade de NF-e
+- [ ] Suporte: histórico multi-instância e sugestão única; novo roteiro com links e CPF protegido; reprocessamento preservado antes/depois, testes e conferência sem envio/publicação
 - [x] Diagnosticar rejeições 539: numeração reiniciada apesar da sequência do CNPJ já configurada em 2767
 - [x] Criar reserva atômica por venda/modelo e trava contra tentativas simultâneas, sem apagar notas autorizadas
 - [x] Ligar NF-e/NFC-e/devoluções à numeração reservada, preservar retry com o mesmo número e implantar

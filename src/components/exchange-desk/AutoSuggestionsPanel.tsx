@@ -19,11 +19,12 @@ interface Suggestion {
   triage_category?: string | null; triage_confidence?: number | null; triage?: { justificativa?: string } | null;
   agent_actions?: { acao: string; pedido: Record<string, unknown>; resultado: unknown }[]; handoff_summary?: string | null; ai_status?: string | null;
   would_route_support?: boolean; routed_at?: string | null; routed_auto?: boolean; tracking_info?: { pedido?: string; url?: string | null; etapa?: string; enviado_em?: string | null } | null;
+  other_instances?: { id: string; label: string }[]; consolidation_target?: { id: string; label: string } | null; cpf_different_phone?: boolean;
 }
 const PAGE = 50;
 const INTENT: Record<string, string> = { troca: "Troca", devolucao: "Devolução", rastreio: "Rastreio", indefinido: "Indefinido" };
 export const ETAPA: Record<string, string> = { em_separacao: "em separação", separado: "separado", enviado: "enviado", entregue: "entregue", sem_envio: "sem envio" };
-const DECISION: Record<string, string> = { enviar_link: "Mandar link", presencial: "Compra na loja", instagram_whatsapp: "Levar pro WhatsApp", fila: "Precisa de você", conversa: "Conversa da IA" };
+const DECISION: Record<string, string> = { enviar_link: "Mandar link", presencial: "Compra na loja", instagram_whatsapp: "Levar pro WhatsApp", fila: "Precisa de você", conversa: "Conversa da IA", consolidar_em_outra_instancia: "Manter no outro número" };
 export const TRIAGE: Record<string, string> = { venda: "Venda", troca: "Troca", devolucao: "Devolução", troca_ou_devolucao_ambiguo: "Troca ou devolução?", rastreio: "Rastreio", outro_suporte: "Outro suporte", nada: "Nada" };
 export const ACTION: Record<string, string> = { buscar_pedidos: "Buscou pedidos", checar_elegibilidade: "Conferiu prazo", consultar_numeracoes: "Consultou numerações", registrar_oferta_troca: "Ofereceu troca", preparar_link: "Preparou link", consultar_rastreio: "Consultou rastreio", escalar_humano: "Passou para pessoa" };
 
@@ -83,6 +84,9 @@ function SuggestionCard({ s, instances, onDone }: { s: Suggestion; instances: Re
         <span className="ml-auto text-xs text-muted-foreground">{new Date(s.created_at).toLocaleString("pt-BR")}</span>
       </div>
       <p className="text-sm">“{s.incoming_text}”</p>
+      {!!s.other_instances?.length && <p className="text-xs">Também conversou em: {s.other_instances.map(i => i.label).join(" · ")}</p>}
+      {s.consolidation_target && <p className="text-sm">Atendimento em andamento: {s.consolidation_target.label}</p>}
+      {s.cpf_different_phone && <Badge variant="outline">Pedido localizado por CPF (telefone diferente)</Badge>}
       {s.triage_category && (
         <p className="text-sm">Triagem da IA: <b>{TRIAGE[s.triage_category] || s.triage_category}</b>{s.triage_confidence != null ? ` (${Math.round(Number(s.triage_confidence) * 100)}%)` : ""}{s.triage?.justificativa ? ` — ${s.triage.justificativa}` : ""}</p>
       )}
