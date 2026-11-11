@@ -1,6 +1,7 @@
 import { VipAttendanceLinksPanel } from "./VipAttendanceLinksPanel";
-import { useState, useEffect, useCallback, lazy, Suspense } from "react";
-const GroupDraftsApprovalTab = lazy(() => import("./GroupDraftsApprovalTab").then(m => ({ default: m.GroupDraftsApprovalTab })));
+import { useState, useEffect, useCallback, Suspense } from "react";
+import { lazyNamed } from "@/lib/lazyTab";
+const GroupDraftsApprovalTab = lazyNamed(() => import("./GroupDraftsApprovalTab"), "GroupDraftsApprovalTab");
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import {
