@@ -1,3 +1,4 @@
 - Live code-intent confirms only via src/lib/liveCodeOrder.ts; open carts receive items (no 2nd cart).
 - Exchange desk (Centrais Fase 3): decisions only via RPC exchange_desk_action, mirrored by src/lib/exchangeDesk/rules.ts; only humans deny, reverse only once on approved, so every step keeps who/when history.
 - payment-receipts bucket is private; show receipts via storage/signedReceiptUrl.ts.
+- Exchange auto-replies (Phase 4): detection/decision only in DB support_auto_evaluate (trigger on incoming), mirrored by src/lib/supportAuto/intent.ts; it only records support_auto_suggestions, sending is a human click, auto mode has no sender yet.

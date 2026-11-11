@@ -11,6 +11,7 @@ import { deskCall } from "@/components/exchange-desk/api";
 import { ExchangeDeskCard } from "@/components/exchange-desk/ExchangeDeskCard";
 import { TemplatesEditor } from "@/components/exchange-desk/TemplatesEditor";
 import { CentralProductChoiceToggle } from "@/components/exchange-desk/CentralProductChoiceToggle";
+import { AutoSuggestionsPanel } from "@/components/exchange-desk/AutoSuggestionsPanel";
 import { ageLabel, ageLevel, REASON_LABEL, STATUS_LABEL, type DeskTab } from "@/lib/exchangeDesk/rules";
 
 interface Row {
@@ -23,7 +24,9 @@ const PAGE = 50;
 export default function ExchangeDesk() {
   const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
-  const tab = (params.get("aba") as DeskTab) || "precisa";
+  const rawTab = params.get("aba") || "precisa";
+  const isSuggestions = rawTab === "sugestoes";
+  const tab = (isSuggestions ? "precisa" : rawTab) as DeskTab;
   const [type, setType] = useState("all");
   const [reason, setReason] = useState("all");
   const [assignee, setAssignee] = useState("all");
@@ -52,7 +55,7 @@ export default function ExchangeDesk() {
     } catch (e) { setErr(e instanceof Error ? e.message : "Erro ao carregar"); }
     finally { setLoading(false); }
   }, [tab, type, reason, assignee, debounced]);
-  useEffect(() => { load(0); }, [load]);
+  useEffect(() => { if (!isSuggestions) load(0); }, [load, isSuggestions]);
 
   const staffName = useMemo(() => Object.fromEntries(staff.map((s) => [s.id, s.name])), [staff]);
 
@@ -65,13 +68,15 @@ export default function ExchangeDesk() {
       </header>
       <main className="p-4 max-w-6xl mx-auto space-y-3">
         <CentralProductChoiceToggle />
-        <Tabs value={tab} onValueChange={(v) => setParams({ aba: v })}>
+        <Tabs value={rawTab} onValueChange={(v) => setParams({ aba: v })}>
           <TabsList>
             <TabsTrigger value="precisa">Precisa de você</TabsTrigger>
             <TabsTrigger value="andamento">Em andamento</TabsTrigger>
             <TabsTrigger value="concluidas">Concluídas</TabsTrigger>
+            <TabsTrigger value="sugestoes">Sugestões automáticas</TabsTrigger>
           </TabsList>
         </Tabs>
+        {isSuggestions ? <AutoSuggestionsPanel /> : <>
         <div className="flex flex-wrap gap-2">
           <div className="relative flex-1 min-w-[220px]">
             <Search className="h-4 w-4 absolute left-2 top-3 text-muted-foreground" />
@@ -115,6 +120,7 @@ export default function ExchangeDesk() {
           {loading && <p className="text-sm text-muted-foreground py-4 text-center">Carregando…</p>}
           {hasMore && !loading && <Button variant="outline" className="w-full" onClick={() => load(rows.length)}>Carregar mais</Button>}
         </div>
+        </>}
       </main>
       {openId && <ExchangeDeskCard id={openId} staff={staff} onClose={() => setOpenId(null)} onChanged={() => load(0)} />}
       <TemplatesEditor open={tplOpen} onOpenChange={setTplOpen} />

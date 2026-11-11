@@ -1366,6 +1366,13 @@
       "when": 1794434474784,
       "tag": "0194_fix_public_form_checks",
       "breakpoints": true
+    },
+    {
+      "idx": 195,
+      "version": "7",
+      "when": 1794435058965,
+      "tag": "0195_support_auto_suggestions_shadow",
+      "breakpoints": true
     }
   ]
 }

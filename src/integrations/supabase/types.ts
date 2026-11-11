@@ -25223,6 +25223,96 @@ export type Database = {
           },
         ]
       }
+      support_auto_suggestions: {
+        Row: {
+          auto_send_after: string | null
+          channel: string
+          created_at: string
+          customer_name: string | null
+          decision: string
+          discard_reason: string | null
+          discarded_at: string | null
+          discarded_by: string | null
+          id: string
+          incoming_text: string | null
+          intent: string
+          link_type: string | null
+          message_row_id: string | null
+          mode_at_creation: string
+          phone: string
+          reason: string
+          sale_channel: string | null
+          sale_id: string | null
+          sent_at: string | null
+          sent_by: string | null
+          sent_link_id: string | null
+          sent_text: string | null
+          status: string
+          suggested_text: string | null
+          wa_me_url: string | null
+          whatsapp_number_id: string | null
+          wrong_suggestion: boolean
+        }
+        Insert: {
+          auto_send_after?: string | null
+          channel?: string
+          created_at?: string
+          customer_name?: string | null
+          decision: string
+          discard_reason?: string | null
+          discarded_at?: string | null
+          discarded_by?: string | null
+          id?: string
+          incoming_text?: string | null
+          intent: string
+          link_type?: string | null
+          message_row_id?: string | null
+          mode_at_creation: string
+          phone: string
+          reason: string
+          sale_channel?: string | null
+          sale_id?: string | null
+          sent_at?: string | null
+          sent_by?: string | null
+          sent_link_id?: string | null
+          sent_text?: string | null
+          status?: string
+          suggested_text?: string | null
+          wa_me_url?: string | null
+          whatsapp_number_id?: string | null
+          wrong_suggestion?: boolean
+        }
+        Update: {
+          auto_send_after?: string | null
+          channel?: string
+          created_at?: string
+          customer_name?: string | null
+          decision?: string
+          discard_reason?: string | null
+          discarded_at?: string | null
+          discarded_by?: string | null
+          id?: string
+          incoming_text?: string | null
+          intent?: string
+          link_type?: string | null
+          message_row_id?: string | null
+          mode_at_creation?: string
+          phone?: string
+          reason?: string
+          sale_channel?: string | null
+          sale_id?: string | null
+          sent_at?: string | null
+          sent_by?: string | null
+          sent_link_id?: string | null
+          sent_text?: string | null
+          status?: string
+          suggested_text?: string | null
+          wa_me_url?: string | null
+          whatsapp_number_id?: string | null
+          wrong_suggestion?: boolean
+        }
+        Relationships: []
+      }
       support_links: {
         Row: {
           created_at: string
@@ -25270,6 +25360,11 @@ export type Database = {
       }
       support_settings: {
         Row: {
+          auto_reply_cooldown_hours: number
+          auto_reply_instance_ids: string[]
+          auto_reply_max_delay_s: number
+          auto_reply_min_delay_s: number
+          auto_reply_mode: string
           central_auto_reverse: boolean
           central_base_url: string
           central_public_enabled: boolean
@@ -25279,9 +25374,15 @@ export type Database = {
           max_offer_attempts: number
           return_window_days: number
           ship_replacement_when: string
+          support_whatsapp_phone: string | null
           updated_at: string
         }
         Insert: {
+          auto_reply_cooldown_hours?: number
+          auto_reply_instance_ids?: string[]
+          auto_reply_max_delay_s?: number
+          auto_reply_min_delay_s?: number
+          auto_reply_mode?: string
           central_auto_reverse?: boolean
           central_base_url?: string
           central_public_enabled?: boolean
@@ -25291,9 +25392,15 @@ export type Database = {
           max_offer_attempts?: number
           return_window_days?: number
           ship_replacement_when?: string
+          support_whatsapp_phone?: string | null
           updated_at?: string
         }
         Update: {
+          auto_reply_cooldown_hours?: number
+          auto_reply_instance_ids?: string[]
+          auto_reply_max_delay_s?: number
+          auto_reply_min_delay_s?: number
+          auto_reply_mode?: string
           central_auto_reverse?: boolean
           central_base_url?: string
           central_public_enabled?: boolean
@@ -25303,6 +25410,7 @@ export type Database = {
           max_offer_attempts?: number
           return_window_days?: number
           ship_replacement_when?: string
+          support_whatsapp_phone?: string | null
           updated_at?: string
         }
         Relationships: []
@@ -32924,6 +33032,75 @@ export type Database = {
       stop_live_shown_product: {
         Args: { p_event_id: string }
         Returns: undefined
+      }
+      support_auto_evaluate: {
+        Args: {
+          p_channel: string
+          p_message_row_id: string
+          p_number_id: string
+          p_phone: string
+          p_text: string
+        }
+        Returns: string
+      }
+      support_auto_reply_can_send: { Args: { p_id: string }; Returns: boolean }
+      support_auto_reply_settings_get: { Args: never; Returns: Json }
+      support_auto_reply_settings_update: {
+        Args: {
+          p_instance_ids: string[]
+          p_mode: string
+          p_support_phone: string
+        }
+        Returns: undefined
+      }
+      support_classify_intent: { Args: { p: string }; Returns: string }
+      support_normalize_text: { Args: { p: string }; Returns: string }
+      support_suggestion_discard: {
+        Args: { p_id: string; p_reason: string; p_wrong?: boolean }
+        Returns: undefined
+      }
+      support_suggestion_mark_sent: {
+        Args: { p_id: string; p_link_id?: string; p_text: string }
+        Returns: undefined
+      }
+      support_suggestion_prepare_link: { Args: { p_id: string }; Returns: Json }
+      support_suggestions_list: {
+        Args: { p_limit?: number; p_offset?: number; p_status?: string }
+        Returns: {
+          auto_send_after: string | null
+          channel: string
+          created_at: string
+          customer_name: string | null
+          decision: string
+          discard_reason: string | null
+          discarded_at: string | null
+          discarded_by: string | null
+          id: string
+          incoming_text: string | null
+          intent: string
+          link_type: string | null
+          message_row_id: string | null
+          mode_at_creation: string
+          phone: string
+          reason: string
+          sale_channel: string | null
+          sale_id: string | null
+          sent_at: string | null
+          sent_by: string | null
+          sent_link_id: string | null
+          sent_text: string | null
+          status: string
+          suggested_text: string | null
+          wa_me_url: string | null
+          whatsapp_number_id: string | null
+          wrong_suggestion: boolean
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "support_auto_suggestions"
+          isOneToOne: false
+          isSetofReturn: true
+        }
       }
       sync_lead_pix_data: {
         Args: {

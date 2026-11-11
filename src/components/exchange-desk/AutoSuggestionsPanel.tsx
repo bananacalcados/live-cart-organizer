@@ -1,0 +1,134 @@
+// Fase 4 — Sugestões automáticas (modo sombra): nada sai sem clique de um atendente.
+import { useCallback, useEffect, useState } from "react";
+import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Textarea } from "@/components/ui/textarea";
+import { Input } from "@/components/ui/input";
+import { supabase } from "@/integrations/supabase/client";
+import { useChatSender, type SendProvider } from "@/hooks/chat/useChatSender";
+import { deskCall } from "./api";
+import { REASON_TEXT } from "@/lib/supportAuto/intent";
+import { AutoReplySettings } from "./AutoReplySettings";
+
+interface Suggestion {
+  id: string; created_at: string; phone: string; channel: string; whatsapp_number_id: string | null; customer_name: string | null;
+  incoming_text: string | null; intent: string; decision: string; reason: string; link_type: string | null;
+  suggested_text: string | null; status: string; sent_text: string | null; discard_reason: string | null;
+}
+const PAGE = 50;
+const INTENT: Record<string, string> = { troca: "Troca", devolucao: "Devolução", indefinido: "Indefinido" };
+const DECISION: Record<string, string> = { enviar_link: "Mandar link", presencial: "Compra na loja", instagram_whatsapp: "Levar pro WhatsApp", fila: "Precisa de você" };
+
+function SuggestionCard({ s, instances, onDone }: { s: Suggestion; instances: Record<string, { provider: string; label: string }>; onDone: () => void }) {
+  const [text, setText] = useState(s.suggested_text || "");
+  const [busy, setBusy] = useState(false);
+  const [discarding, setDiscarding] = useState(false);
+  const [why, setWhy] = useState("");
+  const { sendText } = useChatSender();
+  const inst = s.whatsapp_number_id ? instances[s.whatsapp_number_id] : undefined;
+
+  const send = async () => {
+    if (!text.trim()) { toast.error("Escreva a mensagem"); return; }
+    setBusy(true);
+    try {
+      let msg = text;
+      let linkId: string | null = null;
+      if (msg.includes("{{link}}")) {
+        const link = await deskCall<{ id: string; url: string } | null>("support_suggestion_prepare_link", { p_id: s.id });
+        if (!link?.url) throw new Error("Não foi possível gerar o link");
+        msg = msg.split("{{link}}").join(link.url); linkId = link.id;
+      }
+      const { data: u } = await supabase.auth.getUser();
+      const res = await sendText({
+        phone: s.phone, message: msg, senderUserId: u.user?.id || null,
+        route: { channel: s.channel === "instagram" ? "instagram" : "whatsapp", provider: (inst?.provider || "uazapi") as SendProvider, numberId: s.whatsapp_number_id },
+      });
+      if (!res.success) throw new Error(res.error || "Falha ao enviar");
+      await deskCall("support_suggestion_mark_sent", { p_id: s.id, p_text: msg, p_link_id: linkId });
+      toast.success("Mensagem enviada");
+      onDone();
+    } catch (e) { toast.error(e instanceof Error ? e.message : "Erro"); }
+    finally { setBusy(false); }
+  };
+  const discard = async () => {
+    if (!why.trim()) { toast.error("Diga por que a sugestão está errada"); return; }
+    setBusy(true);
+    try { await deskCall("support_suggestion_discard", { p_id: s.id, p_reason: why, p_wrong: true }); onDone(); }
+    catch (e) { toast.error(e instanceof Error ? e.message : "Erro"); }
+    finally { setBusy(false); }
+  };
+
+  return (
+    <div className="rounded-lg border bg-card p-3 space-y-2">
+      <div className="flex flex-wrap items-center gap-2">
+        <Badge variant={s.intent === "troca" ? "default" : "secondary"}>{INTENT[s.intent] || s.intent}</Badge>
+        <Badge variant="outline">{DECISION[s.decision] || s.decision}</Badge>
+        <span className="font-medium">{s.customer_name || s.phone}</span>
+        <span className="text-xs text-muted-foreground">{s.channel === "instagram" ? "Instagram" : inst?.label || "WhatsApp"}</span>
+        <span className="ml-auto text-xs text-muted-foreground">{new Date(s.created_at).toLocaleString("pt-BR")}</span>
+      </div>
+      <p className="text-sm">“{s.incoming_text}”</p>
+      <p className="text-sm text-muted-foreground">Motivo: {REASON_TEXT[s.reason] || s.reason}</p>
+      {s.status === "nova" ? (
+        <>
+          <Textarea value={text} onChange={(e) => setText(e.target.value)} rows={3} placeholder="Escreva a resposta para a cliente" />
+          {text.includes("{{link}}") && <p className="text-xs text-muted-foreground">O link da Central entra no lugar de {"{{link}}"} na hora do envio.</p>}
+          {discarding ? (
+            <div className="flex gap-2">
+              <Input value={why} onChange={(e) => setWhy(e.target.value)} placeholder="Por que a sugestão está errada?" autoComplete="off" />
+              <Button variant="destructive" disabled={busy} onClick={discard}>Descartar</Button>
+              <Button variant="ghost" onClick={() => setDiscarding(false)}>Voltar</Button>
+            </div>
+          ) : (
+            <div className="flex gap-2">
+              <Button disabled={busy} onClick={send}>Enviar pela conversa</Button>
+              <Button variant="outline" disabled={busy} onClick={() => setDiscarding(true)}>Sugestão errada</Button>
+            </div>
+          )}
+        </>
+      ) : s.status === "enviada" ? (
+        <p className="text-sm">Enviado: {s.sent_text}</p>
+      ) : (
+        <p className="text-sm text-muted-foreground">Descartada: {s.discard_reason}</p>
+      )}
+    </div>
+  );
+}
+
+export function AutoSuggestionsPanel() {
+  const [status, setStatus] = useState("nova");
+  const [rows, setRows] = useState<Suggestion[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [hasMore, setHasMore] = useState(false);
+  const [instances, setInstances] = useState<Record<string, { provider: string; label: string }>>({});
+
+  useEffect(() => {
+    (supabase as any).from("whatsapp_numbers_safe").select("id,label,provider").limit(100)
+      .then(({ data }: any) => setInstances(Object.fromEntries((data || []).map((n: any) => [n.id, { provider: n.provider, label: n.label }]))));
+  }, []);
+  const load = useCallback(async (offset: number) => {
+    setLoading(true);
+    try {
+      const data = await deskCall<Suggestion[]>("support_suggestions_list", { p_status: status, p_limit: PAGE, p_offset: offset });
+      setRows((p) => (offset === 0 ? data : [...p, ...data])); setHasMore(data.length === PAGE);
+    } catch (e) { toast.error(e instanceof Error ? e.message : "Erro ao carregar"); }
+    finally { setLoading(false); }
+  }, [status]);
+  useEffect(() => { load(0); }, [load]);
+
+  return (
+    <div className="space-y-3">
+      <AutoReplySettings />
+      <div className="flex gap-2">
+        {[["nova", "Novas"], ["enviada", "Enviadas"], ["descartada", "Descartadas"]].map(([k, l]) => (
+          <Button key={k} size="sm" variant={status === k ? "default" : "outline"} onClick={() => setStatus(k)}>{l}</Button>
+        ))}
+      </div>
+      {rows.map((s) => <SuggestionCard key={s.id} s={s} instances={instances} onDone={() => load(0)} />)}
+      {!loading && rows.length === 0 && <p className="text-sm text-muted-foreground py-8 text-center">Nenhuma sugestão por aqui.</p>}
+      {loading && <p className="text-sm text-muted-foreground py-4 text-center">Carregando…</p>}
+      {hasMore && !loading && <Button variant="outline" className="w-full" onClick={() => load(rows.length)}>Carregar mais</Button>}
+    </div>
+  );
+}
