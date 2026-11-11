@@ -1296,6 +1296,13 @@
       "when": 1794407214343,
       "tag": "0184_group_drafts_central_tab",
       "breakpoints": true
+    },
+    {
+      "idx": 185,
+      "version": "7",
+      "when": 1794407241305,
+      "tag": "0185_group_drafts_edit_by_campaign",
+      "breakpoints": true
     }
   ]
 }
