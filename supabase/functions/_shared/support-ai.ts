@@ -54,11 +54,12 @@ const TRIAGE_SCHEMA = jsonSchema<Triage>({
     confianca: { type: "number", description: "0 a 1" },
     justificativa: { type: "string", description: "uma frase curta" },
     motivo_tamanho: { type: "boolean", description: "a cliente cita tamanho/numeração/modelo/ficou pequeno ou grande" },
-    facts: { type: "object", additionalProperties: false, required: ["originality", "danger", "selected_ref", "insisted_return", "same_subject_instance", "confirmed_product"], properties: {
+    facts: { type: "object", additionalProperties: false, required: ["originality", "danger", "selected_ref", "insisted_return", "exchange_offer_made", "same_subject_instance", "confirmed_product"], properties: {
       originality: { type: "boolean", description: "alegação ou suspeita de falsificado, réplica ou não original" },
       danger: { type: "boolean", description: "defeito/avaria, irritação, Procon/Reclame Aqui, pedido de estorno/valor/dinheiro ou assunto não entendido. Simples pedido de devolução não é estorno financeiro" },
       selected_ref: { type: ["string", "null"], description: "P1/P2 se cliente identificou inequivocamente o pedido; null se não" },
       insisted_return: { type: "boolean", description: "insistiu na devolução depois de oferta humana de troca com link no histórico" },
+      exchange_offer_made: { type: "boolean", description: "já houve oferta de troca pela loja nesse mesmo assunto, em qualquer número; não repetir oferta" },
       same_subject_instance: { type: ["string", "null"], description: "id da OUTRA instância onde HUMANO respondeu nas últimas 72h SOBRE O MESMO assunto de suporte; não inferir por saudação ou venda diferente" },
       confirmed_product: { type: ["string", "null"], description: "nome exato do produto que a cliente confirmou explicitamente após a pergunta de identificação por CPF; null antes da confirmação" },
     } },

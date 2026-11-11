@@ -26,7 +26,12 @@ export async function loadConversation(sb: Sb, phone: string, numberId: string |
 
 export async function buildSupportContext(sb: Sb, s: { phone: string; whatsapp_number_id: string | null; channel: string },
   opts: { shareLastEvent: boolean; until?: string; saleId?: string; sourceKey?: string }): Promise<SupportContext> {
-  const conv = await loadConversation(sb, s.phone, s.whatsapp_number_id, opts.until);
+  let conv: ConvMessage[];
+  if (s.channel === "instagram") {
+    const { data, error } = await sb.from("whatsapp_messages").select("message,direction,created_at,whatsapp_number_id,sender_user_id").eq("phone", s.phone).eq("channel", "instagram").lte("created_at", opts.until ?? new Date().toISOString()).order("created_at", { ascending: false }).limit(60);
+    if (error) throw new Error("historico_instagram_indisponivel");
+    conv = (data ?? []).filter((m: any) => m.message).reverse().map((m: any) => ({ from: m.direction === "incoming" ? "cliente" : "loja", text: m.message, at: m.created_at, instance_id: m.whatsapp_number_id, instance: "Instagram", human: m.direction === "outgoing" && !!m.sender_user_id }));
+  } else conv = await loadConversation(sb, s.phone, s.whatsapp_number_id, opts.until);
   const s8 = String(s.phone || "").replace(/\D/g, "").slice(-8);
   const saleIds = new Map<string, string>(); const itemSku = new Map<string, string | null>();
   const sims = new Map<string, any>();
@@ -97,7 +102,12 @@ export async function buildSupportContext(sb: Sb, s: { phone: string; whatsapp_n
       if (error) return { error: "consulta_cpf_indisponivel" };
       if (!validCpf(raw)) return { error: "cpf_invalido" };
       if (candidate?.error || !candidate?.found) return { error: candidate?.error ?? "cpf_sem_pedido_unico" };
-      const confirmed = cpfIdentityConfirmed(conversationName, candidate.first_name, candidate.product, facts.confirmed_product ?? null);
+      // Product confirmation must follow the actual identification question, not a model guess or an old product mention.
+      const challenge = [...conv].reverse().find(m => m.from === "loja" && m.text.includes("Encontrei um pedido no nome de") && m.text.includes(candidate.product));
+      const confirmation = challenge && conv.find(m => m.from === "cliente" && m.at > challenge.at && /\b(sim|isso|esse|essa|correto|correta)\b/i.test(m.text));
+      const confirmedProduct = confirmation && facts.confirmed_product === candidate.product ? candidate.product : null;
+      const confirmed = !!challenge && cpfIdentityConfirmed(conversationName, candidate.first_name, candidate.product, confirmedProduct);
+      if (challenge && confirmation && !confirmed) return { error: "identidade_nao_confirmada" };
       if (confirmed) {
         const { data: attempt } = await sb.from("support_cpf_attempts").select("candidate_sale_id").eq("id", candidate.id).maybeSingle();
         if (!attempt?.candidate_sale_id) return { error: "cpf_sem_pedido" };

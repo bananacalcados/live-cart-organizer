@@ -25,10 +25,10 @@ export function cpfIdentityConfirmed(conversationName: string | null, candidateN
   if (conversationName && candidateName && normal(conversationName.split(/\s/)[0]) === normal(candidateName.split(/\s/)[0])) return true;
   return !!confirmedProduct && normal(confirmedProduct) === normal(product);
 }
-export type SupportFacts = { originality?: boolean; danger?: boolean; selected_ref?: string | null; insisted_return?: boolean; same_subject_instance?: string | null; confirmed_product?: string | null };
+export type SupportFacts = { originality?: boolean; danger?: boolean; selected_ref?: string | null; insisted_return?: boolean; exchange_offer_made?: boolean; same_subject_instance?: string | null; confirmed_product?: string | null };
 export function preferredLink(category: string, facts: SupportFacts, offers: number): "troca" | "devolucao" | null {
   if (facts.danger) return null;
   if (category === "troca") return "troca";
   if (category !== "devolucao") return null;
-  return facts.originality || facts.insisted_return || offers >= 1 ? "devolucao" : "troca";
+  return facts.originality || facts.insisted_return || facts.exchange_offer_made || offers >= 1 ? "devolucao" : "troca";
 }

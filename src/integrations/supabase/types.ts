@@ -33468,6 +33468,8 @@ export type Database = {
         Args: { p_cpf: string; p_phone: string; p_source_key: string }
         Returns: Json
       }
+      support_cpf_valid: { Args: { p_value: string }; Returns: boolean }
+      support_mask_cpf_text: { Args: { p_value: string }; Returns: string }
       support_normalize_text: { Args: { p: string }; Returns: string }
       support_route_settings_update: {
         Args: { p_auto_route: boolean }
@@ -33694,6 +33696,17 @@ export type Database = {
           isOneToOne: false
           isSetofReturn: true
         }
+      }
+      support_training_replay_review: {
+        Args: {
+          p_class_ok: boolean
+          p_comment: string
+          p_correct_category: string
+          p_id: string
+          p_ideal_reply: string
+          p_reply_ok: boolean
+        }
+        Returns: undefined
       }
       support_training_review: {
         Args: {

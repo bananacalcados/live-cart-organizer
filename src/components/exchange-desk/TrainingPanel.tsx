@@ -16,7 +16,7 @@ interface Item {
   decision: string | null; reason: string | null; handoff_summary: string | null; would_route_support: boolean | null;
   tracking_info: { etapa?: string; enviado_em?: string | null; url?: string | null } | null;
   review_class_ok: boolean | null; review_correct_category: string | null; review_reply_ok: boolean | null; review_comment: string | null; review_ideal_reply: string | null; reviewed_at: string | null;
-  replay_status?: string | null; replay_result?: { decision?: string; agent_text?: string; link_type?: string; conversation?: Item["conversation"]; other_instances?: { id: string; label: string }[]; cpf_different_phone?: boolean; tokens_in?: number; tokens_out?: number } | null;
+  replay_status?: string | null; replay_result?: { decision?: string; agent_text?: string; link_type?: string; triage_category?: string; conversation?: Item["conversation"]; other_instances?: { id: string; label: string }[]; cpf_different_phone?: boolean; tokens_in?: number; tokens_out?: number; review?: { class_ok?: boolean | null; correct_category?: string | null; reply_ok?: boolean | null; comment?: string | null; ideal_reply?: string | null; at?: string | null } } | null;
 }
 interface Stats { total: number; ok: number; erro: number; pendente: number; por_tipo: Record<string, number>; suporte: number; amostra: number; revisadas: number; class_ok: number; class_err: number; reply_ok: number; reply_err: number }
 const DECISION: Record<string, string> = { enviar_link: "Mandar link", presencial: "Compra na loja", fila: "Passar para pessoa", conversa: "Seguir conversa", consolidar_em_outra_instancia: "Manter no outro número" };
@@ -37,7 +37,7 @@ function Review({ it, onSaved }: { it: Item; onSaved: () => void }) {
     if (hasReply && replyOk === null) { toast.error("Marque se a resposta está aprovada"); return; }
     setBusy(true);
     try {
-      await deskCall("support_training_review", { p_id: it.id, p_class_ok: classOk, p_correct_category: classOk ? null : correct, p_reply_ok: hasReply ? replyOk : null, p_comment: comment, p_ideal_reply: ideal });
+      await deskCall(it.replay_result ? "support_training_replay_review" : "support_training_review", { p_id: it.id, p_class_ok: classOk, p_correct_category: classOk ? null : correct, p_reply_ok: hasReply ? replyOk : null, p_comment: comment, p_ideal_reply: ideal });
       toast.success("Revisão salva"); onSaved();
     } catch (e) { toast.error(e instanceof Error ? e.message : "Erro"); }
     finally { setBusy(false); }
@@ -103,7 +103,8 @@ function ItemCard({ it, onSaved }: { it: Item; onSaved: () => void }) {
           {it.agent_actions.map((a, i) => <div key={i}>{ACTION[a.acao] || a.acao} → {JSON.stringify(a.resultado).slice(0, 300)}</div>)}
         </details>
       )}
-      <Review it={it} onSaved={onSaved} />
+      {it.replay_result && <p className="text-xs font-medium">Revisar resultado novo</p>}
+      <Review it={it.replay_result ? { ...it, agent_text: it.replay_result.agent_text ?? null, review_class_ok: it.replay_result.review?.class_ok ?? null, review_correct_category: it.replay_result.review?.correct_category ?? null, review_reply_ok: it.replay_result.review?.reply_ok ?? null, review_comment: it.replay_result.review?.comment ?? null, review_ideal_reply: it.replay_result.review?.ideal_reply ?? null, reviewed_at: it.replay_result.review?.at ?? null } : it} onSaved={onSaved} />
     </div>
   );
 }
@@ -149,7 +150,7 @@ export function TrainingPanel() {
       </div>
       {comparison && <section className="border-y py-3 text-sm space-y-2">
         <h2 className="font-semibold">Antes × depois</h2>
-        {[["link_troca", "Link de troca"], ["link_devolucao", "Link de devolução"], ["conversa", "Conversa"], ["fila", "Pessoa"], ["consolidar_em_outra_instancia", "Manter no outro número"], ["presencial", "Presencial"]].map(([key, label]) => <p key={key}>{label}: {comparison.before[key] || 0} → {comparison.after[key] || 0}</p>)}
+        {[["link_troca", "Link de troca"], ["link_devolucao", "Link de devolução"], ["conversa", "Conversa"], ["fila", "Pessoa"], ["consolidar_em_outra_instancia", "Manter no outro número"], ["presencial", "Presencial"], ["sem", "Sem resposta de suporte"]].map(([key, label]) => <p key={key}>{label}: {comparison.before[key] || 0} → {comparison.after[key] || 0}</p>)}
         <p>Tokens do reprocessamento: {comparison.tokens_in.toLocaleString("pt-BR")} de entrada · {comparison.tokens_out.toLocaleString("pt-BR")} de saída</p>
         {comparison.pending > 0 && <p>Aguardando: {comparison.pending}</p>}
       </section>}

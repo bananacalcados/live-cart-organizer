@@ -1408,6 +1408,20 @@
       "when": 1794440942150,
       "tag": "0200_support_replay_comparison",
       "breakpoints": true
+    },
+    {
+      "idx": 201,
+      "version": "7",
+      "when": 1794441182297,
+      "tag": "0201_support_cpf_validation_privacy",
+      "breakpoints": true
+    },
+    {
+      "idx": 202,
+      "version": "7",
+      "when": 1794441264848,
+      "tag": "0202_support_replay_review_preserve",
+      "breakpoints": true
     }
   ]
 }
