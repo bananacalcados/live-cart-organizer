@@ -1338,6 +1338,13 @@
       "when": 1794422795359,
       "tag": "0190_central_require_product_choice",
       "breakpoints": true
+    },
+    {
+      "idx": 191,
+      "version": "7",
+      "when": 1794423717800,
+      "tag": "0191_central_reopen_progress",
+      "breakpoints": true
     }
   ]
 }

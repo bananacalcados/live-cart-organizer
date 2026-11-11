@@ -1,6 +1,7 @@
 import { withAccessLog } from "../_shared/withAccessLog.ts";
 import { decideDevolucao, type ExistingDevolucao } from "../_shared/devolucao-guard.ts";
 import { returnDiscountRatio, returnLineValues, isUndiscountedReverse } from "../_shared/devolucao-values.ts";
+import { parseXmlDest, parseXmlItems, matchXmlItem, mergeDest, cfopEntrada, precheckDevolucao, missingAddressMessage, cstEntradaPisCofins as cstEntradaRule } from "../_shared/devolucao-dest.ts";
 import { requireStaffOrInternal } from "../_shared/staff-or-internal.ts";
 // Edge function: nfe-devolucao-emitir
 // Fase 5 — NF-e de DEVOLUÇÃO (entrada) da Etapa 2 de Trocas/Devoluções.
@@ -72,7 +73,16 @@ async function lookupIbge(city: string, uf: string): Promise<string | null> {
     const arr = await r.json();
     const target = sanitize(city).toUpperCase();
     const hit = arr.find((m: any) => sanitize(m.nome).toUpperCase() === target);
-    return hit?.codigo_ibge || null;
+    if (hit?.codigo_ibge) return String(hit.codigo_ibge);
+  } catch { /* tenta a fonte oficial abaixo */ }
+  try {
+    // Fonte oficial do IBGE (reserva quando a BrasilAPI falha).
+    const r = await fetch(`https://servicodados.ibge.gov.br/api/v1/localidades/estados/${uf}/municipios`, { signal: AbortSignal.timeout(8000) });
+    if (!r.ok) return null;
+    const arr = await r.json();
+    const target = sanitize(city).toUpperCase();
+    const hit = arr.find((m: any) => sanitize(m.nome).toUpperCase() === target);
+    return hit?.id ? String(hit.id) : null;
   } catch { return null; }
 }
 
@@ -87,11 +97,7 @@ function cstEntradaPisCofins(
   aliq: number,
   vBase: number,
 ): { cst: string; aliq: number; base: number } {
-  const c = String(cstSaida ?? "").replace(/\D/g, "").padStart(2, "0");
-  if ((c === "01" || c === "02") && aliq > 0) {
-    return { cst: "50", aliq, base: vBase };
-  }
-  return { cst: "98", aliq: 0, base: 0 };
+  return cstEntradaRule(cstSaida, aliq, vBase);
 }
 
 function buildRenderableDanfeUrl(url: string | null | undefined) {
@@ -196,11 +202,17 @@ Deno.serve(withAccessLog("nfe-devolucao-emitir", async (req) => {
       .in("modelo", [55, 65])
       .order("created_at", { ascending: false })
       .limit(1).maybeSingle();
+    if (chaveOriginal) chaveOriginal = digits(chaveOriginal);
+    if (chaveOriginal && origDoc && digits((origDoc as any).chave_acesso) !== chaveOriginal) {
+      // A chave gravada no evento só vale se for de nota AUTORIZADA (TD-027 apontava para uma rejeitada).
+      const { data: evtKeyDoc } = await supabase.from("fiscal_documents").select("id")
+        .eq("chave_acesso", chaveOriginal).eq("status", "authorized").limit(1).maybeSingle();
+      if (!evtKeyDoc) chaveOriginal = digits((origDoc as any).chave_acesso);
+    }
     if (origDoc) {
-      if (!chaveOriginal) chaveOriginal = (origDoc as any).chave_acesso;
+      if (!chaveOriginal) chaveOriginal = digits((origDoc as any).chave_acesso);
       originalCompanyId = (origDoc as any).company_id;
     }
-    if (chaveOriginal) chaveOriginal = digits(chaveOriginal);
     if (!originalCompanyId && chaveOriginal) {
       const { data: keyedDoc } = await supabase.from("fiscal_documents")
         .select("company_id").eq("chave_acesso", chaveOriginal).maybeSingle();
@@ -247,11 +259,94 @@ Deno.serve(withAccessLog("nfe-devolucao-emitir", async (req) => {
     // que a base de cálculo dos impostos da devolução seja idêntica à da venda.
     const ratioDesc = returnDiscountRatio(origItems, Number((sale as any).discount || 0));
 
-    // CFOP de devolução (entrada): 1.202 mesma UF, 2.202 outra UF (confirmar com contador)
-    const ufCliente = String((sale as any).shipping_state || (sale as any).customer_state || ufOrigem).toUpperCase();
-    const cfopDevolucao = cfop_override
-      ? String(cfop_override)
-      : (ufCliente === ufOrigem ? "1202" : "2202");
+    // 6. Destinatário: XML AUTORIZADO da nota original (NF-e 55) é a fonte primária;
+    //    cadastro/pedido/endereço da reversa só completam o que faltar no XML.
+    //    NFC-e (65) não tem endereço → usa o endereço do pedido. Pré-checagem antes da SEFAZ.
+    const { data: origFull } = await supabase.from("fiscal_documents")
+      .select("modelo, xml_content").eq("chave_acesso", chaveOriginal).eq("status", "authorized").limit(1).maybeSingle();
+    const origModelo = Number((origFull as any)?.modelo || chaveOriginal.slice(20, 22));
+    const origXml: string | null = (origFull as any)?.xml_content || null;
+    const xmlDest = origModelo === 55 ? parseXmlDest(origXml) : null;
+    const xmlItems = parseXmlItems(origXml);
+    const ra: any = rv?.address || null;
+    const pc: any = (sale as any).pos_customers || {};
+    const sa: any = (sale as any).shipping_address || {};
+    const pick = (...vals: any[]) => { for (const v of vals) { const t = v == null ? "" : String(v).trim(); if (t) return t; } return ""; };
+    const enderecoRaw = pick([pick(pc.address), pick(pc.address_number)].filter(Boolean).join(", "), sa.address1, [sa.address, sa.number].filter(Boolean).join(", "));
+    const split = splitStreetNumber(enderecoRaw);
+    const fb = {
+      nome: (sale as any).customer_name || pc.name || null,
+      doc: digits((sale as any).customer_cpf || pc.cpf || rv?.customer_cpf) || null,
+      email: (sale as any).customer_email || pc.email || null,
+      fone: digits((sale as any).customer_phone) || null,
+      ender: {
+        xLgr: pick(ra?.logradouro, split.logradouro, pc.address, sa.address) || null,
+        nro: pick(ra?.numero, pc.address_number, sa.number, split.numero !== "S/N" ? split.numero : "") || null,
+        xCpl: pick(ra?.complemento, pc.complement, sa.complement) || null,
+        xBairro: pick(ra?.bairro, pc.neighborhood, sa.neighborhood, sa.address2) || null,
+        cMun: null,
+        xMun: pick(ra?.cidade, pc.city, (sale as any).customer_city, sa.city) || null,
+        UF: ufFromAny(pick(ra?.uf, pc.state, (sale as any).customer_state, sa.province_code, sa.province, sa.state)),
+        CEP: digits(pick(ra?.cep, pc.cep, (sale as any).customer_cep, sa.zip, sa.cep)) || null,
+      },
+    };
+    const dest = mergeDest(xmlDest, fb);
+    if (dest.ender.UF) dest.ender.UF = ufFromAny(dest.ender.UF);
+    const docDest = digits(dest.doc);
+    const hasCpf = docDest.length === 11 || docDest.length === 14;
+    const cpfDest = docDest;
+    const ieEmitente = digits(company.ie);
+    if (hasCpf && !dest.ender.cMun && dest.ender.xMun && dest.ender.UF) {
+      dest.ender.cMun = await lookupIbge(dest.ender.xMun, dest.ender.UF);
+    }
+    if (isReverse && !hasCpf) throw new Error("Para a nota de devolução da reversa é preciso CPF da cliente");
+    const clienteIdentificado = hasCpf;
+    const ufCliente = hasCpf ? (dest.ender.UF || ufOrigem) : ufOrigem;
+    const e = dest.ender;
+    const cliente: any = hasCpf
+      ? {
+          CpfCnpj: docDest,
+          NmCliente: sanitize(dest.nome || "CONSUMIDOR").slice(0, 60),
+          ...(dest.ie ? { Ie: digits(dest.ie) } : {}),
+          IndicadorIe: dest.ie ? 1 : 9,
+          Endereco: {
+            Cep: digits(e.CEP),
+            Logradouro: sanitize(e.xLgr || "").slice(0, 60),
+            Numero: sanitize(e.nro || "S/N").slice(0, 10) || "S/N",
+            ...(e.xCpl ? { Complemento: sanitize(e.xCpl).slice(0, 60) } : {}),
+            Bairro: sanitize(e.xBairro || "").slice(0, 60),
+            ...(e.cMun ? { CodMunicipio: digits(e.cMun) } : {}),
+            Municipio: sanitize(e.xMun || "").slice(0, 60),
+            Uf: e.UF,
+            CodPais: 1058,
+            Pais: "BRASIL",
+          },
+          Contato: {
+            ...(dest.fone ? { Telefone: digits(dest.fone) } : {}),
+            ...(dest.email ? { Email: dest.email } : {}),
+          },
+        }
+      : {
+          // Venda sem CPF → loja é a destinatária (devolução para o próprio estoque).
+          CpfCnpj: digits(company.cnpj),
+          NmCliente: sanitize(company.legal_name || company.trade_name || "LOJA").slice(0, 60),
+          ...(ieEmitente ? { Ie: ieEmitente } : {}),
+          IndicadorIe: ieEmitente ? 1 : 9,
+          Endereco: {
+            Cep: digits(company.address_cep),
+            Logradouro: sanitize(company.address_street || "S/N").slice(0, 60) || "S/N",
+            Numero: sanitize(company.address_number || "S/N").slice(0, 10) || "S/N",
+            Bairro: sanitize(company.address_neighborhood || "Centro").slice(0, 60) || "Centro",
+            ...(company.address_city_ibge ? { CodMunicipio: String(company.address_city_ibge) } : {}),
+            Municipio: sanitize(company.address_city || "").slice(0, 60),
+            Uf: (company.address_state || ufOrigem).toUpperCase(),
+            CodPais: 1058,
+            Pais: "BRASIL",
+          },
+        };
+
+    // CFOP de devolução (entrada): 1.202 mesma UF, 2.202 outra UF — UF do destinatário acima.
+    const cfopDevolucao = cfop_override ? String(cfop_override) : cfopEntrada(ufOrigem, ufCliente);
 
     const produtos: any[] = [];
     let totalProd = 0;
@@ -274,14 +369,15 @@ Deno.serve(withAccessLog("nfe-devolucao-emitir", async (req) => {
       totalDesc += vDesc;
 
       // Espelha snapshot fiscal do item original (garante estorno idêntico)
-      const ncm = digits(oi?.ncm_snapshot) || "64039990";
-      const csosn = String(oi?.csosn_icms || "").trim();
-      const cst = String(oi?.cst_icms || "").trim();
+      const xi = matchXmlItem(xmlItems, { sku: di.sku || oi?.sku, barcode: di.barcode || oi?.barcode, index: idx });
+      const ncm = digits(xi?.NCM) || digits(oi?.ncm_snapshot) || "64039990";
+      const csosn = String(xi?.csosn || oi?.csosn_icms || "").trim();
+      const cst = String(xi?.csosn ? "" : (xi?.cstIcms || oi?.cst_icms || "")).trim();
       const codSitIcms = csosn || cst || "102";
       const aliqIcms = Number(oi?.aliq_icms || 0);
-      const unidade = (oi?.unidade_comercial && String(oi.unidade_comercial).trim()) || "PAR";
-      const origemMerc = oi?.origem_mercadoria != null ? Number(oi.origem_mercadoria) : 0;
-      const cest = oi?.cest_snapshot || undefined;
+      const unidade = (xi?.uCom && String(xi.uCom).trim()) || (oi?.unidade_comercial && String(oi.unidade_comercial).trim()) || "PAR";
+      const origemMerc = xi?.orig != null ? xi.orig : oi?.origem_mercadoria != null ? Number(oi.origem_mercadoria) : 0;
+      const cest = xi?.CEST || oi?.cest_snapshot || undefined;
 
       const nome = di.produto_nome || oi?.product_name || `ITEM ${idx + 1}`;
       const nmRaw = sanitize(nome).slice(0, 60).trim() || `ITEM${idx + 1}`;
@@ -321,6 +417,18 @@ Deno.serve(withAccessLog("nfe-devolucao-emitir", async (req) => {
     }
 
     const totalLiquido = round2(totalProd - totalDesc);
+
+    // 6a. Pré-checagem antes da SEFAZ (endereço + CFOP/CST de entrada).
+    const faltas = precheckDevolucao({
+      ender: hasCpf ? e : { UF: cliente.Endereco.Uf, cMun: cliente.Endereco.CodMunicipio, xBairro: cliente.Endereco.Bairro, CEP: cliente.Endereco.Cep, xLgr: cliente.Endereco.Logradouro, xMun: cliente.Endereco.Municipio },
+      ufEmit: ufOrigem, cfopOverride: !!cfop_override,
+      cfops: produtos.map((p) => String(p.CFOP)),
+      csts: produtos.flatMap((p) => [p.Imposto.PIS.CodSituacaoTributaria, p.Imposto.COFINS.CodSituacaoTributaria]),
+    });
+    const precheckMessage = faltas.length
+      ? (faltas.every((f) => !/CFOP|CST/.test(f)) ? missingAddressMessage(faltas) : `Nota de devolução não enviada: ${faltas.join(", ")}`)
+      : null;
+    const destinatarioInfo = { fonte: hasCpf ? dest.fonte : "loja", modelo_original: origModelo, ...cliente.Endereco, nome: cliente.NmCliente, doc: cliente.CpfCnpj, cfop: cfopDevolucao };
 
     // 6b. TRAVA CONTRA DUPLICIDADE: reaproveita nota já existente (ex.: emitida pela reversa)
     //     ou recusa se a soma das devoluções passar do valor da nota original.
@@ -367,6 +475,7 @@ Deno.serve(withAccessLog("nfe-devolucao-emitir", async (req) => {
         : null;
       if (dry_run) {
         return new Response(JSON.stringify({ dry_run: true, decision, warning: blockMessage,
+          precheck_ok: !precheckMessage, precheck_error: precheckMessage, destinatario: destinatarioInfo,
           valor_novo: totalLiquido, valor_bruto: round2(totalProd), desconto_rateado: round2(totalDesc),
           produtos, valor_original: valorOriginal, existentes }),
           { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 });
@@ -389,86 +498,11 @@ Deno.serve(withAccessLog("nfe-devolucao-emitir", async (req) => {
       }
     }
 
-    // 6. Cliente: identificado (CPF) → contraparte com endereço; sem CPF ou sem endereço válido → a própria loja.
-    //    Endereço é MONTADO automaticamente do cadastro vivo (pos_customers) + snapshot do pedido
-    //    (customer_state/city/cep + shipping_address). Se faltar UF/CEP, cai no fallback loja
-    //    para não travar a devolução por dado de cadastro incompleto (a NF continua idônea:
-    //    devolução para o próprio estoque via CNPJ do emitente).
-    const cpfDest = digits((sale as any).customer_cpf || (sale as any).pos_customers?.cpf || rv?.customer_cpf);
-    const hasCpf = cpfDest.length === 11;
-    const ieEmitente = digits(company.ie);
-
-    // Reversa: o endereço de coleta informado pela equipe tem prioridade (é de onde a cliente posta).
-    const ra: any = rv?.address || null;
-    const pc: any = ra
-      ? { ...((sale as any).pos_customers || {}), state: ra.uf, cep: ra.cep, city: ra.cidade, address: ra.logradouro, address_number: ra.numero, neighborhood: ra.bairro }
-      : ((sale as any).pos_customers || {});
-    const sa: any = (sale as any).shipping_address || {};
-    const pick = (...vals: any[]) => {
-      for (const v of vals) {
-        const s = v == null ? "" : String(v).trim();
-        if (s) return s;
-      }
-      return "";
-    };
-    const ufDest = ufFromAny(pick(pc.state, (sale as any).customer_state, sa.province, sa.state));
-    const cepDest = digits(pick(pc.cep, (sale as any).customer_cep, sa.zip, sa.cep));
-    const cityDest = pick(pc.city, (sale as any).customer_city, sa.city);
-    const enderecoRaw = pick(
-      [pick(pc.address), pick(pc.address_number)].filter(Boolean).join(", "),
-      sa.address1,
-      [sa.address, sa.number].filter(Boolean).join(", "),
-    );
-    const bairroDest = pick(pc.neighborhood, sa.neighborhood, sa.address2, "Centro");
-    const split = splitStreetNumber(enderecoRaw);
-    const numeroDest = pick(pc.address_number, sa.number, split.numero, "S/N");
-    const logradouroDest = split.logradouro || pick(pc.address, sa.address) || "S/N";
-
-    const clienteComEndereco = hasCpf && !!ufDest && cepDest.length === 8;
-    const ibgeDest = clienteComEndereco && cityDest ? await lookupIbge(cityDest, ufDest!) : null;
-    const clienteIdentificado = clienteComEndereco;
-    if (isReverse && !clienteComEndereco) throw new Error("Para a nota de devolução da reversa é preciso CPF e endereço completo da cliente");
-
-    const cliente: any = clienteComEndereco
-      ? {
-          CpfCnpj: cpfDest,
-          NmCliente: sanitize((sale as any).customer_name || pc.name || "CONSUMIDOR").slice(0, 60),
-          IndicadorIe: 9,
-          Endereco: {
-            Cep: cepDest,
-            Logradouro: sanitize(logradouroDest).slice(0, 60) || "S/N",
-            Numero: sanitize(numeroDest).slice(0, 10) || "S/N",
-            Bairro: sanitize(bairroDest).slice(0, 60) || "Centro",
-            ...(ibgeDest ? { CodMunicipio: ibgeDest } : {}),
-            Municipio: sanitize(cityDest).slice(0, 60),
-            Uf: ufDest,
-            CodPais: 1058,
-            Pais: "BRASIL",
-          },
-          Contato: {
-            ...((sale as any).customer_phone ? { Telefone: digits((sale as any).customer_phone) } : {}),
-            ...((sale as any).customer_email || pc.email ? { Email: (sale as any).customer_email || pc.email } : {}),
-          },
-        }
-      : {
-          // Sem CPF OU sem endereço válido → loja é a destinatária (devolução para o próprio estoque).
-          CpfCnpj: digits(company.cnpj),
-          NmCliente: sanitize(company.legal_name || company.trade_name || "LOJA").slice(0, 60),
-          ...(ieEmitente ? { Ie: ieEmitente } : {}),
-          IndicadorIe: ieEmitente ? 1 : 9,
-          Endereco: {
-            Cep: digits(company.address_cep),
-            Logradouro: sanitize(company.address_street || "S/N").slice(0, 60) || "S/N",
-            Numero: sanitize(company.address_number || "S/N").slice(0, 10) || "S/N",
-            Bairro: sanitize(company.address_neighborhood || "Centro").slice(0, 60) || "Centro",
-            ...(company.address_city_ibge ? { CodMunicipio: String(company.address_city_ibge) } : {}),
-            Municipio: sanitize(company.address_city || "").slice(0, 60),
-            Uf: (company.address_state || ufOrigem).toUpperCase(),
-            CodPais: 1058,
-            Pais: "BRASIL",
-          },
-        };
-
+    if (precheckMessage) {
+      await linkDoc({ fase2_erro: precheckMessage }, { error_message: precheckMessage });
+      return new Response(JSON.stringify({ ok: false, precheck: true, error: precheckMessage, faltas }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 422 });
+    }
 
     // 7. Reserva a mesma sequência das NF-e de venda e cria o documento pendente.
     // Assim uma devolução não consome um número que uma venda também possa receber.
