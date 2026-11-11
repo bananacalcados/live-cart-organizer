@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -65,6 +65,8 @@ interface UserData {
 export default function Admin() {
   const { isAdmin } = useIsAdmin();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const activeTab = searchParams.get("tab") || "users";
   const { toast } = useToast();
   const [users, setUsers] = useState<UserData[]>([]);
   const [loading, setLoading] = useState(true);
@@ -220,6 +222,11 @@ export default function Admin() {
             </div>
           </div>
           <div className="flex items-center gap-2">
+            {isAdmin && (
+              <Button variant="outline" size="sm" onClick={() => navigate("/admin/produtos-troca")} className="gap-1">
+                <Package className="h-4 w-4" /> Produtos para troca
+              </Button>
+            )}
             <Button variant="ghost" size="sm" onClick={() => navigate("/")} className="gap-1">
               <ArrowLeft className="h-4 w-4" /> Início
             </Button>
@@ -229,7 +236,7 @@ export default function Admin() {
       </header>
 
       <main className="flex-1 container py-6 space-y-6">
-        <Tabs defaultValue="users">
+        <Tabs value={activeTab} onValueChange={(v) => setSearchParams(v === "users" ? {} : { tab: v }, { replace: true })}>
           <TabsList className="h-auto flex flex-wrap justify-start gap-1">
             <TabsTrigger value="users" className="gap-1.5"><Shield className="h-3.5 w-3.5" /> Usuários</TabsTrigger>
             <TabsTrigger value="zapi" className="gap-1.5"><Smartphone className="h-3.5 w-3.5" /> Instâncias Z-API</TabsTrigger>

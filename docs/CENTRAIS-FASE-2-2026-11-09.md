@@ -77,3 +77,43 @@ Ambas com CORS, validação e registro de acesso, sem registrar token em corpo/q
 Fila/painel novo do atendente (Parte 3), respostas automáticas e migração de canais (Parte 4), IA (Parte 5), integração fiscal/reversa automática. Nenhuma alteração em finalizeExchange, NF de saída, live, estornos ou devolucao-guard.
 
 **Nada foi publicado no front. Nenhuma NF-e foi emitida, cancelada, inutilizada ou alterada. Nenhuma chamada SEFAZ/BrasilNFe nos testes. Nenhum plano foi alterado. Nenhum candidato foi apagado.**
+
+## Atualização 11/11/2026 — proteção de tentativas e validação
+
+**Situação:** proteção própria por IP e por link implantada; as páginas continuam **FECHADAS** (`central_public_enabled = false`). As funções agora obedecem a essa chave (antes o bloqueio era fixo no código); só um admin ligando a chave abre o atendimento.
+
+### Proteção de tentativas
+- Tabela de contadores só do servidor (`central_rate_limits`), com IP e link guardados apenas em hash; função `central_rate_guard` só para o servidor.
+- Janela de 10 minutos: até 60 acessos por IP e 30 por link. Tentativas inválidas (link inexistente, vencido, revogado, já usado, tipo errado ou formato inválido): 10 por IP ou 5 por link → bloqueio de 30 minutos.
+- Respostas genéricas: o mesmo aviso para link inexistente, vencido, revogado, usado ou de outro tipo; o bloqueio mostra só "Muitas tentativas. Aguarde alguns minutos".
+- Se o contador falhar, a central fica fechada para aquela tentativa (não libera).
+- Limpeza automática dentro da própria função (registros parados há mais de 1 dia, em lotes de 500), sem cron novo.
+- Link já usado agora também responde genérico (migração `0188`). Reenvio pelo mesmo link não cria nada; um link novo do mesmo item mostra o andamento da solicitação existente.
+
+### Tela "Produtos para troca sem estoque"
+- A aba existia só para administradores e não abria por endereço. Agora: botão "Produtos para troca" no topo da Administração, aba abre por `/admin?tab=central-restock` e página própria `/admin/produtos-troca` (rota protegida, módulo admin). Busca, seleção da página e Permitir/Não oferecer em lote, gravação conferida no servidor (somente admin).
+
+### Resultados da validação (banco, transações desfeitas no final, sem chamadas externas, sem NF)
+| Teste | Resultado |
+|---|---|
+| Troca: gerar link, abrir, ver opções, enviar com produto em estoque | Passou (aprovado, reserva lógica 1) |
+| Devolução: gerar link, abrir, enviar | Passou (fora do prazo → escalado) |
+| Devolução com produto de reposição | Passou (recusado) |
+| Link de troca não abre devolução / de devolução não abre troca | Passou |
+| Link vencido, revogado, inexistente, já usado → genérico | Passou |
+| Item com solicitação aberta mostra andamento e não duplica | Passou (1 solicitação) |
+| Fora do prazo → escalado | Passou |
+| Entrega sem confirmação da transportadora → escalado | Passou |
+| Limite: link bloqueia na 5ª inválida, IP na 10ª, excesso de acessos no 61º | Passou |
+| Função do servidor (testes locais, 6) incluindo bloqueio após excesso e limitador indisponível | Passou |
+| Concorrência: 3 envios (mesmo link 2x + outro link) para o mesmo item | Passou: 1 solicitação. A ferramenta executou os envios em sequência rápida, sem sobreposição real; a garantia vem da trava do link e da venda. Registros de teste apagados. |
+| Estoque | Passou: nenhum estoque alterado, nenhum ajuste de estoque; produto reservado sai da lista dos próximos (reserva só lógica). |
+
+### Estoque legado
+Nenhuma função das Centrais grava estoque ou ajustes. A reserva é só um número na solicitação, descontado da disponibilidade mostrada. O fluxo antigo de trocas continua sendo o único que dá baixa/entrada, na finalização pela equipe.
+
+### Pendências
+1. Abrir ao público: um admin liga a chave quando o dono pedir.
+2. Concorrência com sobreposição real não pôde ser forçada pela ferramenta.
+3. Interação da tela administrativa não aberta no navegador nesta rodada (confirmada por leitura do código/rota).
+4. Produto original fora do cadastro da loja: troca sem opções (cliente pede ajuda).

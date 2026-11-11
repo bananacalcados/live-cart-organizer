@@ -3230,6 +3230,33 @@ export type Database = {
         }
         Relationships: []
       }
+      central_rate_limits: {
+        Row: {
+          attempts: number
+          blocked_until: string | null
+          bucket: string
+          failures: number
+          updated_at: string
+          window_start: string
+        }
+        Insert: {
+          attempts?: number
+          blocked_until?: string | null
+          bucket: string
+          failures?: number
+          updated_at?: string
+          window_start?: string
+        }
+        Update: {
+          attempts?: number
+          blocked_until?: string | null
+          bucket?: string
+          failures?: number
+          updated_at?: string
+          window_start?: string
+        }
+        Relationships: []
+      }
       chargeback_events: {
         Row: {
           action: string
@@ -29336,6 +29363,10 @@ export type Database = {
           p_type: string
         }
         Returns: Json
+      }
+      central_rate_guard: {
+        Args: { p_fail?: boolean; p_keys: string[] }
+        Returns: boolean
       }
       central_restock_list: {
         Args: { p_limit?: number; p_offset?: number; p_search?: string }

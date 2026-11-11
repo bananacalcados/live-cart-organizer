@@ -1310,6 +1310,20 @@
       "when": 1794407293147,
       "tag": "0186_fix_group_draft_cards_ambiguous",
       "breakpoints": true
+    },
+    {
+      "idx": 187,
+      "version": "7",
+      "when": 1794419981569,
+      "tag": "0187_central_rate_limit",
+      "breakpoints": true
+    },
+    {
+      "idx": 188,
+      "version": "7",
+      "when": 1794420133416,
+      "tag": "0188_central_used_link_generic",
+      "breakpoints": true
     }
   ]
 }
