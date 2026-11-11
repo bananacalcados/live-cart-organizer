@@ -82,4 +82,3 @@
 - Frontend edge calls always use the session token.
 - Finish with zero no-RLS tables; anon EXECUTE only for the documented public list.
 - Code search: RPC search_product_code_keys (fuzzy, cap 200).
-- Staff RLS/storage: is_team_member(auth.uid()), never bare authenticated (Google sign-in has no perms).
