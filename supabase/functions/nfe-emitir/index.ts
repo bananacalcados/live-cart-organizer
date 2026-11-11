@@ -22,6 +22,7 @@ import { applyReservedFiscalNumber, fiscalEmissionReuseBody, getFiscalEmissionCl
 //   • ModalidadeFrete: 0 (CIF — por conta do emitente)
 //   • IdentificadorInterno: NFE-<order_id>
 // ============================================================================
+import { isOnlineSale, missingOnlineCustomerData, MISSING_CUSTOMER_MESSAGE } from "../_shared/fiscal/sale-fiscal-rules.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 
 const corsHeaders = {
@@ -226,13 +227,16 @@ Deno.serve(withAccessLog("nfe-emitir", async (req) => {
     // Para pedidos Beta sem endereço/CPF, habilita fallback on-demand no Tiny ERP.
     let betaTinyOrderId: string | null = null;
     let betaOrderRowId: string | null = null;
+    // Pedidos da Expedição/Beta são sempre online; vendas PDV dependem do tipo/canal.
+    let isOnlineOrder = true;
 
     if (sale_id) {
       const { data: sale, error: sErr } = await supabase
         .from("pos_sales")
-        .select("id, store_id, customer_id, customer_name, customer_phone, customer_email, customer_cpf, customer_cep, customer_city, customer_state, payment_details, shipping_address, discount, pos_sale_items(product_name, sku, barcode, quantity, unit_price, fiscal_unit_price)")
+        .select("id, store_id, customer_id, customer_name, customer_phone, customer_email, customer_cpf, customer_cep, customer_city, customer_state, payment_details, shipping_address, discount, sale_type, sales_channel, is_store_pickup, source_order_id, pos_sale_items(product_name, sku, barcode, quantity, unit_price, fiscal_unit_price)")
         .eq("id", sale_id).single();
       if (sErr || !sale) throw new Error(`Venda PDV não encontrada: ${sErr?.message}`);
+      isOnlineOrder = isOnlineSale(sale as any);
 
       // FONTE DA VERDADE: a VENDA (pos_sales). É nela que a Expedição grava as correções
       // feitas em "Editar dados do pedido / NF-e". A ficha em pos_customers só COMPLETA
@@ -405,6 +409,19 @@ Deno.serve(withAccessLog("nfe-emitir", async (req) => {
       }
     }
 
+    // Uma nota de saída por venda: se já existe NFC-e (65) autorizada, não emite NF-e por cima.
+    if (order.source === "sale") {
+      const { data: other } = await supabase.from("fiscal_documents")
+        .select("id, numero").eq("pos_sale_id", order.source_id).eq("modelo", 65)
+        .eq("status", "authorized").or("finalidade.eq.1,finalidade.is.null").limit(1).maybeSingle();
+      if (other) {
+        return new Response(JSON.stringify({
+          ok: false, code: "sale_already_invoiced",
+          error: `Esta venda já tem NFC-e autorizada (nº ${(other as any).numero}). Não é possível emitir outra nota de saída.`,
+        }), { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 409 });
+      }
+    }
+
     const items = order.items;
     if (!items.length) throw new Error("Pedido sem itens");
 
@@ -435,6 +452,26 @@ Deno.serve(withAccessLog("nfe-emitir", async (req) => {
             }).eq("id", betaOrderRowId);
           }
         }
+      }
+    }
+
+    // Venda online: exige CPF válido e endereço completo da cliente (sem inventar bairro/UF).
+    if (isOnlineOrder) {
+      const ship0 = (order.shipping_address || {}) as any;
+      const cep0 = digits(ship0.zip ?? ship0.cep);
+      const info0 = cep0.length === 8 ? await lookupAddressByCep(cep0) : null;
+      const miss = missingOnlineCustomerData({
+        cpf: order.customer_cpf,
+        uf: ufFromProvince(ship0.province || ship0.state || info0?.uf),
+        city: firstUsable([ship0.city, info0?.localidade], 2),
+        neighborhood: firstUsable([ship0.neighborhood, ship0.bairro, info0?.bairro], 2),
+        cep: cep0,
+      });
+      if (miss.length) {
+        return new Response(JSON.stringify({
+          ok: false, code: "missing_customer_data", missing: miss,
+          error: `${MISSING_CUSTOMER_MESSAGE} (falta: ${miss.join(", ")})`,
+        }), { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 422 });
       }
     }
 

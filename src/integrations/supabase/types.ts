@@ -1963,6 +1963,20 @@ export type Database = {
             foreignKeyName: "automation_pos_followups_sale_id_fkey"
             columns: ["sale_id"]
             isOneToOne: false
+            referencedRelation: "fiscal_report_double_exit_notes"
+            referencedColumns: ["sale_id"]
+          },
+          {
+            foreignKeyName: "automation_pos_followups_sale_id_fkey"
+            columns: ["sale_id"]
+            isOneToOne: false
+            referencedRelation: "fiscal_report_online_nfce"
+            referencedColumns: ["sale_id"]
+          },
+          {
+            foreignKeyName: "automation_pos_followups_sale_id_fkey"
+            columns: ["sale_id"]
+            isOneToOne: false
             referencedRelation: "pos_sales"
             referencedColumns: ["id"]
           },
@@ -2930,6 +2944,20 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "financial_categories"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cash_flow_entries_pos_sale_id_fkey"
+            columns: ["pos_sale_id"]
+            isOneToOne: false
+            referencedRelation: "fiscal_report_double_exit_notes"
+            referencedColumns: ["sale_id"]
+          },
+          {
+            foreignKeyName: "cash_flow_entries_pos_sale_id_fkey"
+            columns: ["pos_sale_id"]
+            isOneToOne: false
+            referencedRelation: "fiscal_report_online_nfce"
+            referencedColumns: ["sale_id"]
           },
           {
             foreignKeyName: "cash_flow_entries_pos_sale_id_fkey"
@@ -5380,6 +5408,20 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "provider_payments"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "delivery_costs_pos_sale_id_fkey"
+            columns: ["pos_sale_id"]
+            isOneToOne: false
+            referencedRelation: "fiscal_report_double_exit_notes"
+            referencedColumns: ["sale_id"]
+          },
+          {
+            foreignKeyName: "delivery_costs_pos_sale_id_fkey"
+            columns: ["pos_sale_id"]
+            isOneToOne: false
+            referencedRelation: "fiscal_report_online_nfce"
+            referencedColumns: ["sale_id"]
           },
           {
             foreignKeyName: "delivery_costs_pos_sale_id_fkey"
@@ -9275,6 +9317,20 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "companies"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fiscal_documents_pos_sale_id_fkey"
+            columns: ["pos_sale_id"]
+            isOneToOne: false
+            referencedRelation: "fiscal_report_double_exit_notes"
+            referencedColumns: ["sale_id"]
+          },
+          {
+            foreignKeyName: "fiscal_documents_pos_sale_id_fkey"
+            columns: ["pos_sale_id"]
+            isOneToOne: false
+            referencedRelation: "fiscal_report_online_nfce"
+            referencedColumns: ["sale_id"]
           },
           {
             foreignKeyName: "fiscal_documents_pos_sale_id_fkey"
@@ -16866,6 +16922,20 @@ export type Database = {
             foreignKeyName: "payment_splits_sale_id_fkey"
             columns: ["sale_id"]
             isOneToOne: false
+            referencedRelation: "fiscal_report_double_exit_notes"
+            referencedColumns: ["sale_id"]
+          },
+          {
+            foreignKeyName: "payment_splits_sale_id_fkey"
+            columns: ["sale_id"]
+            isOneToOne: false
+            referencedRelation: "fiscal_report_online_nfce"
+            referencedColumns: ["sale_id"]
+          },
+          {
+            foreignKeyName: "payment_splits_sale_id_fkey"
+            columns: ["sale_id"]
+            isOneToOne: false
             referencedRelation: "pos_sales"
             referencedColumns: ["id"]
           },
@@ -17729,6 +17799,20 @@ export type Database = {
             foreignKeyName: "pos_crediario_installments_sale_id_fkey"
             columns: ["sale_id"]
             isOneToOne: false
+            referencedRelation: "fiscal_report_double_exit_notes"
+            referencedColumns: ["sale_id"]
+          },
+          {
+            foreignKeyName: "pos_crediario_installments_sale_id_fkey"
+            columns: ["sale_id"]
+            isOneToOne: false
+            referencedRelation: "fiscal_report_online_nfce"
+            referencedColumns: ["sale_id"]
+          },
+          {
+            foreignKeyName: "pos_crediario_installments_sale_id_fkey"
+            columns: ["sale_id"]
+            isOneToOne: false
             referencedRelation: "pos_sales"
             referencedColumns: ["id"]
           },
@@ -17944,6 +18028,20 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "pos_customers"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pos_exchanges_original_sale_id_fkey"
+            columns: ["original_sale_id"]
+            isOneToOne: false
+            referencedRelation: "fiscal_report_double_exit_notes"
+            referencedColumns: ["sale_id"]
+          },
+          {
+            foreignKeyName: "pos_exchanges_original_sale_id_fkey"
+            columns: ["original_sale_id"]
+            isOneToOne: false
+            referencedRelation: "fiscal_report_online_nfce"
+            referencedColumns: ["sale_id"]
           },
           {
             foreignKeyName: "pos_exchanges_original_sale_id_fkey"
@@ -18479,6 +18577,20 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "pos_cash_registers"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pos_payment_receipts_sale_id_fkey"
+            columns: ["sale_id"]
+            isOneToOne: false
+            referencedRelation: "fiscal_report_double_exit_notes"
+            referencedColumns: ["sale_id"]
+          },
+          {
+            foreignKeyName: "pos_payment_receipts_sale_id_fkey"
+            columns: ["sale_id"]
+            isOneToOne: false
+            referencedRelation: "fiscal_report_online_nfce"
+            referencedColumns: ["sale_id"]
           },
           {
             foreignKeyName: "pos_payment_receipts_sale_id_fkey"
@@ -19335,6 +19447,20 @@ export type Database = {
             foreignKeyName: "pos_returns_sale_id_fkey"
             columns: ["sale_id"]
             isOneToOne: false
+            referencedRelation: "fiscal_report_double_exit_notes"
+            referencedColumns: ["sale_id"]
+          },
+          {
+            foreignKeyName: "pos_returns_sale_id_fkey"
+            columns: ["sale_id"]
+            isOneToOne: false
+            referencedRelation: "fiscal_report_online_nfce"
+            referencedColumns: ["sale_id"]
+          },
+          {
+            foreignKeyName: "pos_returns_sale_id_fkey"
+            columns: ["sale_id"]
+            isOneToOne: false
             referencedRelation: "pos_sales"
             referencedColumns: ["id"]
           },
@@ -19514,6 +19640,20 @@ export type Database = {
             foreignKeyName: "pos_sale_items_sale_id_fkey"
             columns: ["sale_id"]
             isOneToOne: false
+            referencedRelation: "fiscal_report_double_exit_notes"
+            referencedColumns: ["sale_id"]
+          },
+          {
+            foreignKeyName: "pos_sale_items_sale_id_fkey"
+            columns: ["sale_id"]
+            isOneToOne: false
+            referencedRelation: "fiscal_report_online_nfce"
+            referencedColumns: ["sale_id"]
+          },
+          {
+            foreignKeyName: "pos_sale_items_sale_id_fkey"
+            columns: ["sale_id"]
+            isOneToOne: false
             referencedRelation: "pos_sales"
             referencedColumns: ["id"]
           },
@@ -19621,6 +19761,20 @@ export type Database = {
           value?: number
         }
         Relationships: [
+          {
+            foreignKeyName: "pos_sale_price_adjustments_sale_id_fkey"
+            columns: ["sale_id"]
+            isOneToOne: false
+            referencedRelation: "fiscal_report_double_exit_notes"
+            referencedColumns: ["sale_id"]
+          },
+          {
+            foreignKeyName: "pos_sale_price_adjustments_sale_id_fkey"
+            columns: ["sale_id"]
+            isOneToOne: false
+            referencedRelation: "fiscal_report_online_nfce"
+            referencedColumns: ["sale_id"]
+          },
           {
             foreignKeyName: "pos_sale_price_adjustments_sale_id_fkey"
             columns: ["sale_id"]
@@ -20082,6 +20236,69 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      pos_sales_cpf_backfill_log: {
+        Row: {
+          cpf_set: string
+          created_at: string
+          id: number
+          matched_from: string
+          pos_customer_id: string | null
+          sale_id: string
+        }
+        Insert: {
+          cpf_set: string
+          created_at?: string
+          id?: number
+          matched_from: string
+          pos_customer_id?: string | null
+          sale_id: string
+        }
+        Update: {
+          cpf_set?: string
+          created_at?: string
+          id?: number
+          matched_from?: string
+          pos_customer_id?: string | null
+          sale_id?: string
+        }
+        Relationships: []
+      }
+      pos_sales_cpf_pending: {
+        Row: {
+          cadastro_cpf: string | null
+          created_at: string
+          customer_name: string | null
+          pagamento_cpfs: string[] | null
+          pos_customer_id: string | null
+          reason: string
+          resolved_at: string | null
+          sale_created_at: string | null
+          sale_id: string
+        }
+        Insert: {
+          cadastro_cpf?: string | null
+          created_at?: string
+          customer_name?: string | null
+          pagamento_cpfs?: string[] | null
+          pos_customer_id?: string | null
+          reason: string
+          resolved_at?: string | null
+          sale_created_at?: string | null
+          sale_id: string
+        }
+        Update: {
+          cadastro_cpf?: string | null
+          created_at?: string
+          customer_name?: string | null
+          pagamento_cpfs?: string[] | null
+          pos_customer_id?: string | null
+          reason?: string
+          resolved_at?: string | null
+          sale_created_at?: string | null
+          sale_id?: string
+        }
+        Relationships: []
       }
       pos_sales_reattribution_log: {
         Row: {
@@ -20599,6 +20816,20 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "v_a1_orphan_pos_products"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pos_stock_adjustments_sale_id_fkey"
+            columns: ["sale_id"]
+            isOneToOne: false
+            referencedRelation: "fiscal_report_double_exit_notes"
+            referencedColumns: ["sale_id"]
+          },
+          {
+            foreignKeyName: "pos_stock_adjustments_sale_id_fkey"
+            columns: ["sale_id"]
+            isOneToOne: false
+            referencedRelation: "fiscal_report_online_nfce"
+            referencedColumns: ["sale_id"]
           },
           {
             foreignKeyName: "pos_stock_adjustments_sale_id_fkey"
@@ -23747,6 +23978,20 @@ export type Database = {
             foreignKeyName: "sale_freight_quotes_sale_id_fkey"
             columns: ["sale_id"]
             isOneToOne: false
+            referencedRelation: "fiscal_report_double_exit_notes"
+            referencedColumns: ["sale_id"]
+          },
+          {
+            foreignKeyName: "sale_freight_quotes_sale_id_fkey"
+            columns: ["sale_id"]
+            isOneToOne: false
+            referencedRelation: "fiscal_report_online_nfce"
+            referencedColumns: ["sale_id"]
+          },
+          {
+            foreignKeyName: "sale_freight_quotes_sale_id_fkey"
+            columns: ["sale_id"]
+            isOneToOne: false
             referencedRelation: "pos_sales"
             referencedColumns: ["id"]
           },
@@ -25816,6 +26061,20 @@ export type Database = {
             foreignKeyName: "tiny_stock_sync_errors_sale_id_fkey"
             columns: ["sale_id"]
             isOneToOne: false
+            referencedRelation: "fiscal_report_double_exit_notes"
+            referencedColumns: ["sale_id"]
+          },
+          {
+            foreignKeyName: "tiny_stock_sync_errors_sale_id_fkey"
+            columns: ["sale_id"]
+            isOneToOne: false
+            referencedRelation: "fiscal_report_online_nfce"
+            referencedColumns: ["sale_id"]
+          },
+          {
+            foreignKeyName: "tiny_stock_sync_errors_sale_id_fkey"
+            columns: ["sale_id"]
+            isOneToOne: false
             referencedRelation: "pos_sales"
             referencedColumns: ["id"]
           },
@@ -26237,6 +26496,20 @@ export type Database = {
             foreignKeyName: "trocas_devolucoes_pedido_novo_id_fkey"
             columns: ["pedido_novo_id"]
             isOneToOne: false
+            referencedRelation: "fiscal_report_double_exit_notes"
+            referencedColumns: ["sale_id"]
+          },
+          {
+            foreignKeyName: "trocas_devolucoes_pedido_novo_id_fkey"
+            columns: ["pedido_novo_id"]
+            isOneToOne: false
+            referencedRelation: "fiscal_report_online_nfce"
+            referencedColumns: ["sale_id"]
+          },
+          {
+            foreignKeyName: "trocas_devolucoes_pedido_novo_id_fkey"
+            columns: ["pedido_novo_id"]
+            isOneToOne: false
             referencedRelation: "pos_sales"
             referencedColumns: ["id"]
           },
@@ -26287,6 +26560,20 @@ export type Database = {
             columns: ["pedido_novo_id"]
             isOneToOne: false
             referencedRelation: "v_sale_taxes"
+            referencedColumns: ["sale_id"]
+          },
+          {
+            foreignKeyName: "trocas_devolucoes_pedido_original_id_fkey"
+            columns: ["pedido_original_id"]
+            isOneToOne: false
+            referencedRelation: "fiscal_report_double_exit_notes"
+            referencedColumns: ["sale_id"]
+          },
+          {
+            foreignKeyName: "trocas_devolucoes_pedido_original_id_fkey"
+            columns: ["pedido_original_id"]
+            isOneToOne: false
+            referencedRelation: "fiscal_report_online_nfce"
             referencedColumns: ["sale_id"]
           },
           {
@@ -28585,6 +28872,48 @@ export type Database = {
           total_spent?: number | null
           updated_at?: string | null
           zoppy_id?: string | null
+        }
+        Relationships: []
+      }
+      fiscal_report_double_exit_notes: {
+        Row: {
+          ambiente: string | null
+          canal: string | null
+          chave_acesso: string | null
+          cliente: string | null
+          cpf: string | null
+          emitente: string | null
+          emitente_cnpj: string | null
+          modelo: number | null
+          nota_em: string | null
+          numero: number | null
+          sale_id: string | null
+          sale_type: string | null
+          serie: number | null
+          valor_nota: number | null
+          valor_venda: number | null
+          venda_em: string | null
+        }
+        Relationships: []
+      }
+      fiscal_report_online_nfce: {
+        Row: {
+          ambiente: string | null
+          canal: string | null
+          chave_acesso: string | null
+          cliente: string | null
+          cpf: string | null
+          emitente: string | null
+          emitente_cnpj: string | null
+          modelo: number | null
+          nota_em: string | null
+          numero: number | null
+          sale_id: string | null
+          sale_type: string | null
+          serie: number | null
+          valor_nota: number | null
+          valor_venda: number | null
+          venda_em: string | null
         }
         Relationships: []
       }

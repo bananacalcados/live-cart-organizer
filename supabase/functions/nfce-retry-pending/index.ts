@@ -30,6 +30,8 @@ Deno.serve(withAccessLog("nfce-retry-pending", async (req) => {
     .from("fiscal_documents")
     .select("id, pos_sale_id, ambiente, retry_count")
     .eq("status", "pending_sefaz")
+    // Só NFC-e (65). NF-e pendente nunca é reenviada pelo emissor de NFC-e.
+    .eq("modelo", 65)
     .or(`next_retry_at.is.null,next_retry_at.lte.${nowIso}`)
     .lt("retry_count", MAX_RETRIES)
     .order("next_retry_at", { ascending: true, nullsFirst: true })

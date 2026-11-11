@@ -270,26 +270,28 @@ export function POSPickupOrders({ storeId }: Props) {
     if (!processingOrder || !saleResult?.sale_id) return;
     setEmittingNfce(true);
     try {
-      const { data, error } = await supabase.functions.invoke('nfce-emitir', {
+      // Retirada na loja de pedido do site/live é venda online: emite NF-e (modelo 55), nunca NF-e.
+      // TODO: confirmar com o contador se a retirada presencial de pedido online segue como NF-e.
+      const { data, error } = await supabase.functions.invoke('nfe-emitir', {
         body: { sale_id: saleResult.sale_id || processingOrder.id },
       });
       if (error) {
         const { extractEdgeError } = await import('@/lib/edgeFunctionError');
-        toast.error(await extractEdgeError(error, 'Erro ao emitir NFC-e'), { duration: 12000 });
+        toast.error(await extractEdgeError(error, 'Erro ao emitir NF-e'), { duration: 12000 });
         return;
       }
       if (data?.ok) {
-        toast.success("NFC-e autorizada!");
-        setNfceResult({ ...data, pdf_url: data.response?.DanfeUrl || null });
+        toast.success("NF-e autorizada!");
+        setNfceResult({ ...data, pdf_url: data.danfe_url || data.response?.DanfeUrl || null });
       } else if (data?.contingencia) {
-        toast.info("SEFAZ indisponível — NFC-e em contingência. Será reemitida automaticamente.");
+        toast.info("SEFAZ indisponível — NF-e em contingência. Será reemitida automaticamente.");
         setNfceResult({ contingencia: true });
       } else {
-        toast.error(data?.error || data?.rejection_message || "Erro ao emitir NFC-e", { duration: 12000 });
+        toast.error(data?.error || data?.rejection_message || "Erro ao emitir NF-e", { duration: 12000 });
       }
     } catch (e: any) {
       const { extractEdgeError } = await import('@/lib/edgeFunctionError');
-      toast.error(await extractEdgeError(e, 'Erro ao emitir NFC-e'), { duration: 12000 });
+      toast.error(await extractEdgeError(e, 'Erro ao emitir NF-e'), { duration: 12000 });
     } finally {
       setEmittingNfce(false);
     }
@@ -643,14 +645,14 @@ export function POSPickupOrders({ storeId }: Props) {
                     className="w-full bg-pos-orange hover:bg-pos-orange/90 text-pos-black font-bold gap-1.5"
                   >
                     {emittingNfce ? (
-                      <><Loader2 className="h-4 w-4 animate-spin" /> Emitindo NFC-e...</>
+                      <><Loader2 className="h-4 w-4 animate-spin" /> Emitindo NF-e...</>
                     ) : (
-                      <><FileText className="h-4 w-4" /> Emitir NFC-e</>
+                      <><FileText className="h-4 w-4" /> Emitir NF-e</>
                     )}
                   </Button>
                 ) : (
                   <div className="bg-green-600/10 rounded-lg p-3 text-center">
-                    <p className="text-sm text-green-400 font-medium">✅ NFC-e Emitida</p>
+                    <p className="text-sm text-green-400 font-medium">✅ NF-e Emitida</p>
                     {nfceResult.pdf_url && (
                       <a href={nfceResult.pdf_url} target="_blank" rel="noopener noreferrer" className="text-xs text-pos-orange underline mt-1 inline-block">
                         Abrir PDF

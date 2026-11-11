@@ -51,6 +51,7 @@ import { requireStaffOrInternal } from "../_shared/staff-or-internal.ts";
 //
 // Veja mem://features/fiscal/nfe-payload-golden-template para detalhes.
 // ============================================================================
+import { isOnlineSale, ONLINE_NFCE_MESSAGE } from "../_shared/fiscal/sale-fiscal-rules.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { persistFiscalFiles } from "../_shared/fiscal-persist-files.ts";
 import { resolveFiscalCompanyForSource, recordFiscalCompanyPending, resolveFiscalPending } from "../_shared/fiscal/gateway-company.ts";
@@ -97,6 +98,24 @@ Deno.serve(withAccessLog("nfce-emitir", async (req) => {
     if (saleErr || !sale) throw new Error(`Venda não encontrada: ${saleErr?.message}`);
 
     if (sale.status === "cancelled") throw new Error("Venda cancelada");
+    // NFC-e nunca em venda online/live/link/WhatsApp ou retirada de pedido online (qualquer tela).
+    if (isOnlineSale(sale)) {
+      return new Response(JSON.stringify({ ok: false, code: "online_sale_nfce_blocked", error: ONLINE_NFCE_MESSAGE }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 422,
+      });
+    }
+    // Uma nota de saída por venda: NF-e (55) autorizada bloqueia NFC-e.
+    {
+      const { data: other } = await supabase.from("fiscal_documents")
+        .select("id, numero").eq("pos_sale_id", sale_id).eq("modelo", 55)
+        .eq("status", "authorized").or("finalidade.eq.1,finalidade.is.null").limit(1).maybeSingle();
+      if (other) {
+        return new Response(JSON.stringify({
+          ok: false, code: "sale_already_invoiced",
+          error: `Esta venda já tem NF-e autorizada (nº ${(other as any).numero}). Não é possível emitir outra nota de saída.`,
+        }), { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 409 });
+      }
+    }
     // Redução fiscal da Expedição: só a nota usa fiscal_unit_price; a venda mantém o valor cheio.
     const items = (sale.pos_sale_items || []).map((it: any) => ({ ...it, unit_price: it.fiscal_unit_price ?? it.unit_price }));
     if (!items.length) throw new Error("Venda sem itens");

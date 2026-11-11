@@ -1284,7 +1284,7 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
 
         // 🔥 Auto-emissão NFC-e (apenas vendas presenciais)
         try {
-          if (saleId && saleType !== 'online') {
+          if (saleId && (saleType as string) !== 'online' && (saleType as string) !== 'live') {
             const { data: cfg } = await supabase
               .from('pos_invoice_config')
               .select('auto_emit_on_sale, auto_emit_min_value, auto_emit_payment_methods')
@@ -1510,7 +1510,7 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
     setEmittingNfce(true);
     try {
       // Vendas online → emissão NF-e ocorre na aba Envios (junto do despacho)
-      if (saleType === 'online') {
+      if ((saleType as string) === 'online' || (saleType as string) === 'live') {
         toast.info("Esta venda online será faturada com NF-e na aba Envios.");
         setEmittingNfce(false);
         return;

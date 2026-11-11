@@ -208,6 +208,9 @@ export function POSSaleDetailDialog({ sale, onClose, customer, items, sellerName
   const [originalSale, setOriginalSale] = useState<{ id: string; created_at: string; total: number; status: string; customer_name: string | null; paid_at: string | null } | null>(null);
   const [loadingOriginal, setLoadingOriginal] = useState(false);
   const isRemoteSale = sale?.sale_type === 'online' || sale?.sale_type === 'live';
+  // Venda online/live/link nunca recebe NFC-e (o servidor também recusa).
+  const isOnlineFiscal = isRemoteSale || ['site', 'live', 'link_online', 'whatsapp', 'online'].includes(String((sale as any)?.sales_channel || ''))
+    || !!(sale as any)?.is_store_pickup;
   // Rótulo derivado do modelo REAL do documento (55=NF-e, 65=NFC-e); fallback pelo tipo de venda.
   const fiscalTipoLabel = fiscalDoc?.modelo === 55 ? 'NF-e'
     : fiscalDoc?.modelo === 65 ? 'NFC-e'
@@ -511,7 +514,7 @@ export function POSSaleDetailDialog({ sale, onClose, customer, items, sellerName
     if (!confirm('Re-emitir esta nota em PRODUÇÃO (com valor fiscal real)? A nota anterior em homologação será mantida no histórico.')) return;
     setReemittingProd(true);
     try {
-      const fnName = isRemoteSale ? 'nfe-emitir' : 'nfce-emitir';
+      const fnName = isOnlineFiscal ? 'nfe-emitir' : 'nfce-emitir';
       const { data, error } = await supabase.functions.invoke(fnName, { body: { sale_id: sale.id, ambiente: 'producao' } });
       if (error) {
         const msg = await (await import('@/lib/edgeFunctionError')).extractEdgeError(error, 'Erro ao re-emitir nota fiscal');
@@ -1741,14 +1744,14 @@ export function POSSaleDetailDialog({ sale, onClose, customer, items, sellerName
                           {emittingNfce ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />}
                           {isRejected ? 'Reemitir NF-e' : 'Emitir NF-e'}
                         </Button>
-                        <Button
+                        {!isOnlineFiscal && <Button
                           onClick={() => handleEmitOrPrintFiscal('nfce')}
                           disabled={emittingNfce}
                           className="gap-1 h-10 text-xs bg-blue-600 text-white hover:bg-blue-700 font-bold"
                         >
                           {emittingNfce ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />}
                           {isRejected ? 'Reemitir NFC-e' : 'Emitir NFC-e'}
-                        </Button>
+                        </Button>}
                         <p className="col-span-2 text-[10px] text-gray-500 -mt-1">
                           💡 <strong>NF-e</strong> para vendas online/Live (modelo 55) · <strong>NFC-e</strong> para venda presencial (modelo 65)
                         </p>

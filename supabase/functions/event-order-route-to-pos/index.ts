@@ -169,6 +169,8 @@ Deno.serve(withAccessLog("event-order-route-to-pos", async (req) => {
         customer_id: posCustomerId,
         customer_name: customerName,
         customer_phone: whatsapp,
+        // CPF da ficha já na criação (a Conferência continua completando como reforço).
+        customer_cpf: cpfDigits.length === 11 ? cpfDigits : null,
         shipping_address,
         subtotal, discount, total,
         status: saleStatus,

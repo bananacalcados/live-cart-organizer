@@ -1345,6 +1345,13 @@
       "when": 1794423717800,
       "tag": "0191_central_reopen_progress",
       "breakpoints": true
+    },
+    {
+      "idx": 192,
+      "version": "7",
+      "when": 1794428516693,
+      "tag": "0192_fiscal_one_exit_note_and_sale_cpf",
+      "breakpoints": true
     }
   ]
 }
