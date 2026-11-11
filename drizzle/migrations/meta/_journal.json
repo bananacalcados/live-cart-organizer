@@ -1303,6 +1303,13 @@
       "when": 1794407241305,
       "tag": "0185_group_drafts_edit_by_campaign",
       "breakpoints": true
+    },
+    {
+      "idx": 186,
+      "version": "7",
+      "when": 1794407293147,
+      "tag": "0186_fix_group_draft_cards_ambiguous",
+      "breakpoints": true
     }
   ]
 }
