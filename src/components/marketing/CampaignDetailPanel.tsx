@@ -41,6 +41,7 @@ import { GroupDispatchErrorsPanel } from "./GroupDispatchErrorsPanel";
 import { authHeaders } from "@/lib/authHeaders";
 import { fetchInstanceInfo, instanceKeys, syncInstanceGroups } from "@/lib/marketing/instanceGroups";
 import { findMirrorUpdates, type MirrorUpdate } from "@/lib/marketing/mirrorGroupMedia";
+import { defaultSiblingChecked, summarizeByCampaign, type SyncSibling, type SyncApproveRow } from "@/lib/marketing/groupDraftSync";
 import { hasVipLinkWithoutMode } from "@/lib/marketing/vipLinkDraft";
 
 /** Detecta falhas transitórias de rede ("Load failed"/"Failed to fetch"/timeout). */
@@ -188,6 +189,25 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
   const [approvePreview, setApprovePreview] = useState<{ ids: string[] } | null>(null);
   const [mirrorPrompt, setMirrorPrompt] = useState<{ updates: MirrorUpdate[]; campaignNames: Record<string, string> } | null>(null);
   const [pastScheduleAck, setPastScheduleAck] = useState(false);
+  // Cópias da mesma mensagem em outras campanhas (sync_key), carregadas 1x ao abrir o resumo
+  const [syncSiblings, setSyncSiblings] = useState<SyncSibling[]>([]);
+  const [siblingChecked, setSiblingChecked] = useState<Record<string, boolean>>({});
+  const [siblingsLoading, setSiblingsLoading] = useState(false);
+  const previewKey = approvePreview?.ids.join(',') || '';
+  useEffect(() => {
+    if (!previewKey) { setSyncSiblings([]); setSiblingChecked({}); return; }
+    let cancelled = false;
+    setSiblingsLoading(true);
+    (supabase as any).rpc('group_draft_sync_siblings', { p_ids: previewKey.split(',') }).then(({ data, error }: any) => {
+      if (cancelled) return;
+      setSiblingsLoading(false);
+      if (error) { setSyncSiblings([]); return; }
+      const rows = (data || []) as SyncSibling[];
+      setSyncSiblings(rows);
+      setSiblingChecked(Object.fromEntries(rows.map(r => [r.id, defaultSiblingChecked(r)])));
+    });
+    return () => { cancelled = true; };
+  }, [previewKey]);
   const [isSending, setIsSending] = useState<string | null>(null);
   const [dispatchRefreshKey, setDispatchRefreshKey] = useState(0);
   const [newSlug, setNewSlug] = useState("");
@@ -890,10 +910,24 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
     setShowMessageForm(true);
   };
 
-  const approveDrafts = async (ids: string[]) => {
+  const approveDrafts = async (ids: string[], siblingIds: string[] = []) => {
     if (ids.length === 0) return;
     setIsApproving(true);
     try {
+      if (siblingIds.length > 0) {
+        const { data, error } = await (supabase as any).rpc('approve_group_drafts_synced', { p_anchor_ids: ids, p_sibling_ids: siblingIds, p_approved_by: 'usuario' });
+        if (error) throw error;
+        const names: Record<string, string> = { [campaignId]: campaign?.name || 'Esta campanha' };
+        syncSiblings.forEach(s => { names[s.campaign_id] = s.campaign_name || 'Campanha'; });
+        const summary = summarizeByCampaign((data || []) as SyncApproveRow[]);
+        const lines = Array.from(summary.entries()).map(([cid, v]) =>
+          `${names[cid] || 'Campanha'}: ${v.ok} aprovada(s)${v.blocked.length ? `, ${v.blocked.length} bloqueada(s) (${v.blocked.map(r => DRAFT_BLOCK_REASONS[r] || r).join('; ')})` : ''}`);
+        const anyBlocked = Array.from(summary.values()).some(v => v.blocked.length > 0);
+        (anyBlocked ? toast.warning : toast.success)(lines.join(' · '), { duration: 10000 });
+        setSelectedDraftIds([]);
+        await fetchMessages();
+        return;
+      }
       const { data: results, error } = await (supabase as any).rpc('approve_group_drafts', { p_ids: ids, p_approved_by: 'usuario' });
       if (error) throw error;
       const rows = (results || []) as { id: string; ok: boolean; reason: string }[];
@@ -1719,6 +1753,11 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
               const previewPast = previewOk.filter(r => r.isPast);
               const previewBlocked = previewRows.filter(r => r.reason);
               const approvableIds = previewOk.filter(r => !r.isPast || pastScheduleAck).map(r => r.msg.id);
+              const siblingIsPast = (s: SyncSibling) => !!s.scheduled_at && new Date(s.scheduled_at).getTime() < Date.now();
+              const pastSiblings = syncSiblings.filter(s => !s.reason && siblingChecked[s.id] && siblingIsPast(s) && approvableIds.includes(s.anchor_id));
+              const approvableSiblingIds = syncSiblings
+                .filter(s => !s.reason && siblingChecked[s.id] && approvableIds.includes(s.anchor_id) && (!siblingIsPast(s) || pastScheduleAck))
+                .map(s => s.id);
 
               return (
                 <>
@@ -1965,6 +2004,26 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
                           <strong>{previewOk.length}</strong> serão aprovadas e agendadas
                           {previewBlocked.length > 0 && <> · <strong className="text-destructive">{previewBlocked.length} bloqueada(s)</strong></>}
                         </p>
+                        {siblingsLoading && <p className="text-[11px] text-muted-foreground">Procurando cópias em outras campanhas…</p>}
+                        {previewOk.filter(r => syncSiblings.some(s => s.anchor_id === r.msg.id)).map(r => (
+                          <div key={`sib-${r.msg.id}`} className="rounded-md border bg-muted/30 p-2 space-y-1">
+                            <p className="text-[11px] font-medium">
+                              {r.msg.scheduled_at ? format(new Date(r.msg.scheduled_at), 'dd/MM HH:mm') : 'sem horário'} · {TYPE_LABELS[r.msg.message_type] || r.msg.message_type} — esta mensagem também está em:
+                            </p>
+                            <p className="text-[10px] text-muted-foreground">Aprovar também nas outras campanhas:</p>
+                            {syncSiblings.filter(s => s.anchor_id === r.msg.id).map(s => (
+                              <div key={s.id} className="flex items-center gap-2 text-[11px] pl-1">
+                                {s.reason ? <span className="text-destructive">❌</span> : (
+                                  <Checkbox checked={!!siblingChecked[s.id]} onCheckedChange={v => setSiblingChecked(prev => ({ ...prev, [s.id]: !!v }))} />
+                                )}
+                                <span>{s.campaign_name || 'Campanha'} ({s.scheduled_at ? format(new Date(s.scheduled_at), 'dd/MM HH:mm') : 'sem horário'})</span>
+                                {s.reason && <span className="text-destructive">{DRAFT_BLOCK_REASONS[s.reason] || s.reason}</span>}
+                                {!s.reason && s.content_differs && <Badge variant="outline" className="text-[10px] border-amber-500/50 text-amber-600">conteúdo diferente</Badge>}
+                                {!s.reason && siblingIsPast(s) && <span className="text-red-600">horário no passado</span>}
+                              </div>
+                            ))}
+                          </div>
+                        ))}
                         {previewBlocked.length > 0 && (
                           <div className="rounded-md border border-destructive/40 bg-destructive/10 p-2 space-y-1">
                             {previewBlocked.map(r => (
@@ -1974,14 +2033,19 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
                             ))}
                           </div>
                         )}
-                        {previewPast.length > 0 && (
+                        {(previewPast.length > 0 || pastSiblings.length > 0) && (
                           <div className="rounded-md border border-red-500/40 bg-red-500/10 p-2 space-y-2">
                             <p className="text-[11px] font-semibold text-red-600">
-                              ⚠️ {previewPast.length} mensagem(ns) com horário no passado serão ENVIADAS IMEDIATAMENTE após aprovar:
+                              ⚠️ {previewPast.length + pastSiblings.length} mensagem(ns) com horário no passado serão ENVIADAS IMEDIATAMENTE após aprovar:
                             </p>
                             {previewPast.map(r => (
                               <p key={r.msg.id} className="text-[11px]">
                                 • {format(new Date(r.msg.scheduled_at!), 'dd/MM HH:mm')} · {TYPE_LABELS[r.msg.message_type] || r.msg.message_type}
+                              </p>
+                            ))}
+                            {pastSiblings.map(s => (
+                              <p key={`past-${s.id}`} className="text-[11px]">
+                                • {format(new Date(s.scheduled_at!), 'dd/MM HH:mm')} · {s.campaign_name || 'Campanha'}
                               </p>
                             ))}
                             <label className="flex items-center gap-2 text-[11px] font-medium">
@@ -1993,9 +2057,9 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
                       </div>
                       <DialogFooter>
                         <Button variant="outline" onClick={() => setApprovePreview(null)}>Cancelar</Button>
-                        <Button onClick={() => approveDrafts(approvableIds)} disabled={isApproving || approvableIds.length === 0} className="gap-1">
+                        <Button onClick={() => approveDrafts(approvableIds, approvableSiblingIds)} disabled={isApproving || approvableIds.length === 0} className="gap-1">
                           {isApproving ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle className="h-4 w-4" />}
-                          Aprovar {approvableIds.length > 0 ? `(${approvableIds.length})` : ''}
+                          Aprovar {approvableIds.length > 0 ? `(${approvableIds.length + approvableSiblingIds.length})` : ''}
                         </Button>
                       </DialogFooter>
                     </DialogContent>
