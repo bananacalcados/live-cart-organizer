@@ -1373,6 +1373,20 @@
       "when": 1794435058965,
       "tag": "0195_support_auto_suggestions_shadow",
       "breakpoints": true
+    },
+    {
+      "idx": 196,
+      "version": "7",
+      "when": 1794435394630,
+      "tag": "0196_support_ai_agent_shadow",
+      "breakpoints": true
+    },
+    {
+      "idx": 197,
+      "version": "7",
+      "when": 1794435572666,
+      "tag": "0197_support_ai_settings_get",
+      "breakpoints": true
     }
   ]
 }

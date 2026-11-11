@@ -354,3 +354,6 @@ verify_jwt = false
 
 [functions.live-selfservice]
 verify_jwt = false
+
+[functions.support-ai-agent]
+verify_jwt = false

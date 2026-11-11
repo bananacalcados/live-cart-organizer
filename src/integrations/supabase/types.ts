@@ -25223,8 +25223,83 @@ export type Database = {
           },
         ]
       }
+      support_agent_scripts: {
+        Row: {
+          body: string
+          created_at: string
+          created_by: string | null
+          id: string
+          note: string | null
+          version: number
+        }
+        Insert: {
+          body: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          note?: string | null
+          version: number
+        }
+        Update: {
+          body?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          note?: string | null
+          version?: number
+        }
+        Relationships: []
+      }
+      support_ai_calls: {
+        Row: {
+          created_at: string
+          duration_ms: number | null
+          error: string | null
+          id: string
+          input_tokens: number | null
+          kind: string
+          model: string
+          ok: boolean
+          output_tokens: number | null
+          phone: string
+          suggestion_id: string | null
+          whatsapp_number_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          duration_ms?: number | null
+          error?: string | null
+          id?: string
+          input_tokens?: number | null
+          kind: string
+          model: string
+          ok: boolean
+          output_tokens?: number | null
+          phone: string
+          suggestion_id?: string | null
+          whatsapp_number_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          duration_ms?: number | null
+          error?: string | null
+          id?: string
+          input_tokens?: number | null
+          kind?: string
+          model?: string
+          ok?: boolean
+          output_tokens?: number | null
+          phone?: string
+          suggestion_id?: string | null
+          whatsapp_number_id?: string | null
+        }
+        Relationships: []
+      }
       support_auto_suggestions: {
         Row: {
+          agent_actions: Json
+          ai_error: string | null
+          ai_status: string | null
           auto_send_after: string | null
           channel: string
           created_at: string
@@ -25233,6 +25308,8 @@ export type Database = {
           discard_reason: string | null
           discarded_at: string | null
           discarded_by: string | null
+          exchange_offered: boolean
+          handoff_summary: string | null
           id: string
           incoming_text: string | null
           intent: string
@@ -25243,17 +25320,24 @@ export type Database = {
           reason: string
           sale_channel: string | null
           sale_id: string | null
+          script_version: number | null
           sent_at: string | null
           sent_by: string | null
           sent_link_id: string | null
           sent_text: string | null
           status: string
           suggested_text: string | null
+          triage: Json | null
+          triage_category: string | null
+          triage_confidence: number | null
           wa_me_url: string | null
           whatsapp_number_id: string | null
           wrong_suggestion: boolean
         }
         Insert: {
+          agent_actions?: Json
+          ai_error?: string | null
+          ai_status?: string | null
           auto_send_after?: string | null
           channel?: string
           created_at?: string
@@ -25262,6 +25346,8 @@ export type Database = {
           discard_reason?: string | null
           discarded_at?: string | null
           discarded_by?: string | null
+          exchange_offered?: boolean
+          handoff_summary?: string | null
           id?: string
           incoming_text?: string | null
           intent: string
@@ -25272,17 +25358,24 @@ export type Database = {
           reason: string
           sale_channel?: string | null
           sale_id?: string | null
+          script_version?: number | null
           sent_at?: string | null
           sent_by?: string | null
           sent_link_id?: string | null
           sent_text?: string | null
           status?: string
           suggested_text?: string | null
+          triage?: Json | null
+          triage_category?: string | null
+          triage_confidence?: number | null
           wa_me_url?: string | null
           whatsapp_number_id?: string | null
           wrong_suggestion?: boolean
         }
         Update: {
+          agent_actions?: Json
+          ai_error?: string | null
+          ai_status?: string | null
           auto_send_after?: string | null
           channel?: string
           created_at?: string
@@ -25291,6 +25384,8 @@ export type Database = {
           discard_reason?: string | null
           discarded_at?: string | null
           discarded_by?: string | null
+          exchange_offered?: boolean
+          handoff_summary?: string | null
           id?: string
           incoming_text?: string | null
           intent?: string
@@ -25301,12 +25396,16 @@ export type Database = {
           reason?: string
           sale_channel?: string | null
           sale_id?: string | null
+          script_version?: number | null
           sent_at?: string | null
           sent_by?: string | null
           sent_link_id?: string | null
           sent_text?: string | null
           status?: string
           suggested_text?: string | null
+          triage?: Json | null
+          triage_category?: string | null
+          triage_confidence?: number | null
           wa_me_url?: string | null
           whatsapp_number_id?: string | null
           wrong_suggestion?: boolean
@@ -25360,6 +25459,11 @@ export type Database = {
       }
       support_settings: {
         Row: {
+          ai_agent_model: string
+          ai_enabled: boolean
+          ai_max_calls_per_conversation_day: number
+          ai_timeout_ms: number
+          ai_triage_model: string
           auto_reply_cooldown_hours: number
           auto_reply_instance_ids: string[]
           auto_reply_max_delay_s: number
@@ -25378,6 +25482,11 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          ai_agent_model?: string
+          ai_enabled?: boolean
+          ai_max_calls_per_conversation_day?: number
+          ai_timeout_ms?: number
+          ai_triage_model?: string
           auto_reply_cooldown_hours?: number
           auto_reply_instance_ids?: string[]
           auto_reply_max_delay_s?: number
@@ -25396,6 +25505,11 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          ai_agent_model?: string
+          ai_enabled?: boolean
+          ai_max_calls_per_conversation_day?: number
+          ai_timeout_ms?: number
+          ai_triage_model?: string
           auto_reply_cooldown_hours?: number
           auto_reply_instance_ids?: string[]
           auto_reply_max_delay_s?: number
@@ -33033,6 +33147,36 @@ export type Database = {
         Args: { p_event_id: string }
         Returns: undefined
       }
+      support_agent_script_get: { Args: never; Returns: Json }
+      support_agent_script_save: {
+        Args: { p_body: string; p_note?: string }
+        Returns: number
+      }
+      support_ai_accuracy: { Args: never; Returns: Json }
+      support_ai_enqueue: {
+        Args: {
+          p_channel: string
+          p_message_row_id: string
+          p_number_id: string
+          p_phone: string
+          p_text: string
+        }
+        Returns: string
+      }
+      support_ai_fallback: {
+        Args: { p_error: string; p_id: string }
+        Returns: string
+      }
+      support_ai_settings_get: { Args: never; Returns: Json }
+      support_ai_settings_update: {
+        Args: {
+          p_agent_model: string
+          p_enabled: boolean
+          p_max_calls: number
+          p_triage_model: string
+        }
+        Returns: undefined
+      }
       support_auto_evaluate: {
         Args: {
           p_channel: string
@@ -33067,6 +33211,9 @@ export type Database = {
       support_suggestions_list: {
         Args: { p_limit?: number; p_offset?: number; p_status?: string }
         Returns: {
+          agent_actions: Json
+          ai_error: string | null
+          ai_status: string | null
           auto_send_after: string | null
           channel: string
           created_at: string
@@ -33075,6 +33222,8 @@ export type Database = {
           discard_reason: string | null
           discarded_at: string | null
           discarded_by: string | null
+          exchange_offered: boolean
+          handoff_summary: string | null
           id: string
           incoming_text: string | null
           intent: string
@@ -33085,12 +33234,16 @@ export type Database = {
           reason: string
           sale_channel: string | null
           sale_id: string | null
+          script_version: number | null
           sent_at: string | null
           sent_by: string | null
           sent_link_id: string | null
           sent_text: string | null
           status: string
           suggested_text: string | null
+          triage: Json | null
+          triage_category: string | null
+          triage_confidence: number | null
           wa_me_url: string | null
           whatsapp_number_id: string | null
           wrong_suggestion: boolean

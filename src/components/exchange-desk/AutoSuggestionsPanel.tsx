@@ -10,15 +10,20 @@ import { useChatSender, type SendProvider } from "@/hooks/chat/useChatSender";
 import { deskCall } from "./api";
 import { REASON_TEXT } from "@/lib/supportAuto/intent";
 import { AutoReplySettings } from "./AutoReplySettings";
+import { AiAgentSettings } from "./AiAgentSettings";
 
 interface Suggestion {
   id: string; created_at: string; phone: string; channel: string; whatsapp_number_id: string | null; customer_name: string | null;
   incoming_text: string | null; intent: string; decision: string; reason: string; link_type: string | null;
   suggested_text: string | null; status: string; sent_text: string | null; discard_reason: string | null;
+  triage_category?: string | null; triage_confidence?: number | null; triage?: { justificativa?: string } | null;
+  agent_actions?: { acao: string; pedido: Record<string, unknown>; resultado: unknown }[]; handoff_summary?: string | null; ai_status?: string | null;
 }
 const PAGE = 50;
 const INTENT: Record<string, string> = { troca: "Troca", devolucao: "Devolução", indefinido: "Indefinido" };
-const DECISION: Record<string, string> = { enviar_link: "Mandar link", presencial: "Compra na loja", instagram_whatsapp: "Levar pro WhatsApp", fila: "Precisa de você" };
+const DECISION: Record<string, string> = { enviar_link: "Mandar link", presencial: "Compra na loja", instagram_whatsapp: "Levar pro WhatsApp", fila: "Precisa de você", conversa: "Conversa da IA" };
+const TRIAGE: Record<string, string> = { venda: "Venda", troca: "Troca", devolucao: "Devolução", troca_ou_devolucao_ambiguo: "Troca ou devolução?", outro_suporte: "Outro suporte", nada: "Nada" };
+const ACTION: Record<string, string> = { buscar_pedidos: "Buscou pedidos", checar_elegibilidade: "Conferiu prazo", consultar_numeracoes: "Consultou numerações", registrar_oferta_troca: "Ofereceu troca", preparar_link: "Preparou link", escalar_humano: "Passou para pessoa" };
 
 function SuggestionCard({ s, instances, onDone }: { s: Suggestion; instances: Record<string, { provider: string; label: string }>; onDone: () => void }) {
   const [text, setText] = useState(s.suggested_text || "");
@@ -69,7 +74,19 @@ function SuggestionCard({ s, instances, onDone }: { s: Suggestion; instances: Re
         <span className="ml-auto text-xs text-muted-foreground">{new Date(s.created_at).toLocaleString("pt-BR")}</span>
       </div>
       <p className="text-sm">“{s.incoming_text}”</p>
-      <p className="text-sm text-muted-foreground">Motivo: {REASON_TEXT[s.reason] || s.reason}</p>
+      {s.triage_category && (
+        <p className="text-sm">Triagem da IA: <b>{TRIAGE[s.triage_category] || s.triage_category}</b>{s.triage_confidence != null ? ` (${Math.round(Number(s.triage_confidence) * 100)}%)` : ""}{s.triage?.justificativa ? ` — ${s.triage.justificativa}` : ""}</p>
+      )}
+      {s.ai_status === "falhou_reserva" && <p className="text-xs text-muted-foreground">A IA falhou; sugestão feita pela regra de palavras.</p>}
+      <p className="text-sm text-muted-foreground">Motivo: {s.reason?.startsWith("ia_escalou:") ? `IA passou para pessoa — ${s.reason.slice(11)}` : REASON_TEXT[s.reason] || s.reason}</p>
+      {s.handoff_summary && <p className="text-sm">Resumo para o atendente: {s.handoff_summary}</p>}
+      {!!s.agent_actions?.length && (
+        <details className="text-xs text-muted-foreground">
+          <summary className="cursor-pointer">Ações que a IA pediu ({s.agent_actions.length})</summary>
+          {s.agent_actions.map((a, i) => <div key={i}>{ACTION[a.acao] || a.acao} {JSON.stringify(a.pedido)} → {JSON.stringify(a.resultado).slice(0, 300)}</div>)}
+        </details>
+      )}
+      {s.link_type && s.decision === "enviar_link" && <p className="text-xs">Link que seria enviado: Central de {s.link_type === "troca" ? "troca" : "devolução"} (gerado só ao clicar em enviar)</p>}
       {s.status === "nova" ? (
         <>
           <Textarea value={text} onChange={(e) => setText(e.target.value)} rows={3} placeholder="Escreva a resposta para a cliente" />
@@ -120,6 +137,7 @@ export function AutoSuggestionsPanel() {
   return (
     <div className="space-y-3">
       <AutoReplySettings />
+      <AiAgentSettings />
       <div className="flex gap-2">
         {[["nova", "Novas"], ["enviada", "Enviadas"], ["descartada", "Descartadas"]].map(([k, l]) => (
           <Button key={k} size="sm" variant={status === k ? "default" : "outline"} onClick={() => setStatus(k)}>{l}</Button>
