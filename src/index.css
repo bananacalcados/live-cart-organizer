@@ -39,6 +39,8 @@
     /* Orange accent for CTAs */
     --accent: 25 90% 52%;
     --accent-foreground: 0 0% 100%;
+    --whatsapp: 142 70% 30%;
+    --whatsapp-foreground: 0 0% 100%;
 
     --destructive: 0 72% 51%;
     --destructive-foreground: 0 0% 100%;
@@ -147,6 +149,8 @@
 
     --accent: 25 90% 52%;
     --accent-foreground: 0 0% 100%;
+    --whatsapp: 142 70% 30%;
+    --whatsapp-foreground: 0 0% 100%;
 
     --destructive: 0 62% 45%;
     --destructive-foreground: 0 0% 100%;
