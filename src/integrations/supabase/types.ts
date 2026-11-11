@@ -30331,6 +30331,10 @@ export type Database = {
         Args: { p_event_id: string }
         Returns: Json
       }
+      get_event_official_whatsapp: {
+        Args: { p_event_id?: string; p_slug?: string }
+        Returns: Json
+      }
       get_events_performance: { Args: { p_mes_ref: string }; Returns: Json }
       get_group_conversation_heads: {
         Args: never
