@@ -18,12 +18,14 @@ interface Suggestion {
   suggested_text: string | null; status: string; sent_text: string | null; discard_reason: string | null;
   triage_category?: string | null; triage_confidence?: number | null; triage?: { justificativa?: string } | null;
   agent_actions?: { acao: string; pedido: Record<string, unknown>; resultado: unknown }[]; handoff_summary?: string | null; ai_status?: string | null;
+  would_route_support?: boolean; routed_at?: string | null; routed_auto?: boolean; tracking_info?: { pedido?: string; url?: string | null; etapa?: string; enviado_em?: string | null } | null;
 }
 const PAGE = 50;
-const INTENT: Record<string, string> = { troca: "Troca", devolucao: "Devolução", indefinido: "Indefinido" };
+const INTENT: Record<string, string> = { troca: "Troca", devolucao: "Devolução", rastreio: "Rastreio", indefinido: "Indefinido" };
+export const ETAPA: Record<string, string> = { em_separacao: "em separação", separado: "separado", enviado: "enviado", entregue: "entregue", sem_envio: "sem envio" };
 const DECISION: Record<string, string> = { enviar_link: "Mandar link", presencial: "Compra na loja", instagram_whatsapp: "Levar pro WhatsApp", fila: "Precisa de você", conversa: "Conversa da IA" };
-const TRIAGE: Record<string, string> = { venda: "Venda", troca: "Troca", devolucao: "Devolução", troca_ou_devolucao_ambiguo: "Troca ou devolução?", outro_suporte: "Outro suporte", nada: "Nada" };
-const ACTION: Record<string, string> = { buscar_pedidos: "Buscou pedidos", checar_elegibilidade: "Conferiu prazo", consultar_numeracoes: "Consultou numerações", registrar_oferta_troca: "Ofereceu troca", preparar_link: "Preparou link", escalar_humano: "Passou para pessoa" };
+export const TRIAGE: Record<string, string> = { venda: "Venda", troca: "Troca", devolucao: "Devolução", troca_ou_devolucao_ambiguo: "Troca ou devolução?", rastreio: "Rastreio", outro_suporte: "Outro suporte", nada: "Nada" };
+export const ACTION: Record<string, string> = { buscar_pedidos: "Buscou pedidos", checar_elegibilidade: "Conferiu prazo", consultar_numeracoes: "Consultou numerações", registrar_oferta_troca: "Ofereceu troca", preparar_link: "Preparou link", consultar_rastreio: "Consultou rastreio", escalar_humano: "Passou para pessoa" };
 
 function SuggestionCard({ s, instances, onDone }: { s: Suggestion; instances: Record<string, { provider: string; label: string }>; onDone: () => void }) {
   const [text, setText] = useState(s.suggested_text || "");
@@ -56,6 +58,13 @@ function SuggestionCard({ s, instances, onDone }: { s: Suggestion; instances: Re
     } catch (e) { toast.error(e instanceof Error ? e.message : "Erro"); }
     finally { setBusy(false); }
   };
+  const [routed, setRouted] = useState(!!s.routed_at);
+  const route = async () => {
+    setBusy(true);
+    try { await deskCall("support_suggestion_route", { p_id: s.id }); setRouted(true); toast.success("Conversa movida para Suporte"); }
+    catch (e) { toast.error(e instanceof Error ? e.message : "Erro"); }
+    finally { setBusy(false); }
+  };
   const discard = async () => {
     if (!why.trim()) { toast.error("Diga por que a sugestão está errada"); return; }
     setBusy(true);
@@ -85,6 +94,15 @@ function SuggestionCard({ s, instances, onDone }: { s: Suggestion; instances: Re
           <summary className="cursor-pointer">Ações que a IA pediu ({s.agent_actions.length})</summary>
           {s.agent_actions.map((a, i) => <div key={i}>{ACTION[a.acao] || a.acao} {JSON.stringify(a.pedido)} → {JSON.stringify(a.resultado).slice(0, 300)}</div>)}
         </details>
+      )}
+      {s.tracking_info && <p className="text-xs">Rastreio do pedido: {ETAPA[s.tracking_info.etapa || ""] || s.tracking_info.etapa}{s.tracking_info.enviado_em ? ` · enviado em ${new Date(s.tracking_info.enviado_em + "T12:00:00").toLocaleDateString("pt-BR")}` : ""}{s.tracking_info.url ? " · com link" : " · sem link"}</p>}
+      {s.would_route_support && s.channel === "whatsapp" && (
+        <div className="flex items-center gap-2 text-xs">
+          {routed ? <span>Movida para a linha Suporte{s.routed_auto ? " (automático)" : ""}.</span> : <>
+            <span>Moveria para a linha SUPORTE do WhatsApp do PDV.</span>
+            <Button size="sm" variant="outline" disabled={busy} onClick={route}>Mover para Suporte</Button>
+          </>}
+        </div>
       )}
       {s.link_type && s.decision === "enviar_link" && <p className="text-xs">Link que seria enviado: Central de {s.link_type === "troca" ? "troca" : "devolução"} (gerado só ao clicar em enviar)</p>}
       {s.status === "nova" ? (

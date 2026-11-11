@@ -106,6 +106,13 @@ export function ExchangeDeskCard({ id, staff, onClose, onChanged }: { id: string
     finally { setBusy(false); }
   };
 
+  const deleteTest = async () => {
+    setBusy(true);
+    try { await deskCall("exchange_desk_delete_test", { p_id: id }); toast({ title: "Teste apagado" }); onChanged(); onClose(); }
+    catch (e) { toast({ title: "Não apagou", description: e instanceof Error ? e.message : "", variant: "destructive" }); }
+    finally { setBusy(false); }
+  };
+
   const formTitle: Record<Form["kind"], string> = {
     approve: "Aprovar (exceção)", deny: "Negar", request_info: "Pedir mais informação", note: "Observação interna", offer_size: "Oferecer outra numeração", create_troca: "Abrir registro da troca", choose_product: "Escolher e separar produto",
   };
@@ -169,11 +176,13 @@ export function ExchangeDeskCard({ id, staff, onClose, onChanged }: { id: string
             {r.status === "escalado" && can("approve", "xxx") === null && <Button size="sm" onClick={() => setForm({ kind: "approve", reason: "", note: "" })}>Aprovar</Button>}
             {r.status === "escalado" && can("approve", "xxx") !== null && <span className="text-xs text-muted-foreground self-center">{can("approve", "xxx")}</span>}
             {can("deny", "xxx") === null && <Button size="sm" variant="destructive" onClick={() => setForm({ kind: "deny", reason: "", note: "", tpl: "negada" })}>Negar</Button>}
-            {can("create_troca") === null && <Button size="sm" onClick={() => setForm({ kind: "create_troca", reason: "", note: "" })}>Abrir registro da {r.request_type === "troca" ? "troca" : "devolução"}</Button>}
-            {can("reverse") === null && <Button size="sm" onClick={() => setConfirmReverse(true)}>Gerar reversa dos Correios</Button>}
+            {!r.is_test && can("create_troca") === null && <Button size="sm" onClick={() => setForm({ kind: "create_troca", reason: "", note: "" })}>Abrir registro da {r.request_type === "troca" ? "troca" : "devolução"}</Button>}
+            {!r.is_test && can("reverse") === null && <Button size="sm" onClick={() => setConfirmReverse(true)}>Gerar reversa dos Correios</Button>}
             {d.troca && <Button size="sm" variant="outline" onClick={() => navigate("/pos")}>Abrir no PDV ({d.troca.codigo})</Button>}
             <Button size="sm" variant="ghost" onClick={() => setForm({ kind: "note", reason: "", note: "" })}>Observação interna</Button>
+            {r.is_test && <Button size="sm" variant="destructive" disabled={busy} onClick={deleteTest}>Apagar teste</Button>}
           </div>
+          {r.is_test && <p className="text-xs text-destructive">Solicitação de TESTE: não gera reversa nem registro de troca.</p>}
           {r.request_type === "devolucao" && <p className="text-xs text-muted-foreground">Devolução: não prometa valor nem prazo de reembolso. Estorno, voucher e nota seguem pelo fluxo normal do PDV.</p>}
 
           {form && (

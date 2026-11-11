@@ -7825,6 +7825,7 @@ export type Database = {
           fit_detail: string | null
           frenet_quote_id: string | null
           id: string
+          is_test: boolean
           new_sku: string | null
           new_variant_id: string | null
           order_number: string | null
@@ -7886,6 +7887,7 @@ export type Database = {
           fit_detail?: string | null
           frenet_quote_id?: string | null
           id?: string
+          is_test?: boolean
           new_sku?: string | null
           new_variant_id?: string | null
           order_number?: string | null
@@ -7947,6 +7949,7 @@ export type Database = {
           fit_detail?: string | null
           frenet_quote_id?: string | null
           id?: string
+          is_test?: boolean
           new_sku?: string | null
           new_variant_id?: string | null
           order_number?: string | null
@@ -25318,6 +25321,9 @@ export type Database = {
           mode_at_creation: string
           phone: string
           reason: string
+          routed_at: string | null
+          routed_auto: boolean
+          routed_by: string | null
           sale_channel: string | null
           sale_id: string | null
           script_version: number | null
@@ -25327,11 +25333,13 @@ export type Database = {
           sent_text: string | null
           status: string
           suggested_text: string | null
+          tracking_info: Json | null
           triage: Json | null
           triage_category: string | null
           triage_confidence: number | null
           wa_me_url: string | null
           whatsapp_number_id: string | null
+          would_route_support: boolean
           wrong_suggestion: boolean
         }
         Insert: {
@@ -25356,6 +25364,9 @@ export type Database = {
           mode_at_creation: string
           phone: string
           reason: string
+          routed_at?: string | null
+          routed_auto?: boolean
+          routed_by?: string | null
           sale_channel?: string | null
           sale_id?: string | null
           script_version?: number | null
@@ -25365,11 +25376,13 @@ export type Database = {
           sent_text?: string | null
           status?: string
           suggested_text?: string | null
+          tracking_info?: Json | null
           triage?: Json | null
           triage_category?: string | null
           triage_confidence?: number | null
           wa_me_url?: string | null
           whatsapp_number_id?: string | null
+          would_route_support?: boolean
           wrong_suggestion?: boolean
         }
         Update: {
@@ -25394,6 +25407,9 @@ export type Database = {
           mode_at_creation?: string
           phone?: string
           reason?: string
+          routed_at?: string | null
+          routed_auto?: boolean
+          routed_by?: string | null
           sale_channel?: string | null
           sale_id?: string | null
           script_version?: number | null
@@ -25403,11 +25419,13 @@ export type Database = {
           sent_text?: string | null
           status?: string
           suggested_text?: string | null
+          tracking_info?: Json | null
           triage?: Json | null
           triage_category?: string | null
           triage_confidence?: number | null
           wa_me_url?: string | null
           whatsapp_number_id?: string | null
+          would_route_support?: boolean
           wrong_suggestion?: boolean
         }
         Relationships: []
@@ -25420,6 +25438,7 @@ export type Database = {
           customer_phone: string | null
           expires_at: string
           id: string
+          is_test: boolean
           order_ref: string
           request_type: string
           revoked_at: string | null
@@ -25434,6 +25453,7 @@ export type Database = {
           customer_phone?: string | null
           expires_at?: string
           id?: string
+          is_test?: boolean
           order_ref: string
           request_type: string
           revoked_at?: string | null
@@ -25448,6 +25468,7 @@ export type Database = {
           customer_phone?: string | null
           expires_at?: string
           id?: string
+          is_test?: boolean
           order_ref?: string
           request_type?: string
           revoked_at?: string | null
@@ -25469,6 +25490,7 @@ export type Database = {
           auto_reply_max_delay_s: number
           auto_reply_min_delay_s: number
           auto_reply_mode: string
+          auto_route_support_line: boolean
           central_auto_reverse: boolean
           central_base_url: string
           central_public_enabled: boolean
@@ -25479,6 +25501,7 @@ export type Database = {
           return_window_days: number
           ship_replacement_when: string
           support_whatsapp_phone: string | null
+          tracking_share_last_event: boolean
           updated_at: string
         }
         Insert: {
@@ -25492,6 +25515,7 @@ export type Database = {
           auto_reply_max_delay_s?: number
           auto_reply_min_delay_s?: number
           auto_reply_mode?: string
+          auto_route_support_line?: boolean
           central_auto_reverse?: boolean
           central_base_url?: string
           central_public_enabled?: boolean
@@ -25502,6 +25526,7 @@ export type Database = {
           return_window_days?: number
           ship_replacement_when?: string
           support_whatsapp_phone?: string | null
+          tracking_share_last_event?: boolean
           updated_at?: string
         }
         Update: {
@@ -25515,6 +25540,7 @@ export type Database = {
           auto_reply_max_delay_s?: number
           auto_reply_min_delay_s?: number
           auto_reply_mode?: string
+          auto_route_support_line?: boolean
           central_auto_reverse?: boolean
           central_base_url?: string
           central_public_enabled?: boolean
@@ -25525,6 +25551,7 @@ export type Database = {
           return_window_days?: number
           ship_replacement_when?: string
           support_whatsapp_phone?: string | null
+          tracking_share_last_event?: boolean
           updated_at?: string
         }
         Relationships: []
@@ -25599,6 +25626,167 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      support_training_items: {
+        Row: {
+          agent_actions: Json | null
+          agent_text: string | null
+          attempts: number
+          channel: string
+          conversation: Json | null
+          created_at: string
+          customer_name: string | null
+          decision: string | null
+          error: string | null
+          handoff_summary: string | null
+          id: string
+          instance_name: string | null
+          is_support: boolean | null
+          last_incoming_at: string | null
+          orders_ctx: Json | null
+          phone: string
+          processed_at: string | null
+          reason: string | null
+          review_class_ok: boolean | null
+          review_comment: string | null
+          review_correct_category: string | null
+          review_group: string | null
+          review_ideal_reply: string | null
+          review_reply_ok: boolean | null
+          reviewed_at: string | null
+          reviewed_by: string | null
+          run_id: string
+          status: string
+          tokens_in: number | null
+          tokens_out: number | null
+          tracking_info: Json | null
+          triage: Json | null
+          triage_category: string | null
+          triage_confidence: number | null
+          whatsapp_number_id: string | null
+          would_route_support: boolean | null
+        }
+        Insert: {
+          agent_actions?: Json | null
+          agent_text?: string | null
+          attempts?: number
+          channel?: string
+          conversation?: Json | null
+          created_at?: string
+          customer_name?: string | null
+          decision?: string | null
+          error?: string | null
+          handoff_summary?: string | null
+          id?: string
+          instance_name?: string | null
+          is_support?: boolean | null
+          last_incoming_at?: string | null
+          orders_ctx?: Json | null
+          phone: string
+          processed_at?: string | null
+          reason?: string | null
+          review_class_ok?: boolean | null
+          review_comment?: string | null
+          review_correct_category?: string | null
+          review_group?: string | null
+          review_ideal_reply?: string | null
+          review_reply_ok?: boolean | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          run_id: string
+          status?: string
+          tokens_in?: number | null
+          tokens_out?: number | null
+          tracking_info?: Json | null
+          triage?: Json | null
+          triage_category?: string | null
+          triage_confidence?: number | null
+          whatsapp_number_id?: string | null
+          would_route_support?: boolean | null
+        }
+        Update: {
+          agent_actions?: Json | null
+          agent_text?: string | null
+          attempts?: number
+          channel?: string
+          conversation?: Json | null
+          created_at?: string
+          customer_name?: string | null
+          decision?: string | null
+          error?: string | null
+          handoff_summary?: string | null
+          id?: string
+          instance_name?: string | null
+          is_support?: boolean | null
+          last_incoming_at?: string | null
+          orders_ctx?: Json | null
+          phone?: string
+          processed_at?: string | null
+          reason?: string | null
+          review_class_ok?: boolean | null
+          review_comment?: string | null
+          review_correct_category?: string | null
+          review_group?: string | null
+          review_ideal_reply?: string | null
+          review_reply_ok?: boolean | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          run_id?: string
+          status?: string
+          tokens_in?: number | null
+          tokens_out?: number | null
+          tracking_info?: Json | null
+          triage?: Json | null
+          triage_category?: string | null
+          triage_confidence?: number | null
+          whatsapp_number_id?: string | null
+          would_route_support?: boolean | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "support_training_items_run_id_fkey"
+            columns: ["run_id"]
+            isOneToOne: false
+            referencedRelation: "support_training_runs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      support_training_runs: {
+        Row: {
+          created_at: string
+          days: number
+          eligible_conversations: number
+          est_cost_usd: number | null
+          finished_at: string | null
+          id: string
+          label: string
+          notes: string | null
+          selected_conversations: number
+        }
+        Insert: {
+          created_at?: string
+          days?: number
+          eligible_conversations?: number
+          est_cost_usd?: number | null
+          finished_at?: string | null
+          id?: string
+          label: string
+          notes?: string | null
+          selected_conversations?: number
+        }
+        Update: {
+          created_at?: string
+          days?: number
+          eligible_conversations?: number
+          est_cost_usd?: number | null
+          finished_at?: string | null
+          id?: string
+          label?: string
+          notes?: string | null
+          selected_conversations?: number
+        }
+        Relationships: []
       }
       system_settings: {
         Row: {
@@ -29715,6 +29903,10 @@ export type Database = {
       _is_group_staff: { Args: never; Returns: boolean }
       _norm_concrete_gateway: { Args: { p: string }; Returns: string }
       _pm_pmd_sync_in_progress: { Args: never; Returns: boolean }
+      _support_move_to_support_line: {
+        Args: { p_by: string; p_number: string; p_phone: string }
+        Returns: boolean
+      }
       _validate_group_draft: { Args: { p_id: string }; Returns: string }
       ack_group_responsible_alert: {
         Args: { p_id: string }
@@ -30058,6 +30250,7 @@ export type Database = {
             }
             Returns: Json
           }
+      central_test_link_ok: { Args: { p_hash: string }; Returns: boolean }
       change_area_password: {
         Args: { p_area: string; p_current: string; p_new: string }
         Returns: boolean
@@ -30458,6 +30651,10 @@ export type Database = {
         }
         Returns: Json
       }
+      create_support_test_link: {
+        Args: { p_order_ref: string; p_request_type: string }
+        Returns: Json
+      }
       crm_facet_counts: {
         Args: { p_column: string }
         Returns: {
@@ -30649,6 +30846,7 @@ export type Database = {
         Returns: Json
       }
       exchange_desk_count: { Args: never; Returns: number }
+      exchange_desk_delete_test: { Args: { p_id: string }; Returns: undefined }
       exchange_desk_detail: { Args: { p_id: string }; Returns: Json }
       exchange_desk_list: {
         Args: {
@@ -32792,6 +32990,10 @@ export type Database = {
         Returns: boolean
       }
       rotate_overlay_token: { Args: { p_event_id: string }; Returns: string }
+      sale_has_only_test_requests: {
+        Args: { p_sale: string }
+        Returns: boolean
+      }
       sample_variant_normalization: {
         Args: { p_limit?: number }
         Returns: {
@@ -33197,8 +33399,13 @@ export type Database = {
         }
         Returns: undefined
       }
+      support_auto_route: { Args: { p_id: string }; Returns: boolean }
       support_classify_intent: { Args: { p: string }; Returns: string }
       support_normalize_text: { Args: { p: string }; Returns: string }
+      support_route_settings_update: {
+        Args: { p_auto_route: boolean }
+        Returns: undefined
+      }
       support_suggestion_discard: {
         Args: { p_id: string; p_reason: string; p_wrong?: boolean }
         Returns: undefined
@@ -33208,6 +33415,7 @@ export type Database = {
         Returns: undefined
       }
       support_suggestion_prepare_link: { Args: { p_id: string }; Returns: Json }
+      support_suggestion_route: { Args: { p_id: string }; Returns: Json }
       support_suggestions_list: {
         Args: { p_limit?: number; p_offset?: number; p_status?: string }
         Returns: {
@@ -33232,6 +33440,9 @@ export type Database = {
           mode_at_creation: string
           phone: string
           reason: string
+          routed_at: string | null
+          routed_auto: boolean
+          routed_by: string | null
           sale_channel: string | null
           sale_id: string | null
           script_version: number | null
@@ -33241,11 +33452,13 @@ export type Database = {
           sent_text: string | null
           status: string
           suggested_text: string | null
+          tracking_info: Json | null
           triage: Json | null
           triage_category: string | null
           triage_confidence: number | null
           wa_me_url: string | null
           whatsapp_number_id: string | null
+          would_route_support: boolean
           wrong_suggestion: boolean
         }[]
         SetofOptions: {
@@ -33255,6 +33468,118 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      support_training_claim: {
+        Args: { p_n: number; p_run: string }
+        Returns: {
+          agent_actions: Json | null
+          agent_text: string | null
+          attempts: number
+          channel: string
+          conversation: Json | null
+          created_at: string
+          customer_name: string | null
+          decision: string | null
+          error: string | null
+          handoff_summary: string | null
+          id: string
+          instance_name: string | null
+          is_support: boolean | null
+          last_incoming_at: string | null
+          orders_ctx: Json | null
+          phone: string
+          processed_at: string | null
+          reason: string | null
+          review_class_ok: boolean | null
+          review_comment: string | null
+          review_correct_category: string | null
+          review_group: string | null
+          review_ideal_reply: string | null
+          review_reply_ok: boolean | null
+          reviewed_at: string | null
+          reviewed_by: string | null
+          run_id: string
+          status: string
+          tokens_in: number | null
+          tokens_out: number | null
+          tracking_info: Json | null
+          triage: Json | null
+          triage_category: string | null
+          triage_confidence: number | null
+          whatsapp_number_id: string | null
+          would_route_support: boolean | null
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "support_training_items"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      support_training_list: {
+        Args: {
+          p_group?: string
+          p_limit?: number
+          p_offset?: number
+          p_pending_only?: boolean
+          p_run: string
+        }
+        Returns: {
+          agent_actions: Json | null
+          agent_text: string | null
+          attempts: number
+          channel: string
+          conversation: Json | null
+          created_at: string
+          customer_name: string | null
+          decision: string | null
+          error: string | null
+          handoff_summary: string | null
+          id: string
+          instance_name: string | null
+          is_support: boolean | null
+          last_incoming_at: string | null
+          orders_ctx: Json | null
+          phone: string
+          processed_at: string | null
+          reason: string | null
+          review_class_ok: boolean | null
+          review_comment: string | null
+          review_correct_category: string | null
+          review_group: string | null
+          review_ideal_reply: string | null
+          review_reply_ok: boolean | null
+          reviewed_at: string | null
+          reviewed_by: string | null
+          run_id: string
+          status: string
+          tokens_in: number | null
+          tokens_out: number | null
+          tracking_info: Json | null
+          triage: Json | null
+          triage_category: string | null
+          triage_confidence: number | null
+          whatsapp_number_id: string | null
+          would_route_support: boolean | null
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "support_training_items"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      support_training_review: {
+        Args: {
+          p_class_ok: boolean
+          p_comment: string
+          p_correct_category: string
+          p_id: string
+          p_ideal_reply: string
+          p_reply_ok: boolean
+        }
+        Returns: undefined
+      }
+      support_training_stats: { Args: { p_run: string }; Returns: Json }
       sync_lead_pix_data: {
         Args: {
           p_chosen_payment_method: string

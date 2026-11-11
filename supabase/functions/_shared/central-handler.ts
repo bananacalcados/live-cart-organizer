@@ -38,9 +38,14 @@ export function centralHandler(kind: 'resolve' | 'submit', db: Db, enabled: () =
     try {
       if (Number(req.headers.get('content-length') || 0)>6000) return response({ error: 'Solicitação inválida.' },400);
       // Closed by flag: answer before touching tokens or counters.
-      if (!await enabled()) return response({ error: 'A central está em preparação. Fale com a nossa equipe.' },503);
-      const ipKey = 'ip:' + await hashCentralToken('central-ip:' + clientIp(req));
       const raw = await req.json().catch(() => null);
+      if (!await enabled()) {
+        // Central fechada: só links marcados como TESTE passam (sem tocar em contadores).
+        const tk = typeof raw?.token === 'string' && /^[A-Za-z0-9_-]{32,128}$/.test(raw.token) ? raw.token : null;
+        const { data: ok } = tk ? await db.rpc('central_test_link_ok', { p_hash: await hashCentralToken(tk) }) : { data: false };
+        if (ok !== true) return response({ error: 'A central está em preparação. Fale com a nossa equipe.' },503);
+      }
+      const ipKey = 'ip:' + await hashCentralToken('central-ip:' + clientIp(req));
       const parsed = (kind==='resolve' ? resolveSchema : submitSchema).safeParse(raw);
       if (!parsed.success) {
         const ok = await limiter([ipKey], true);

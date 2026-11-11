@@ -4,12 +4,12 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { withAccessLog } from "../_shared/withAccessLog.ts";
 import { isAuthorizedCron, unauthorizedResponse } from "../_shared/cron-guard.ts";
 import {
-  type CallLog, type ConvMessage, finalDecision, firstName, type OrderCtx, runAgent, runTriage, triageIgnores, triageToIntent,
+  type CallLog, finalDecision, runAgent, runTriage, shouldRouteSupport, triageIgnores, triageToIntent,
 } from "../_shared/support-ai.ts";
+import { buildSupportContext } from "../_shared/support-context.ts";
 
 const cors = { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-cron-secret" };
 const json = (b: unknown, s = 200) => new Response(JSON.stringify(b), { status: s, headers: { ...cors, "Content-Type": "application/json" } });
-const ONLINE = ["site", "live", "link_online", "whatsapp"];
 
 Deno.serve(withAccessLog("support-ai-agent", async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: cors });
@@ -38,39 +38,8 @@ Deno.serve(withAccessLog("support-ai-agent", async (req) => {
     error: c.error ?? null, duration_ms: c.ms, input_tokens: c.inTok ?? null, output_tokens: c.outTok ?? null,
   }))) : Promise.resolve();
 
-  // Conversa (últimas 12 mensagens de texto)
-  const { data: msgs } = await sb.from("whatsapp_messages").select("message,direction,created_at")
-    .eq("phone", s.phone).eq("whatsapp_number_id", s.whatsapp_number_id).lte("created_at", new Date().toISOString())
-    .order("created_at", { ascending: false }).limit(12);
-  const conv: ConvMessage[] = (msgs ?? []).filter((m) => m.message).reverse()
-    .map((m) => ({ from: m.direction === "incoming" ? "cliente" : "loja", text: m.message, at: m.created_at }));
-
-  // Pedidos pagos dos últimos 60 dias pelo final do telefone (sem CPF, endereço ou telefone)
-  const s8 = String(s.phone || "").replace(/\D/g, "").slice(-8);
-  const saleIds = new Map<string, string>(); const itemSku = new Map<string, string | null>();
-  let orders: OrderCtx[] = []; let nome: string | null = null;
-  if (s.channel !== "instagram" && s8.length === 8) {
-    const { data: sales } = await sb.from("pos_sales").select("id,created_at,sales_channel,status,customer_name,status_cancelamento")
-      .eq("phone_suffix8", s8).gte("created_at", new Date(Date.now() - 60 * 864e5).toISOString())
-      .in("status", ["completed", "paid"]).order("created_at", { ascending: false }).limit(5);
-    const valid = (sales ?? []).filter((x) => String(x.status_cancelamento ?? "") !== "cancelado");
-    const ids = valid.map((x) => x.id);
-    const [{ data: items }, { data: sims }] = await Promise.all([
-      ids.length ? sb.from("pos_sale_items").select("sale_id,product_name,size,variant_name,quantity,sku").in("sale_id", ids) : Promise.resolve({ data: [] as any[] }),
-      ids.length ? sb.from("shipment_simulations").select("sale_id,delivered_at,created_at").in("sale_id", ids).is("merged_into_id", null) : Promise.resolve({ data: [] as any[] }),
-    ]);
-    nome = firstName(valid[0]?.customer_name);
-    orders = valid.map((x, i) => {
-      const ref = `P${i + 1}`; saleIds.set(ref, x.id);
-      const its = (items ?? []).filter((it: any) => it.sale_id === x.id).map((it: any, j: number) => {
-        itemSku.set(`${ref}:I${j + 1}`, it.sku ?? null);
-        return { item: `I${j + 1}`, produto: it.product_name, tamanho: it.size ?? it.variant_name ?? null, quantidade: it.quantity };
-      });
-      const sim = (sims ?? []).filter((z: any) => z.sale_id === x.id).sort((a: any, b: any) => b.created_at.localeCompare(a.created_at))[0];
-      return { ref, data: x.created_at.slice(0, 10), canal: ONLINE.includes(x.sales_channel) ? "online" : "loja", status: x.status,
-        entregue_em: sim?.delivered_at?.slice(0, 10) ?? null, itens: its } as OrderCtx;
-    });
-  }
+  const ctx = await buildSupportContext(sb, s, { shareLastEvent: !!st.tracking_share_last_event });
+  const { conv, orders, nome, saleIds } = ctx;
 
   const cfg = { apiKey, baseURL: "https://ai.gateway.lovable.dev/v1", timeoutMs: st.ai_timeout_ms ?? 30000 };
   try {
@@ -89,23 +58,7 @@ Deno.serve(withAccessLog("support-ai-agent", async (req) => {
       .in("status", ["enviada"]).gte("created_at", new Date(Date.now() - 30 * 864e5).toISOString());
 
     const outcome = await runAgent(cfg, st.ai_agent_model, script?.body ?? "", nome, triage, conv, {
-      orders,
-      offersAlreadyMade: offers ?? 0,
-      maxOffers: st.max_offer_attempts ?? 1,
-      checkEligibility: async (ref, tipo) => {
-        const { data, error } = await sb.rpc("check_exchange_eligibility", { p_order_ref: saleIds.get(ref)!, p_request_type: tipo });
-        if (error) return { elegivel: "needs_human", motivo: "erro_consulta", prazo_ate: null };
-        return { elegivel: data?.eligible ?? "needs_human", motivo: data?.reason ?? "", prazo_ate: data?.deadline_at ? String(data.deadline_at).slice(0, 10) : null };
-      },
-      sizesInStock: async (ref, item) => {
-        const sku = itemSku.get(`${ref}:${item}`);
-        if (!sku) return { erro: "item_sem_codigo" };
-        const { data: p } = await sb.from("pos_products").select("parent_sku").eq("sku", sku).not("parent_sku", "is", null).limit(1).maybeSingle();
-        if (!p?.parent_sku) return { erro: "produto_sem_grade" };
-        const { data: vs } = await sb.from("pos_products").select("size,stock").eq("parent_sku", p.parent_sku).gt("stock", 0).limit(200);
-        const tamanhos = [...new Set((vs ?? []).map((v: any) => String(v.size ?? "").trim()).filter(Boolean))].sort();
-        return { tamanhos };
-      },
+      ...ctx.deps, offersAlreadyMade: offers ?? 0, maxOffers: st.max_offer_attempts ?? 1,
     }, log);
 
     const dec = finalDecision(outcome, orders);
@@ -120,7 +73,11 @@ Deno.serve(withAccessLog("support-ai-agent", async (req) => {
       handoff_summary: outcome.handoff?.resumo ?? null, script_version: script?.version ?? null,
       sale_id: linkSale ?? (orders.length === 1 ? saleIds.get("P1") : null), sale_channel: linkOrder ? "online" : null,
       link_type: outcome.link?.tipo ?? null, customer_name: nome,
+      would_route_support: shouldRouteSupport(triage.categoria, !!outcome.handoff),
+      tracking_info: outcome.tracking ? { pedido: outcome.tracking.ref, ...outcome.tracking.info } : null,
     }).eq("id", s.id).eq("status", "processando");
+    // Linha SUPORTE: só move sozinho com o interruptor ligado e modo automático (checado no banco).
+    await sb.rpc("support_auto_route", { p_id: s.id });
     return json({ ok: true, decision: dec.decision });
   } catch (e) {
     await flushLogs();

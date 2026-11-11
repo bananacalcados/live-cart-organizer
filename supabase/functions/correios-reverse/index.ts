@@ -195,6 +195,9 @@ Deno.serve(withAccessLog("correios-reverse", async (req) => {
       const key = b.customer.telefone.replace(/\D/g, '').slice(-8);
       const { data: sale } = await db.from('pos_sales').select('id,discount,phone_suffix8').eq('id', b.sale_id).maybeSingle();
       if (!sale) throw fail('Venda original não encontrada');
+      // Solicitações de TESTE da Central nunca geram reversa.
+      const { data: onlyTest } = await db.rpc('sale_has_only_test_requests', { p_sale: sale.id });
+      if (onlyTest === true) throw fail('Esta venda só tem solicitação de TESTE: reversa bloqueada');
       if (sale.phone_suffix8 && sale.phone_suffix8 !== key) throw fail('Esta venda não é deste telefone');
       const { data: saleItems } = await db.from('pos_sale_items').select('id,product_name,quantity,unit_price,sku,barcode').eq('sale_id', sale.id).limit(200);
       const ret = reverseReturnItems(saleItems || [], b.return_items, Number(sale.discount || 0));

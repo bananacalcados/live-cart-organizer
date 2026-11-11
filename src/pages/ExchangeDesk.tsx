@@ -12,12 +12,13 @@ import { ExchangeDeskCard } from "@/components/exchange-desk/ExchangeDeskCard";
 import { TemplatesEditor } from "@/components/exchange-desk/TemplatesEditor";
 import { CentralProductChoiceToggle } from "@/components/exchange-desk/CentralProductChoiceToggle";
 import { AutoSuggestionsPanel } from "@/components/exchange-desk/AutoSuggestionsPanel";
+import { TrainingPanel } from "@/components/exchange-desk/TrainingPanel";
 import { ageLabel, ageLevel, REASON_LABEL, STATUS_LABEL, type DeskTab } from "@/lib/exchangeDesk/rules";
 
 interface Row {
   id: string; request_type: string; first_name: string; phone: string; order_ref: string | null; order_number: string | null;
   product_name: string | null; product_size: string | null; desired_size: string | null; requested_quantity: number | null;
-  reason: string | null; status: string; escalated_reason: string | null; created_at: string; assigned_to: string | null;
+  reason: string | null; status: string; escalated_reason: string | null; created_at: string; assigned_to: string | null; is_test?: boolean;
 }
 const PAGE = 50;
 
@@ -25,7 +26,8 @@ export default function ExchangeDesk() {
   const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
   const rawTab = params.get("aba") || "precisa";
-  const isSuggestions = rawTab === "sugestoes";
+  const isTraining = rawTab === "treino";
+  const isSuggestions = rawTab === "sugestoes" || isTraining;
   const tab = (isSuggestions ? "precisa" : rawTab) as DeskTab;
   const [type, setType] = useState("all");
   const [reason, setReason] = useState("all");
@@ -74,9 +76,10 @@ export default function ExchangeDesk() {
             <TabsTrigger value="andamento">Em andamento</TabsTrigger>
             <TabsTrigger value="concluidas">Concluídas</TabsTrigger>
             <TabsTrigger value="sugestoes">Sugestões automáticas</TabsTrigger>
+            <TabsTrigger value="treino">Treino do agente</TabsTrigger>
           </TabsList>
         </Tabs>
-        {isSuggestions ? <AutoSuggestionsPanel /> : <>
+        {isTraining ? <TrainingPanel /> : isSuggestions ? <AutoSuggestionsPanel /> : <>
         <div className="flex flex-wrap gap-2">
           <div className="relative flex-1 min-w-[220px]">
             <Search className="h-4 w-4 absolute left-2 top-3 text-muted-foreground" />
@@ -98,6 +101,7 @@ export default function ExchangeDesk() {
                 className={`w-full text-left rounded-lg border bg-card p-3 hover:bg-muted/50 transition ${lvl === "48h" ? "border-destructive" : lvl === "24h" ? "border-primary" : ""}`}>
                 <div className="flex flex-wrap items-center gap-2">
                   <Badge variant={r.request_type === "troca" ? "default" : "secondary"}>{r.request_type === "troca" ? "Troca" : "Devolução"}</Badge>
+                  {r.is_test && <Badge variant="destructive">TESTE</Badge>}
                   <span className="font-medium">{r.first_name || "Cliente"}</span>
                   <span className="text-sm text-muted-foreground">Pedido {r.order_number || r.order_ref || "—"}</span>
                   <span className="ml-auto text-xs flex items-center gap-2">

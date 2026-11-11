@@ -9,7 +9,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { deskCall } from "./api";
 import { waMeLink } from "@/lib/supportAuto/intent";
 
-interface Cfg { mode: string; instance_ids: string[]; support_whatsapp_phone: string | null; central_public_enabled: boolean; is_admin: boolean }
+interface Cfg { auto_route_support_line?: boolean; mode: string; instance_ids: string[]; support_whatsapp_phone: string | null; central_public_enabled: boolean; is_admin: boolean }
 
 export function AutoReplySettings() {
   const [cfg, setCfg] = useState<Cfg | null>(null);
@@ -28,6 +28,7 @@ export function AutoReplySettings() {
     setSaving(true);
     try {
       await deskCall("support_auto_reply_settings_update", { p_mode: cfg.mode, p_instance_ids: cfg.instance_ids, p_support_phone: cfg.support_whatsapp_phone || "" });
+      await deskCall("support_route_settings_update", { p_auto_route: !!cfg.auto_route_support_line });
       toast.success("Configuração salva");
     } catch (e) { toast.error(e instanceof Error ? e.message : "Erro"); }
     finally { setSaving(false); }
@@ -59,6 +60,11 @@ export function AutoReplySettings() {
           </div>
           {cfg.mode === "auto" && !cfg.central_public_enabled && <p className="text-destructive">As Centrais estão fechadas: nada é enviado sozinho.</p>}
           {cfg.mode === "auto" && <p className="text-muted-foreground">O envio sozinho ainda não está ligado nesta fase.</p>}
+          <label className="flex items-center gap-2">
+            <Checkbox checked={!!cfg.auto_route_support_line} disabled={!cfg.is_admin} onCheckedChange={(v) => setCfg({ ...cfg, auto_route_support_line: !!v })} />
+            Mover sozinho para a linha Suporte do WhatsApp do PDV
+          </label>
+          {cfg.auto_route_support_line && cfg.mode !== "auto" && <p className="text-muted-foreground">Em modo sombra nada é movido sozinho: use o botão “Mover para Suporte”.</p>}
           <div>
             <p className="mb-1">Números que participam</p>
             {list.map((n) => (

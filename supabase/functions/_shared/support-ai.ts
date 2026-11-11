@@ -4,7 +4,7 @@ import { createOpenAI } from "npm:@ai-sdk/openai@4";
 import { jsonSchema, Output, stepCountIs, streamText, tool } from "npm:ai@7";
 import { createLovableAiGatewayRunIdFetch } from "./run-id.ts";
 
-export const TRIAGE_CATEGORIES = ["venda", "troca", "devolucao", "troca_ou_devolucao_ambiguo", "outro_suporte", "nada"] as const;
+export const TRIAGE_CATEGORIES = ["venda", "troca", "devolucao", "troca_ou_devolucao_ambiguo", "rastreio", "outro_suporte", "nada"] as const;
 export type TriageCategory = typeof TRIAGE_CATEGORIES[number];
 export type Triage = { categoria: TriageCategory; confianca: number; justificativa: string; motivo_tamanho: boolean };
 
@@ -36,9 +36,13 @@ export function transcript(msgs: ConvMessage[]): string {
 }
 
 /** Mapeia a triagem para a intenção antiga (contador por tipo e compatibilidade). */
-export function triageToIntent(c: TriageCategory): "troca" | "devolucao" | "indefinido" {
-  return c === "troca" ? "troca" : c === "devolucao" ? "devolucao" : "indefinido";
+export function triageToIntent(c: TriageCategory): "troca" | "devolucao" | "rastreio" | "indefinido" {
+  return c === "troca" ? "troca" : c === "devolucao" ? "devolucao" : c === "rastreio" ? "rastreio" : "indefinido";
 }
+/** Categorias que pertencem à linha SUPORTE do WhatsApp do PDV. */
+export const SUPPORT_CATEGORIES: TriageCategory[] = ["troca", "devolucao", "troca_ou_devolucao_ambiguo", "rastreio", "outro_suporte"];
+/** Moveria para a linha SUPORTE: triagem de suporte ou agente escalou para humano. */
+export const shouldRouteSupport = (c: TriageCategory, escalated: boolean) => escalated || SUPPORT_CATEGORIES.includes(c);
 export const triageIgnores = (c: TriageCategory) => c === "venda" || c === "nada";
 
 const TRIAGE_SCHEMA = jsonSchema<Triage>({
@@ -58,7 +62,8 @@ Leia as últimas mensagens (a mais recente é a última) e o contexto de pedidos
 - troca: quer outro tamanho/modelo/cor, ou diz "devolver" mas o motivo é tamanho/numeração (isso é troca).
 - devolucao: quer o dinheiro de volta / devolver sem motivo de tamanho, ou insiste em devolver depois de oferecida a troca.
 - troca_ou_devolucao_ambiguo: fala em trocar/devolver sem dar para saber qual.
-- outro_suporte: rastreio, atraso, defeito, avaria, pagamento de pedido já feito, reclamação.
+- rastreio: cadê meu pedido, código/link de rastreio, não chegou, quando chega, status da entrega.
+- outro_suporte: extravio, defeito, avaria, pagamento de pedido já feito, reclamação.
 - nada: saudação, agradecimento, assunto sem relação.
 Seja conservador: na dúvida entre troca e devolução use troca_ou_devolucao_ambiguo.`;
 
@@ -102,8 +107,23 @@ export async function runTriage(cfg: GatewayConfig, model: string, conv: ConvMes
 }
 
 /** Ferramentas: o servidor implementa e valida. */
+/** Rastreio do pedido. url = página pública de rastreio (a mesma enviada na confirmação). */
+export type TrackingInfo = {
+  url: string | null; etapa: "em_separacao" | "separado" | "enviado" | "entregue" | "sem_envio";
+  enviado_em: string | null; entregue_em: string | null; ocorrencia: boolean; dias_desde_envio: number | null;
+  ultimo_evento?: string | null;
+};
+/** Atraso grande: enviado há mais de 15 dias sem entrega. */
+export const TRACKING_LATE_DAYS = 15;
+export function trackingNeedsHuman(t: TrackingInfo): string | null {
+  if (t.ocorrencia) return "ocorrencia_na_entrega";
+  if (t.etapa !== "sem_envio" && t.etapa !== "entregue" && !t.url) return "sem_rastreio";
+  if (t.etapa === "enviado" && (t.dias_desde_envio ?? 0) > TRACKING_LATE_DAYS) return "atraso_grande";
+  return null;
+}
 export type AgentDeps = {
   orders: OrderCtx[];
+  tracking?: (ref: string) => Promise<TrackingInfo | null>;
   checkEligibility: (ref: string, tipo: "troca" | "devolucao") => Promise<{ elegivel: string; motivo: string; prazo_ate: string | null }>;
   sizesInStock: (ref: string, item: string) => Promise<{ tamanhos: string[] } | { erro: string }>;
   offersAlreadyMade: number;
@@ -115,12 +135,13 @@ export type AgentOutcome = {
   link: { ref: string; tipo: "troca" | "devolucao" } | null;
   handoff: { motivo: string; resumo: string } | null;
   exchangeOffered: boolean;
+  tracking: { ref: string; info: TrackingInfo } | null;
 };
 
 export async function runAgent(cfg: GatewayConfig, model: string, script: string, nome: string | null, triage: Triage,
   conv: ConvMessage[], deps: AgentDeps, log: (c: CallLog) => void): Promise<AgentOutcome> {
   const actions: AgentAction[] = [];
-  const out: AgentOutcome = { text: "", actions, link: null, handoff: null, exchangeOffered: false };
+  const out: AgentOutcome = { text: "", actions, link: null, handoff: null, exchangeOffered: false, tracking: null };
   const rec = (acao: string, pedido: Record<string, unknown>, resultado: unknown) => { actions.push({ acao, pedido, resultado }); return resultado; };
   const refOk = (ref: string) => deps.orders.find((o) => o.ref === ref);
   const tipoSchema = { type: "string", enum: ["troca", "devolucao"] };
@@ -167,6 +188,26 @@ export async function runAgent(cfg: GatewayConfig, model: string, script: string
         return rec("preparar_link", { pedido, tipo }, { ok: true, escreva_no_texto: "{{link}}" });
       },
     }),
+    consultar_rastreio: tool({
+      description: "Rastreio de um pedido ONLINE: etapa da expedição, data de envio e link de rastreio. Se a cliente tiver vários pedidos online e não disse qual, pergunte antes.",
+      inputSchema: jsonSchema<{ pedido: string }>({ type: "object", additionalProperties: false, required: ["pedido"], properties: { pedido: { type: "string" } } }),
+      execute: async ({ pedido }) => {
+        const o = refOk(pedido);
+        if (!o) return rec("consultar_rastreio", { pedido }, { erro: "pedido_inexistente" });
+        if (o.canal !== "online") return rec("consultar_rastreio", { pedido }, { erro: "compra_na_loja_sem_envio" });
+        const info = deps.tracking ? await deps.tracking(pedido) : null;
+        if (!info) return rec("consultar_rastreio", { pedido }, { erro: "sem_dados_de_envio", instrucao: "escale para humano" });
+        out.tracking = { ref: pedido, info };
+        const humano = trackingNeedsHuman(info);
+        const { url: _u, ...semUrl } = info;
+        return rec("consultar_rastreio", { pedido }, {
+          ...semUrl, tem_link: !!info.url,
+          ...(info.url ? { escreva_no_texto: "{{rastreio}}" } : {}),
+          ...(humano ? { instrucao: `escale para humano (${humano})` } : {}),
+          regra: "não invente prazo de entrega; diga só a etapa e a data de envio",
+        });
+      },
+    }),
     escalar_humano: tool({
       description: "Passa a conversa para uma pessoa da equipe, com um resumo curto.",
       inputSchema: jsonSchema<{ motivo: string; resumo: string }>({ type: "object", additionalProperties: false, required: ["motivo", "resumo"], properties: { motivo: { type: "string" }, resumo: { type: "string" } } }),
@@ -180,6 +221,7 @@ CONTEXTO DO SISTEMA (não invente nada além disso):
 - Primeiro nome da cliente: ${nome ?? "desconhecido (não use nome)"}
 - Triagem: ${triage.categoria} (confiança ${triage.confianca.toFixed(2)}; motivo de tamanho: ${triage.motivo_tamanho ? "sim" : "não"})
 - Ofertas de troca já feitas nesta conversa: ${deps.offersAlreadyMade} de no máximo ${deps.maxOffers}
+- Rastreio (cadê meu pedido, não chegou, quando chega): use consultar_rastreio e escreva {{rastreio}} onde vai o link; resposta curta. Sem envio ainda: diga a etapa, sem inventar prazo. Vários pedidos online e ela não disse qual: pergunte qual. Sem rastreio, atraso grande ou extravio: escale para humano.
 - Use as ferramentas para pedidos, prazos e numerações. Os pedidos se chamam P1, P2…; itens I1, I2…
 - Responda apenas com a próxima mensagem para a cliente, em português. Se escalar para humano, escreva uma mensagem curta avisando que uma pessoa da equipe vai continuar.`;
 
@@ -199,6 +241,9 @@ CONTEXTO DO SISTEMA (não invente nada além disso):
     if (!out.text) throw new Error("resposta_vazia");
     if (out.link && !out.text.includes("{{link}}")) out.text += "\n{{link}}";
     if (!out.link) out.text = out.text.replaceAll("{{link}}", "").trim();
+    // O link de rastreio é colocado pelo sistema, nunca digitado pela IA.
+    const trackUrl = out.tracking?.info.url;
+    out.text = trackUrl ? out.text.replaceAll("{{rastreio}}", trackUrl) : out.text.replaceAll("{{rastreio}}", "").trim();
     return out;
   } catch (e) {
     log({ kind: "agente", model, ok: false, error: String((e as Error)?.message || e).slice(0, 400), ms: Date.now() - t0 });
@@ -207,9 +252,14 @@ CONTEXTO DO SISTEMA (não invente nada além disso):
 }
 
 /** Decisão final é do sistema, a partir das ações validadas. */
-export function finalDecision(o: Pick<AgentOutcome, "link" | "handoff">, orders: OrderCtx[]): { decision: string; reason: string } {
+export function finalDecision(o: Pick<AgentOutcome, "link" | "handoff"> & { tracking?: AgentOutcome["tracking"] }, orders: OrderCtx[]): { decision: string; reason: string } {
   if (o.handoff) return { decision: "fila", reason: "ia_escalou:" + o.handoff.motivo };
   if (o.link) return { decision: "enviar_link", reason: "um_pedido_elegivel" };
+  if (o.tracking) {
+    const h = trackingNeedsHuman(o.tracking.info);
+    if (h) return { decision: "fila", reason: "rastreio:" + h };
+    return { decision: "conversa", reason: "rastreio_" + o.tracking.info.etapa };
+  }
   if (orders.length && orders.every((x) => x.canal === "loja")) return { decision: "presencial", reason: "compra_na_loja" };
   return { decision: "conversa", reason: "ia_conversando" };
 }

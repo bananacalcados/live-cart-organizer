@@ -7,8 +7,14 @@ Deno.test('submissão simulada usa hash e RPC atômica sem provedores',async()=>
 Deno.test('devolução rejeita reposição sem consultar banco',async()=>{
  let calls=0;const db={rpc:async()=>{calls++;return {data:null,error:null};}};const res=await centralHandler('submit',db,async()=>true,async()=>true)(new Request('http://localhost',{method:'POST',body:JSON.stringify({token,type:'devolucao',item_id:item,replacement_id:item,quantity:1,reason:'outro',detail:'Devolver',unused:true})}));await res.text();assert(res.status===400);assert(calls===0);
 });
-Deno.test('central permanece fechada sem limite autorizado',async()=>{
- let calls=0;const db={rpc:async()=>{calls++;return {data:null,error:null};}};const res=await centralHandler('resolve',db,async()=>false)(new Request('http://localhost',{method:'POST',body:JSON.stringify({token,type:'troca'})}));await res.text();assert(res.status===503);assert(calls===0);
+Deno.test('central permanece fechada para link comum',async()=>{
+ const names:string[]=[];const db={rpc:async(n:string)=>{names.push(n);return {data:false,error:null};}};const res=await centralHandler('resolve',db,async()=>false)(new Request('http://localhost',{method:'POST',body:JSON.stringify({token,type:'troca'})}));await res.text();assert(res.status===503);assert(names.length===1&&names[0]==='central_test_link_ok');
+});
+Deno.test('central fechada aceita link de TESTE',async()=>{
+ const names:string[]=[];const db={rpc:async(n:string)=>{names.push(n);return {data:n==='central_test_link_ok'?true:{ok:1},error:null};}};const res=await centralHandler('resolve',db,async()=>false,async()=>true)(new Request('http://localhost',{method:'POST',body:JSON.stringify({token,type:'troca'})}));await res.text();assert(res.status===200);assert(names[1]==='central_context');
+});
+Deno.test('central fechada com token malformado nem consulta o banco',async()=>{
+ let calls=0;const db={rpc:async()=>{calls++;return {data:true,error:null};}};const res=await centralHandler('resolve',db,async()=>false)(new Request('http://localhost',{method:'POST',body:JSON.stringify({token:'curto',type:'troca'})}));await res.text();assert(res.status===503);assert(calls===0);
 });
 Deno.test('token inexistente resposta genérica',async()=>{
  const db={rpc:async()=>({data:null,error:null})};const res=await centralHandler('resolve',db,async()=>true,async()=>true)(new Request('http://localhost',{method:'POST',body:JSON.stringify({token,type:'troca'})}));const body=await res.json();assert(res.status===404);assert(body.error==='Este link não está disponível. Peça um novo link à equipe.');

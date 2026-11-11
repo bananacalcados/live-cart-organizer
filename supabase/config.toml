@@ -357,3 +357,6 @@ verify_jwt = false
 
 [functions.support-ai-agent]
 verify_jwt = false
+
+[functions.support-ai-training]
+verify_jwt = false
