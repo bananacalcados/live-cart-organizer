@@ -25,7 +25,7 @@ export function LiveCodeSettingsSection({ eventId }: { eventId: string }) {
         if (!alive) return;
         setActive(data?.mode === "active");
         setMinutes(data?.overlay_previous_minutes ?? 10);
-        setShowCodes(Boolean(data?.overlay_show_codes));
+        setShowCodes(data?.overlay_show_codes ?? true);
         setLoading(false);
       });
     return () => { alive = false; };
@@ -47,8 +47,13 @@ export function LiveCodeSettingsSection({ eventId }: { eventId: string }) {
   const toggleActive = async (v: boolean) => {
     const prev = active;
     setActive(v);
-    const ok = await persist({ active: v, minutes, showCodes }, v ? "Anotação automática ativada" : "Anotação automática desligada");
-    if (!ok) setActive(prev);
+    setSaving(true);
+    const { error } = await db.from("live_code_settings").upsert({
+      event_id: eventId, mode: v ? "active" : "off", updated_at: new Date().toISOString(),
+    }, { onConflict: "event_id" });
+    setSaving(false);
+    if (error) { toast.error("Erro ao salvar: " + error.message); setActive(prev); return; }
+    toast.success(v ? "Anotação automática ativada" : "Anotação automática desligada");
   };
 
   if (loading) return <div className="rounded-lg border p-3"><Loader2 className="h-4 w-4 animate-spin" /></div>;
