@@ -1,5 +1,7 @@
 import { VipAttendanceLinksPanel } from "./VipAttendanceLinksPanel";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, Suspense } from "react";
+import { lazyNamed } from "@/lib/lazyTab";
+const GroupDraftsApprovalTab = lazyNamed(() => import("./GroupDraftsApprovalTab"), "GroupDraftsApprovalTab");
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import {
@@ -363,6 +365,7 @@ export function GroupsVipManager() {
 
       <Tabs defaultValue="campaigns">
         <TabsList>
+          <TabsTrigger value="approval" className="gap-1"><CheckCircle className="h-3.5 w-3.5" />Aprovação</TabsTrigger>
           <TabsTrigger value="campaigns" className="gap-1"><Send className="h-3.5 w-3.5" />Campanhas</TabsTrigger>
           <TabsTrigger value="groups" className="gap-1"><Users className="h-3.5 w-3.5" />Grupos</TabsTrigger>
           <TabsTrigger value="queue" className="gap-1"><ListChecks className="h-3.5 w-3.5" />Ações de grupo</TabsTrigger>
@@ -371,6 +374,10 @@ export function GroupsVipManager() {
           <TabsTrigger value="dashboard" className="gap-1"><BarChart3 className="h-3.5 w-3.5" />Dashboard</TabsTrigger>
           <TabsTrigger value="attendance_links" className="gap-1"><LinkIcon className="h-3.5 w-3.5" />Links de atendimento</TabsTrigger>
         </TabsList>
+
+        <TabsContent value="approval" className="space-y-4">
+          <Suspense fallback={<Loader2 className="h-5 w-5 animate-spin mx-auto" />}><GroupDraftsApprovalTab /></Suspense>
+        </TabsContent>
 
         {/* FILA DE AÇÕES DE GRUPO TAB */}
         <TabsContent value="queue" className="space-y-4">

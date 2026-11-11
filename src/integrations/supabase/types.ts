@@ -29028,7 +29028,9 @@ export type Database = {
           touch_wa: string
         }[]
       }
+      _can_review_group_drafts: { Args: never; Returns: boolean }
       _dispatch_can_read: { Args: never; Returns: boolean }
+      _group_draft_owner: { Args: { p_id: string }; Returns: string }
       _group_draft_signature: { Args: { p_id: string }; Returns: string }
       _is_group_staff: { Args: never; Returns: boolean }
       _norm_concrete_gateway: { Args: { p: string }; Returns: string }
@@ -29780,6 +29782,7 @@ export type Database = {
         Args: { p_gateway: string }
         Returns: undefined
       }
+      delete_group_drafts: { Args: { p_ids: string[] }; Returns: number }
       delete_pos_divergent_parent: {
         Args: { p_parent_sku: string }
         Returns: Json
@@ -30674,6 +30677,16 @@ export type Database = {
           hour_count: number
           whatsapp_number_id: string
         }[]
+      }
+      group_draft_cards: {
+        Args: {
+          p_batch?: string
+          p_day?: string
+          p_limit?: number
+          p_offset?: number
+          p_status?: string
+        }
+        Returns: Json
       }
       group_draft_sync_siblings: {
         Args: { p_ids: string[] }
@@ -32463,6 +32476,16 @@ export type Database = {
         Returns: Json
       }
       unify_upsert_customers: { Args: { p_records: Json }; Returns: Json }
+      unlink_group_draft: { Args: { p_id: string }; Returns: boolean }
+      update_group_drafts_synced: {
+        Args: { p_block_id: string; p_only_ids?: string[]; p_patch: Json }
+        Returns: {
+          campaign_id: string
+          id: string
+          ok: boolean
+          reason: string
+        }[]
+      }
       update_lead_recovery: {
         Args: {
           p_disparo: number
