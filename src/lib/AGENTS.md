@@ -1,1 +1,2 @@
 - Live code-intent confirms only via src/lib/liveCodeOrder.ts; open carts receive items (no 2nd cart).
+- Exchange desk (Centrais Fase 3): decisions only via RPC exchange_desk_action, mirrored by src/lib/exchangeDesk/rules.ts; only humans deny, reverse only once on approved, so every step keeps who/when history.

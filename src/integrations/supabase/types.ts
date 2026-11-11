@@ -7684,10 +7684,83 @@ export type Database = {
           },
         ]
       }
+      exchange_message_templates: {
+        Row: {
+          body: string
+          key: string
+          title: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          body: string
+          key: string
+          title: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          body?: string
+          key?: string
+          title?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: []
+      }
+      exchange_request_events: {
+        Row: {
+          action: string
+          actor: string | null
+          actor_name: string | null
+          created_at: string
+          from_status: string | null
+          id: string
+          note: string | null
+          reason: string | null
+          request_id: string
+          to_status: string | null
+        }
+        Insert: {
+          action: string
+          actor?: string | null
+          actor_name?: string | null
+          created_at?: string
+          from_status?: string | null
+          id?: string
+          note?: string | null
+          reason?: string | null
+          request_id: string
+          to_status?: string | null
+        }
+        Update: {
+          action?: string
+          actor?: string | null
+          actor_name?: string | null
+          created_at?: string
+          from_status?: string | null
+          id?: string
+          note?: string | null
+          reason?: string | null
+          request_id?: string
+          to_status?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "exchange_request_events_request_id_fkey"
+            columns: ["request_id"]
+            isOneToOne: false
+            referencedRelation: "exchange_requests"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       exchange_requests: {
         Row: {
           ai_interpretation: string | null
           ai_nuance_tags: string[] | null
+          assigned_at: string | null
+          assigned_to: string | null
           auto_approved: boolean | null
           channel_origin: string | null
           created_at: string
@@ -7695,9 +7768,13 @@ export type Database = {
           customer_reported_received_at: string | null
           customer_verbatim: string | null
           deadline_at: string | null
+          decided_at: string | null
+          decided_by: string | null
+          decision_reason: string | null
           delivered_at_used: string | null
           delivered_source: string | null
           desired_size: string | null
+          desk_info_requested_at: string | null
           eligibility: string
           eligibility_reason: string | null
           escalated_reason: string | null
@@ -7740,6 +7817,8 @@ export type Database = {
         Insert: {
           ai_interpretation?: string | null
           ai_nuance_tags?: string[] | null
+          assigned_at?: string | null
+          assigned_to?: string | null
           auto_approved?: boolean | null
           channel_origin?: string | null
           created_at?: string
@@ -7747,9 +7826,13 @@ export type Database = {
           customer_reported_received_at?: string | null
           customer_verbatim?: string | null
           deadline_at?: string | null
+          decided_at?: string | null
+          decided_by?: string | null
+          decision_reason?: string | null
           delivered_at_used?: string | null
           delivered_source?: string | null
           desired_size?: string | null
+          desk_info_requested_at?: string | null
           eligibility?: string
           eligibility_reason?: string | null
           escalated_reason?: string | null
@@ -7792,6 +7875,8 @@ export type Database = {
         Update: {
           ai_interpretation?: string | null
           ai_nuance_tags?: string[] | null
+          assigned_at?: string | null
+          assigned_to?: string | null
           auto_approved?: boolean | null
           channel_origin?: string | null
           created_at?: string
@@ -7799,9 +7884,13 @@ export type Database = {
           customer_reported_received_at?: string | null
           customer_verbatim?: string | null
           deadline_at?: string | null
+          decided_at?: string | null
+          decided_by?: string | null
+          decision_reason?: string | null
           delivered_at_used?: string | null
           delivered_source?: string | null
           desired_size?: string | null
+          desk_info_requested_at?: string | null
           eligibility?: string
           eligibility_reason?: string | null
           escalated_reason?: string | null
@@ -29057,6 +29146,7 @@ export type Database = {
       }
       _can_review_group_drafts: { Args: never; Returns: boolean }
       _dispatch_can_read: { Args: never; Returns: boolean }
+      _exchange_desk_staff: { Args: { p_uid: string }; Returns: boolean }
       _group_draft_owner: { Args: { p_id: string }; Returns: string }
       _group_draft_signature: { Args: { p_id: string }; Returns: string }
       _is_group_staff: { Args: never; Returns: boolean }
@@ -29963,6 +30053,34 @@ export type Database = {
         Args: { p_channel?: string; p_from: string; p_to: string }
         Returns: Json
       }
+      exchange_desk_action: {
+        Args: {
+          p_action: string
+          p_assignee?: string
+          p_code?: string
+          p_id: string
+          p_note?: string
+          p_reason?: string
+          p_troca_id?: string
+        }
+        Returns: Json
+      }
+      exchange_desk_count: { Args: never; Returns: number }
+      exchange_desk_detail: { Args: { p_id: string }; Returns: Json }
+      exchange_desk_list: {
+        Args: {
+          p_assignee?: string
+          p_limit?: number
+          p_offset?: number
+          p_reason?: string
+          p_search?: string
+          p_tab: string
+          p_type?: string
+        }
+        Returns: Json
+      }
+      exchange_desk_sizes: { Args: { p_id: string }; Returns: Json }
+      exchange_desk_staff_list: { Args: never; Returns: Json }
       execute_merge_unified_duplicates: {
         Args: { p_dry_run?: boolean; p_rule?: string }
         Returns: Json

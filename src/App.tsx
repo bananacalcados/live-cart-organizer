@@ -79,6 +79,7 @@ const FiscalDocuments = lazy(() => import("./pages/admin/FiscalDocuments"));
 const NfeReceived = lazy(() => import("./pages/admin/NfeReceived"));
 const ProductsReview = lazy(() => import("./pages/admin/ProductsReview"));
 const CentralRestock = lazy(() => import("./pages/admin/CentralRestock"));
+const ExchangeDesk = lazy(() => import("./pages/ExchangeDesk"));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -190,6 +191,7 @@ const App = () => (
               <Route path="/admin/fiscal-documents" element={<ProtectedRoute requiredModule="admin"><FiscalDocuments /></ProtectedRoute>} />
               <Route path="/admin/nfe-received" element={<ProtectedRoute requiredModule="admin"><NfeReceived /></ProtectedRoute>} />
               <Route path="/admin/produtos-revisar" element={<ProtectedRoute requiredModule="admin"><ProductsReview /></ProtectedRoute>} />
+              <Route path="/atendimento/trocas" element={<ProtectedRoute requiredModule={["pos", "expedition", "management", "admin"]}><ExchangeDesk /></ProtectedRoute>} />
               <Route path="/admin/produtos-troca" element={<ProtectedRoute requiredModule="admin"><CentralRestock /></ProtectedRoute>} />
 
               {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
