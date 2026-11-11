@@ -1,116 +1,116 @@
-# Grupos VIP — Fase 1: aprovar a mesma mensagem em várias campanhas
+# Fase 2 — Aba central "Aprovação" nos Grupos VIP
+
+Só plano. Nada foi alterado. Reaproveita a Fase 1 (sync_key, group_draft_sync_siblings, approve_group_drafts_synced, _validate_group_draft, _group_draft_signature).
+
+## Dados reais conferidos agora
+- 43 rascunhos no bloco 0: 31 com vínculo e 18 com horário no passado.
+- 42 blocos extras ("grouped"): 36 pertencem a mensagens ainda em rascunho, e nenhum tem vínculo. Há 11 mensagens vinculadas que têm blocos extras.
+- Só 3 usuários têm papel de acesso, e os 3 são admin. O resto da equipe entra no Marketing pela permissão por módulo ("marketing", via get_user_allowed_modules), que hoje as funções da Fase 1 não aceitam.
 
 ## O que você vai ver
-1. Em uma campanha, você seleciona os rascunhos e clica em **Aprovar** (igual a hoje).
-2. No resumo "Aprovar rascunhos", cada mensagem que também existe em outras campanhas mostra:
-   "Esta mensagem também está em:" e, embaixo, uma linha por cópia: **[x] Vips Gv — 11/11 10:05**, **[x] Vips Gv #2 — 11/11 10:10**.
-   Todas já vêm marcadas. Dá para desmarcar cada uma.
-3. As cópias que não podem ser aprovadas aparecem com um X vermelho e o motivo (por exemplo "Sem mídia" ou "Campanha sem instância"). Elas não têm caixa.
-4. O aviso de horário no passado vale também para as cópias. A caixa "Entendi" precisa estar marcada para incluir essas mensagens.
-5. Ao clicar em **Aprovar (N)**, o aviso final mostra o resultado por campanha. Exemplo: "Live - Meio de Semana: 3 aprovadas · Vips Gv: 3 aprovadas · Vips Gv #2: 2 aprovadas, 1 bloqueada (sem mídia)".
-6. Nada é aprovado sem esse clique. Os horários de cada campanha não mudam.
+1. Em Marketing > Grupos VIP aparece a aba **Aprovação**, a primeira da lista, com um contador de rascunhos prontos.
+2. Filtros no topo: lote, status (Prontos / Bloqueados / Conteúdo diferente / Horário passado) e dia. A lista mostra um card por mensagem, e rolar até o fim carrega mais 50.
+3. Cada card mostra:
+   - a prévia de todos os blocos (texto, foto/vídeo, enquete, contato), o lote e o selo "Claude";
+   - chips com cada campanha de destino, assim: `Vips Gv 10:05 · pronta`, `Vips Gv #2 10:10 · sem foto` (vermelho), `Live 10:00 · conteúdo diferente` (amarelo) e `horário passado` (cinza com relógio).
+   - Um rascunho sem vínculo vira um card com um destino só.
+4. **Aprovar** (por card, ou marcando vários): abre o mesmo resumo da Fase 1, com uma caixa por cópia. "Conteúdo diferente" vem desmarcada, a cópia bloqueada aparece sem caixa e com o motivo, e o horário no passado pede o "Entendi". Nada é aprovado sem confirmar. O resultado sai separado por campanha.
+5. **Foto/mídia:** no bloco do card, use "Trocar mídia". O arquivo sobe uma vez e a mesma URL vai para todas as cópias vinculadas ainda em rascunho. Dentro da campanha, o espelhamento por texto continua como está.
+6. **Editar:** o lápis em cada bloco abre texto/legenda, opções da enquete, "marcar todos", contato e "sem prévia de link". Embaixo fica "Aplicar em: todas as cópias (padrão) / só em: [caixas por campanha]". Antes de salvar aparece "vai alterar N cópias", e depois o resultado de cada cópia.
+7. **Desvincular:** no menu de cada chip, use "Desvincular desta mensagem". A cópia passa a ser um card próprio, e a campanha pode ter texto diferente.
+8. **Horário passado:** tem selo e filtro próprios. Com o filtro ligado aparece o botão "Excluir rascunhos selecionados". Ele só apaga o que você marcar, pede confirmação e nunca roda sozinho.
 
-## Situação hoje (conferida no banco)
-- A tabela tem 3.804 mensagens, das quais 43 são rascunhos (42 com lote e 1 sem lote).
-- Nenhum rascunho com lote está sem texto.
-- No backfill, 31 rascunhos seriam vinculados, formando 7 grupos de cópias entre campanhas diferentes. Nenhuma assinatura se repete dentro da mesma campanha, ou seja, hoje não há ambiguidade.
-- O número exato será recontado no momento da migração. Se a contagem por mensagem agrupada der diferente, eu aviso antes de aplicar.
+## Consultas (sem repetição automática)
+- Abrir a aba: 1 consulta de lista (50 cards) e 1 de filtros (lotes e dias). Rolar até o fim: +1 por página.
+- Mudar filtro: 1 consulta. Aprovar: 1 para abrir o resumo (a da Fase 1) e 1 para aprovar. Editar, trocar mídia ou desvincular: 1 cada, e depois só o card afetado é recarregado.
+- Não há atualização periódica. O botão "Atualizar" é manual.
 
-## Regras de vínculo (sync_key)
-- A chave é por bloco: `sync_key = <chave da mensagem>:<posição do bloco>`. Todas as cópias do mesmo bloco têm a mesma chave. A chave não depende do texto, então editar uma cópia não quebra o vínculo.
-- **Backfill** (só rascunhos com lote; linhas pending, grouped, sent etc. não são tocadas):
-  - A assinatura da mensagem inteira junta o lote e a lista ordenada dos blocos (tipo + texto normalizado). A normalização é a mesma de `normalizeMessageText`: espaços colapsados, trim e minúsculas.
-  - Só vincula quando a mensagem tem pelo menos um bloco com texto. Mensagem sem texto nenhum fica sem chave, como no espelhamento de mídia.
-  - Só vincula quando a mesma assinatura aparece em **2 ou mais campanhas diferentes** e **no máximo uma vez por campanha**. Se aparecer duas vezes na mesma campanha, fica ambígua e não recebe chave.
-  - Blocos de imagem sem legenda dentro de uma mensagem agrupada entram pela posição. Eles só são vinculados porque a mensagem como um todo casou (mesmo lote, mesma quantidade de blocos e mesmos tipos na mesma ordem).
-  - Proteção contra falso positivo: o mesmo texto em lotes diferentes não casa, o mesmo texto em outra posição ou com outro tipo não casa, e mensagens agrupadas com um número diferente de blocos não casam.
-- **Cópia editada depois do vínculo:** continua vinculada, porque editar o texto não quebra a chave. No resumo, quando o texto ou a mídia da cópia estiver diferente da que você está aprovando, aparece o selo **"conteúdo diferente"**. Essa cópia vem **desmarcada** por padrão, e você marca se quiser. Decisão: a cópia nunca é aprovada no escuro com um conteúdo que você não está vendo, e o vínculo também não se perde.
-- Rascunho criado dentro do sistema, numa campanha só: fica sem chave e funciona exatamente como hoje.
+## Respostas aos pontos
+- **Horários (7):** a edição nunca mexe no horário. Recomendo deixar de fora agora a opção "deslocar todas em X minutos". Ela mexe no ritmo anti-spam e pode cair no passado. Se precisar, vira uma Fase 2e separada, que só soma X minutos mantendo os intervalos e recusa resultado no passado.
+- **Acesso (9):** hoje só os 3 admins usariam a aba. Proposta: uma nova checagem que aceita papel admin/manager/user OU a permissão do módulo Marketing, usada só pelas funções novas e pelas da Fase 1. Assim, quem já abre Grupos VIP consegue aprovar, e quem não tem Marketing continua barrado. A aprovação antiga dentro da campanha não muda.
+- **Colunas editáveis (4):** message_content, media_url, media_type/mime (só junto com a mídia), poll_options, poll_max_options, mention_all, contact_name, contact_phone e disable_link_preview. Ficam fora: horário, campanha, instância, status, tipo do bloco, ordem, modo do link VIP e lote.
 
 ## Casos de borda
-- **Cópia já aprovada, enviada ou cancelada:** nem aparece como irmã (a busca é só por `status='draft'`). A função confere de novo `status='draft'` com trava de linha, e a resposta é `not_draft`.
-- **Cópia sem mídia, enquete com menos de 2 opções, contato sem telefone, sem horário, {{link_atendimento}} sem modo:** bloqueada com o motivo. As outras seguem.
-- **Campanha sem instância:** a cópia é bloqueada com `missing_instance`. Cada cópia usa a instância da própria campanha e nunca a da âncora.
-- **Campanhas com instâncias diferentes:** isso é permitido. Nada de instância é copiado ou alterado.
-- **Horário no passado:** listado por cópia. Exige a mesma caixa "Entendi", e a cópia sem o "Entendi" não é enviada.
-- **Mensagem agrupada:** as irmãs são buscadas pela chave do bloco 0. Na aprovação, cada cópia faz a própria transição: o bloco 0 vira pending e os outros blocos viram grouped, pelo `message_group_id` da cópia.
-- **Âncora bloqueada:** as cópias dela não são aprovadas. Elas só seguem a âncora.
-- **Duas aprovações ao mesmo tempo:** a trava de linha e o `WHERE status='draft'` garantem que cada cópia seja aprovada uma vez só.
+- **Cópia aprovada no meio da edição:** cada linha é travada e conferida como rascunho dentro da mesma transação. A que já saiu de rascunho volta como "já aprovada, não alterada", e as outras seguem.
+- **Edição que deixaria vazio:** é recusada por cópia ("texto vazio"), exceto em bloco de mídia com legenda vazia, que é permitido. Mídia nunca fica vazia em bloco de foto/vídeo.
+- **Mídia faltando:** o chip mostra "sem foto", e o "Trocar mídia" resolve todas as cópias de uma vez.
+- **Enquete com menos de 2 opções:** a edição é recusada antes de gravar.
+- **{{link_atendimento}} sem modo:** é aceito na edição, mas a cópia fica bloqueada com o motivo (a mesma regra da aprovação). O modo não é editado aqui.
+- **Blocos em quantidades diferentes entre campanhas:** a edição atinge só as cópias que têm aquele bloco (mesma chave). As que não têm aparecem como "sem esse bloco", e o card marca "conteúdo diferente".
+- **Campanha sem instância:** o chip fica bloqueado "sem número"; a edição é permitida e a aprovação, não.
+- **Rascunho sem vínculo:** edição e aprovação só nele.
 
-## Consultas da tela
-- **Ao abrir a campanha:** nada muda. A coluna `sync_key` entra na seleção que já existe, que hoje já lista as colunas.
-- **Ao abrir o resumo "Aprovar":** 1 chamada, a RPC `group_draft_sync_siblings(p_ids)`. Ela devolve as irmãs com campanha, horário, motivo de bloqueio pré-calculado e o indicador "conteúdo diferente", limitada a 200 linhas. A chamada não se repete e não há polling.
-- **Ao aprovar:** 1 chamada, a RPC `approve_group_drafts_synced`. Depois vem a recarga de mensagens que já acontece hoje.
-- Não há trigger novo e não há consulta dentro de laço. O índice parcial novo atende a busca das irmãs.
-
-## Fase 2 e Fase 3 (deixar preparado)
-- **Fase 2 (aba central):** reaproveita as duas RPCs sem mudança. Basta listar os rascunhos agrupados por `sync_key`, com uma RPC paginada nova nessa fase.
-- **Fase 3 (Claude):** ao criar o mesmo rascunho em N campanhas, o Claude gera **um UUID por mensagem** e grava `sync_key = '<uuid>:<block_order>'` em cada bloco de cada campanha, no mesmo insert em que hoje grava o `draft_batch`. Assim o casamento por texto deixa de ser necessário. Vou documentar isso na skill e no `AGENTS.md` de marketing.
-
-## Riscos e como reverter
-- **Risco: vínculo errado no backfill.** As regras acima são restritivas, e a aprovação das cópias sempre pede confirmação visual. Para reverter: `UPDATE ... SET sync_key = NULL WHERE status='draft'`.
-- **Risco: a tela nova falhar.** A RPC antiga `approve_group_drafts` fica intacta, e há um interruptor no front (sem as irmãs) que volta ao comportamento atual.
-- **Reverter a fase inteira:** remover as 2 funções novas e voltar o diálogo. A coluna pode ficar, porque é nullable e ninguém mais a lê.
-- O worker de disparo, os intervalos, a velocidade de envio e o `scheduled_at` não são tocados em nenhum ponto.
-
-## Testes
-- Teste unitário da assinatura (`src/test/groupDraftSync.test.ts`): texto igual em campanhas diferentes casa; texto igual em lotes diferentes não casa; sem texto não casa; posição ou tipo diferente não casa; duplicado na mesma campanha não casa; número diferente de blocos não casa.
-- No banco, com uma transação revertida (rollback), sem aprovar de verdade:
-  - âncora + 2 cópias: todas aprovadas, o bloco 0 vira pending, os outros viram grouped e o `scheduled_at` continua idêntico;
-  - cópia sem mídia: só ela fica bloqueada;
-  - campanha sem instância: só a cópia dela fica bloqueada;
-  - cópia já em pending: `not_draft`, e a cópia não é tocada;
-  - cópia desmarcada: continua draft.
-- Conferência da contagem real do backfill antes e depois.
-- Na tela, com a sessão da equipe: abrir o resumo e ver as campanhas e os horários, desmarcar uma, ver o selo "conteúdo diferente" e o aviso de passado. A aprovação real só com a sua autorização.
-
-## Perguntas em aberto
-1. A cópia com "conteúdo diferente" deve vir desmarcada (minha proposta) ou ficar bloqueada de vez?
-2. As irmãs devem casar só pelo lote igual (proposta) ou também entre lotes diferentes?
+## Sub-etapas (cada uma reversível)
+- **2a, leitura e aprovação:** aba, lista paginada, filtros, aprovação pela função da Fase 1 e nova checagem de acesso.
+- **2b, chave nos blocos extras:** backfill e regra para a criação futura.
+- **2c, mídia:** "Trocar mídia" sincronizado.
+- **2d, edição de texto/enquete/contato:** com "aplicar em".
+- **2e, desvincular e excluir rascunhos antigos selecionados.**
+- **(opcional, fora por ora)** deslocar horários.
 
 ## Detalhes técnicos
 
-Arquivos:
-- migração nova (via ferramenta de migração);
-- `src/components/marketing/CampaignDetailPanel.tsx`: seleção da `sync_key`, diálogo com as irmãs e chamada da RPC nova;
-- `src/lib/marketing/groupDraftSync.ts` (novo, reutiliza `normalizeMessageText`);
-- `src/test/groupDraftSync.test.ts`;
-- `src/integrations/supabase/types.ts` (gerado automaticamente);
-- `AGENTS.md` de marketing (regra da `sync_key`).
+Navegação: `GroupsVipManager.tsx` ganha `TabsTrigger value="approval"` com o novo componente lazy `GroupDraftsApprovalTab.tsx` (+ `GroupDraftCard.tsx`, `GroupDraftEditDialog.tsx`). O diálogo de resumo da Fase 1 é extraído de `CampaignDetailPanel.tsx` para `SyncedApprovalDialog.tsx` e usado nos dois lugares, sem mudar o comportamento. O agrupamento e os testes ficam em `src/lib/groupDraftCards.ts`.
 
-SQL proposto (não executado):
+Migração 0184 (2a + 2b):
 ```sql
-ALTER TABLE public.group_campaign_scheduled_messages ADD COLUMN sync_key text;
-CREATE INDEX idx_gcsm_sync_key_draft ON public.group_campaign_scheduled_messages (sync_key)
-  WHERE sync_key IS NOT NULL AND status = 'draft';
+CREATE OR REPLACE FUNCTION public._can_review_group_drafts() RETURNS boolean
+LANGUAGE sql STABLE SECURITY DEFINER SET search_path=public AS $$
+  SELECT auth.uid() IS NOT NULL AND (public._is_group_staff()
+    OR 'marketing' = ANY(public.get_user_allowed_modules(auth.uid())))  -- ajustar ao tipo de retorno real
+$$;
+-- group_draft_sync_siblings e approve_group_drafts_synced passam a usar _can_review_group_drafts()
 
--- backfill: assinatura por mensagem (grupo ou linha solta), só drafts com lote
-WITH msg AS (
-  SELECT COALESCE(message_group_id, id) mk, campaign_id, draft_batch,
-         string_agg(message_type||'::'||lower(btrim(regexp_replace(coalesce(message_content,''),'\s+',' ','g'))),
-                    '||' ORDER BY coalesce(block_order,0)) sig,
-         bool_or(btrim(coalesce(message_content,''))<>'') has_text
-  FROM public.group_campaign_scheduled_messages
-  WHERE status='draft' AND draft_batch IS NOT NULL
-  GROUP BY 1,2,3),
-ok AS (
-  SELECT draft_batch, sig, gen_random_uuid() k FROM msg WHERE has_text
-  GROUP BY draft_batch, sig
-  HAVING count(DISTINCT campaign_id) >= 2 AND count(*) = count(DISTINCT campaign_id))
-UPDATE public.group_campaign_scheduled_messages m
-SET sync_key = ok.k::text||':'||coalesce(m.block_order,0)
-FROM msg JOIN ok USING (draft_batch, sig)
-WHERE COALESCE(m.message_group_id, m.id) = msg.mk AND m.status='draft' AND m.sync_key IS NULL;
+-- 2b: chave nos blocos extras de mensagens em rascunho vinculadas
+UPDATE group_campaign_scheduled_messages g
+SET sync_key = split_part(p.sync_key,':',1)||':'||coalesce(g.block_order,0)
+FROM group_campaign_scheduled_messages p
+WHERE p.message_group_id = g.message_group_id AND coalesce(p.block_order,0)=0
+  AND p.status='draft' AND p.sync_key IS NOT NULL
+  AND g.status='grouped' AND g.id<>p.id AND g.sync_key IS NULL;
+CREATE INDEX IF NOT EXISTS idx_gcsm_sync_key_grouped ON group_campaign_scheduled_messages (sync_key)
+  WHERE sync_key IS NOT NULL AND status='grouped';
 
--- group_draft_sync_siblings(p_ids uuid[]) -> anchor_id, id, campaign_id, campaign_name,
---   scheduled_at, reason, content_differs  (STABLE, SECURITY DEFINER, exige has_role staff, cap 200)
--- approve_group_drafts_synced(p_anchor_ids uuid[], p_sibling_ids uuid[], p_approved_by text)
---   -> anchor_id, id, campaign_id, ok, reason
---   * valida que cada sibling tem a mesma sync_key de uma âncora e outra campanha;
---   * para cada id (âncora e depois cópias): SELECT ... FOR UPDATE, mesmas validações da
---     approve_group_drafts (lógica extraída para um helper interno _validate_group_draft),
---     UPDATE bloco0->pending / irmãos->grouped dentro de um bloco BEGIN..EXCEPTION por mensagem;
---   * nunca toca scheduled_at, instância nem linhas fora de 'draft'.
-REVOKE ALL ON FUNCTION ... FROM PUBLIC, anon; GRANT EXECUTE ... TO authenticated;
+CREATE FUNCTION public.group_draft_cards(p_batch text, p_status text, p_day date,
+  p_limit int DEFAULT 50, p_offset int DEFAULT 0)
+RETURNS jsonb  -- [{card_key, batch, blocks:[...], copies:[{id,campaign_id,campaign_name,scheduled_at,reason,content_differs,past}]}]
+-- card_key = split_part(sync_key,':',1) ou id; limite de 200; usa idx_gcsm_sync_key_draft e status='draft'
+
+CREATE FUNCTION public.update_group_drafts_synced(p_block_id uuid, p_patch jsonb, p_only_ids uuid[] DEFAULT NULL)
+RETURNS TABLE(id uuid, campaign_id uuid, ok boolean, reason text)
+-- _can_review_group_drafts(); patch só com chaves da lista permitida (outras chaves dão erro);
+-- alvo = linhas com a mesma sync_key do bloco; a linha "dona" (bloco 0) precisa estar em 'draft'
+--   (blocos extras 'grouped' de mensagem em rascunho entram; os de mensagem aprovada não);
+-- SELECT ... FOR UPDATE ordenado por id; atualiza só se IS DISTINCT FROM; limite de 200 linhas.
+
+CREATE FUNCTION public.unlink_group_draft(p_id uuid) RETURNS boolean
+-- zera sync_key da mensagem toda (bloco 0 + extras) só se estiver em rascunho
+
+CREATE FUNCTION public.delete_group_drafts(p_ids uuid[]) RETURNS int
+-- apaga só rascunhos selecionados (e seus blocos extras); limite de 200
 ```
-A `approve_group_drafts` atual não muda. Para não ficarem duas cópias das validações, a nova função chama o mesmo helper. Mudar a antiga para usar o helper fica para depois, se você quiser.
+Todas com REVOKE de PUBLIC/anon e GRANT para authenticated. A `approve_group_drafts` antiga não muda.
+
+Criação futura: o `CampaignDetailPanel` e o Claude geram um uuid por mensagem lógica e gravam `uuid:block_order` em todos os blocos de todas as cópias (a regra do AGENTS.md já diz isso; reforçar "inclusive os blocos extras").
+
+Reversão: o front volta a esconder a aba; `DROP FUNCTION` nas funções novas; a checagem volta para `_is_group_staff`; `UPDATE ... SET sync_key=NULL WHERE status='grouped'` desfaz o 2b. A Fase 1 fica intacta.
+
+## Testes
+- **Unitários:** agrupamento em cards, status dos chips, "conteúdo diferente", blocos em quantidades diferentes e lista permitida de colunas.
+- **Banco, sempre com ROLLBACK:**
+  - backfill 2b (contar as 36 linhas esperadas);
+  - lista paginada com filtros e limite;
+  - edição sincronizada de texto e mídia no bloco 3, atingindo o mesmo bloco nas outras cópias;
+  - recusa de cópia já aprovada, enquete com 1 opção, texto vazio e coluna proibida;
+  - horários iguais antes e depois;
+  - desvincular;
+  - excluir só os selecionados;
+  - usuário sem Marketing barrado, e com Marketing liberado.
+- **Tela (Playwright), sem clicar em confirmar aprovação:** aba, filtros, rolagem, chips e diálogos.
+- Nunca aprovar mensagem real.
+
+## Perguntas em aberto (com recomendação)
+1. **Acesso pela permissão do módulo Marketing?** Recomendo **sim**.
+2. **"Deslocar horários" fica fora?** Recomendo **fora**.
+3. **"Excluir rascunhos antigos": só os selecionados, ou também um "selecionar todos do filtro"?** Recomendo **só os selecionados, com "marcar todos da página"**.
+4. **Edição em "Conteúdo diferente": o padrão "todas as cópias" inclui as que estão diferentes?** Recomendo **não**: elas vêm desmarcadas, igual na aprovação.
