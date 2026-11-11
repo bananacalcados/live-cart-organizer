@@ -10083,6 +10083,7 @@ export type Database = {
           sent_count: number
           sent_group_ids: string[] | null
           status: string
+          sync_key: string | null
           vip_link_mode: string | null
           vip_link_product: Json | null
           whatsapp_number_id: string | null
@@ -10119,6 +10120,7 @@ export type Database = {
           sent_count?: number
           sent_group_ids?: string[] | null
           status?: string
+          sync_key?: string | null
           vip_link_mode?: string | null
           vip_link_product?: Json | null
           whatsapp_number_id?: string | null
@@ -10155,6 +10157,7 @@ export type Database = {
           sent_count?: number
           sent_group_ids?: string[] | null
           status?: string
+          sync_key?: string | null
           vip_link_mode?: string | null
           vip_link_product?: Json | null
           whatsapp_number_id?: string | null
@@ -29006,6 +29009,13 @@ export type Database = {
         Args: { p_actor: string; p_sale_id: string }
         Returns: boolean
       }
+      _approve_one_group_draft: {
+        Args: { p_approved_by: string; p_id: string }
+        Returns: {
+          ok: boolean
+          reason: string
+        }[]
+      }
       _automation_sale_attribution: {
         Args: { p_days: number }
         Returns: {
@@ -29019,8 +29029,11 @@ export type Database = {
         }[]
       }
       _dispatch_can_read: { Args: never; Returns: boolean }
+      _group_draft_signature: { Args: { p_id: string }; Returns: string }
+      _is_group_staff: { Args: never; Returns: boolean }
       _norm_concrete_gateway: { Args: { p: string }; Returns: string }
       _pm_pmd_sync_in_progress: { Args: never; Returns: boolean }
+      _validate_group_draft: { Args: { p_id: string }; Returns: string }
       ack_group_responsible_alert: {
         Args: { p_id: string }
         Returns: undefined
@@ -29089,6 +29102,20 @@ export type Database = {
       approve_group_drafts: {
         Args: { p_approved_by: string; p_ids: string[] }
         Returns: {
+          id: string
+          ok: boolean
+          reason: string
+        }[]
+      }
+      approve_group_drafts_synced: {
+        Args: {
+          p_anchor_ids: string[]
+          p_approved_by: string
+          p_sibling_ids: string[]
+        }
+        Returns: {
+          anchor_id: string
+          campaign_id: string
           id: string
           ok: boolean
           reason: string
@@ -30646,6 +30673,18 @@ export type Database = {
           day_count: number
           hour_count: number
           whatsapp_number_id: string
+        }[]
+      }
+      group_draft_sync_siblings: {
+        Args: { p_ids: string[] }
+        Returns: {
+          anchor_id: string
+          campaign_id: string
+          campaign_name: string
+          content_differs: boolean
+          id: string
+          reason: string
+          scheduled_at: string
         }[]
       }
       group_instance_presence: {

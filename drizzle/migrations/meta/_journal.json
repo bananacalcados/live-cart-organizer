@@ -1275,6 +1275,20 @@
       "when": 1794324552380,
       "tag": "0181_normalize_outgoing_wa_phone",
       "breakpoints": true
+    },
+    {
+      "idx": 182,
+      "version": "7",
+      "when": 1794406156332,
+      "tag": "0182_group_draft_sync_key",
+      "breakpoints": true
+    },
+    {
+      "idx": 183,
+      "version": "7",
+      "when": 1794406195217,
+      "tag": "0183_fix_approve_group_drafts_synced",
+      "breakpoints": true
     }
   ]
 }
