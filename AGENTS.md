@@ -82,5 +82,3 @@
 - Frontend edge calls always use the session token.
 - Finish with zero no-RLS tables; anon EXECUTE only for the documented public list.
 - Code search: RPC search_product_code_keys (fuzzy, cap 200).
-- Fiscal exit notes: online/live/link/WhatsApp/pickup sales never get NFC-e (shared _shared/fiscal/sale-fiscal-rules.ts in nfce-emitir); online NF-e requires valid CPF and full address with no invented fallback; claim_fiscal_emission locks per sale and refuses a second active exit note of any model (finalidade 4 excluded); nfce-retry-pending retries model 65 only — so one sale never gets two exit notes.
-- Online sale CPF is filled at insert from the linked pos_customers by trigger trg_set_pos_sale_cpf_from_customer (only when empty); Conferência hydration stays as reinforcement.
