@@ -42,6 +42,7 @@ export default {
           DEFAULT: "hsl(var(--muted))",
           foreground: "hsl(var(--muted-foreground))",
         },
+        whatsapp: { DEFAULT: "hsl(var(--whatsapp))", foreground: "hsl(var(--whatsapp-foreground))" },
         accent: {
           DEFAULT: "hsl(var(--accent))",
           foreground: "hsl(var(--accent-foreground))",

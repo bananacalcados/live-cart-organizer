@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Loader2, ShieldCheck, Clock, MessageCircle } from "lucide-react";
 import { SelfServicePrivacy } from "@/components/live/SelfServicePrivacy";
 import { advertisingSignals, ensureAdvertisingRegion, trackSelfservice } from "@/lib/selfServiceAdvertising";
+import { OfficialWhatsAppBanner, ConfirmStepsCard } from "@/components/live/OfficialWhatsAppBanner";
 import { SelfServicePrizeBanner } from "@/components/live/SelfServicePrizeBanner";
 import { toast } from "sonner";
 import { buildInstallmentOptions, parseInstallmentRule, resolveSelfServiceInstallments, type InstallmentConfig } from "@/lib/installmentRules";
@@ -315,6 +316,7 @@ export default function SelfServiceOrderPage() {
       <div className="mx-auto max-w-md p-4">
         <h1 className="mb-1 text-center text-xl font-bold">{ev.name}</h1>
         <p className="mb-1 text-center text-sm text-muted-foreground">Banana Calçados · pedido da live</p>
+        {screen !== "confirm_wa" && <OfficialWhatsAppBanner eventId={ev.id} slug={slug} />}
 
         {screen === "identify" && (
           <div className="space-y-4 rounded-2xl border p-4">
@@ -456,6 +458,8 @@ export default function SelfServiceOrderPage() {
           <div className="space-y-4 rounded-2xl border p-4 text-center">
             <MessageCircle className="mx-auto h-12 w-12 text-primary" />
             <p className="font-semibold">Falta só um passo: envie a mensagem que abriu no WhatsApp</p>
+            <OfficialWhatsAppBanner eventId={ev.id} slug={slug} />
+            <ConfirmStepsCard />
             <p className="text-sm font-semibold">{known && orders.length ? "Seu pedido só fica confirmado depois que essa mensagem chegar para nós." : "Seu cadastro só fica confirmado depois que essa mensagem chegar para nós."}</p>
             <p className="text-sm text-muted-foreground">
               {orders.length ? "Assim que ela chegar, a gente te responde com o link do seu carrinho." : "Assim que ela chegar, seu cadastro fica confirmado."}
