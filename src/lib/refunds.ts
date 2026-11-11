@@ -112,6 +112,8 @@ export const refundApi = {
     call<ReceiptSendPreview>({ action: "receipt_send_preview", id, whatsapp_number_id: whatsappNumberId || undefined }),
   sendReceipt: (p: { id: string; message: string; confirm_resend?: boolean; whatsapp_number_id?: string | null }) =>
     call<{ ok: boolean; sent_at: string }>({ action: "send_receipt", ...p }),
+  checkGateway: (id: string) => call<{ ok: boolean; refunded: boolean; can_retry?: boolean; message: string }>({ action: "check_gateway", id }),
+  retry: (id: string) => call<{ ok: boolean; pending_approval?: boolean; status?: string; message?: string; error?: string }>({ action: "retry", id }),
   approve: (id: string) => call<{ ok: boolean; message?: string }>({ action: "approve", id }),
   reject: (id: string, reason: string) => call<{ ok: boolean; message?: string }>({ action: "reject", id, rejected_reason: reason }),
   eligibility: (items: { source: RefundSource; id: string }[]) =>

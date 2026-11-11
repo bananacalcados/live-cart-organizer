@@ -3,6 +3,7 @@ import { REFUND_REASONS, REFUND_STATUS_LABELS, type RefundListRow } from "@/lib/
 import { RefundReceiptButton } from "./RefundReceiptButton";
 import { SendRefundReceiptButton } from "./SendRefundReceiptButton";
 import { RefundWhatsAppButton } from "./RefundWhatsAppButton";
+import { FailedRefundActions } from "./FailedRefundActions";
 
 export const brl = (n: number) => Number(n).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 export const refundReasonLabel = (v: string) => REFUND_REASONS.find((r) => r.value === v)?.label || v;
@@ -46,6 +47,7 @@ export function RefundRowCard({ r, actions, onChanged, storeId }: { r: RefundLis
         {["concluido","concluido_manual"].includes(r.status) && <RefundReceiptButton refundId={r.id} />}
         {["concluido","concluido_manual"].includes(r.status) && r.receipt_path && <SendRefundReceiptButton refundId={r.id} sentAt={r.receipt_sent_at} onSent={onChanged} />}
         {r.receipt_code && <span className="text-[10px] text-muted-foreground">Cód. {r.receipt_code}</span>}
+        {r.status === "falhou" && <FailedRefundActions refundId={r.id} onChanged={onChanged} />}
         {actions}
       </div>
     </div>

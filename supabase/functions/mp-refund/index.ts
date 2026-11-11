@@ -213,7 +213,7 @@ serve(withAccessLog("mp-refund", async (req) => {
 
   let body: any = {};
   try { body = await req.json(); } catch { return json({ error: "Corpo inválido." }, 400); }
-  const action = String(body?.action || "");
+  let action = String(body?.action || "");
 
   // This action records evidence only. No provider refund endpoint is called.
   if (action === "register_manual") {
@@ -631,6 +631,48 @@ serve(withAccessLog("mp-refund", async (req) => {
       refundedSoFar: check.refundedSoFar ?? null,
       existingRefunds: existing || [],
     });
+  }
+
+  // ── Estorno que falhou: consultar o gateway (só leitura + registro de confirmação) ──
+  if (action === "check_gateway" || action === "retry") {
+    const refundId = String(body?.id || "");
+    if (!refundId) return json({ error: "Estorno não informado." }, 400);
+    const { data: row } = await supabase.from("gateway_refunds").select("*").eq("id", refundId).maybeSingle();
+    if (!row) return json({ error: "Estorno não encontrado." }, 404);
+    if (row.status !== "falhou") return json({ error: "Só estornos com falha podem ser conferidos ou tentados de novo por aqui." }, 400);
+    const src = await loadSource(supabase, row.source, row.source_id);
+    if (!src) return json({ error: "Venda/pedido não encontrado." }, 404);
+    const gw = await checkAny(supabase, src, null);
+    const c = gw.check || {};
+    if (c.retry) return json({ error: "Não consegui consultar o gateway agora. Tente de novo em instantes." }, 503);
+    if (gw.payId && String(gw.payId) !== String(row.payment_id)) return json({ error: "O pagamento desta venda mudou desde o pedido de estorno. Confira manualmente." }, 409);
+    const refunded = c.refundedSoFar != null ? Number(c.refundedSoFar) : (c.remaining === 0 ? Number(row.amount) : 0);
+    const isRefunded = (c.remaining === 0) || refunded + 0.009 >= Number(row.amount);
+    const { data: others } = await supabase.from("gateway_refunds").select("id,status")
+      .eq("payment_id", row.payment_id).neq("id", row.id)
+      .in("status", ["concluido", "concluido_manual", "processando", "verificar", "aguardando_aprovacao"]).limit(1);
+    const other = others?.[0];
+    if (action === "check_gateway") {
+      if (isRefunded) {
+        if (other) return json({ ok: true, refunded: true, message: "O gateway mostra o valor estornado e já existe outro registro de estorno para este pagamento. Nada foi alterado." });
+        const { data: upd } = await supabase.from("gateway_refunds").update({
+          status: "concluido", error_message: null, completed_at: new Date().toISOString(), updated_at: new Date().toISOString(),
+          reason_text: `${row.reason_text ? row.reason_text + " · " : ""}Confirmado na consulta ao gateway (feito fora do sistema ou em nova tentativa)`.slice(0, 500),
+        }).eq("id", row.id).eq("status", "falhou").select("id").maybeSingle();
+        if (upd) await runRefundPostActions(supabase, { ...row, status: "concluido" }, userEmail);
+        return json({ ok: true, refunded: true, message: "O gateway confirma que o valor foi estornado. Marquei este estorno como concluído." });
+      }
+      const st = c.payment?.status ? ` (pagamento está "${c.payment.status}")` : "";
+      return json({ ok: true, refunded: false, can_retry: !!c.ok && !other, message: c.ok
+        ? `O gateway NÃO mostra estorno deste valor${st}. Você pode tentar de novo.`
+        : `O gateway não mostra estorno${st}. ${c.error || ""}`.trim() });
+    }
+    // retry: confere de novo e cria NOVA solicitação (nova chave), pelas mesmas regras do estorno normal
+    if (isRefunded) return json({ error: "O gateway já mostra este valor estornado. Use \"Verificar no gateway\" para marcar como concluído." }, 409);
+    if (other) return json({ error: "Já existe outro estorno em andamento ou concluído para este pagamento." }, 409);
+    if (!c.ok) return json({ error: c.error || "O gateway não permite estornar este pagamento agora." }, 400);
+    body = { source: row.source, id: row.source_id, amount: Number(row.amount), reason: row.reason, reason_text: row.reason_text || (row.reason === "outro" ? "Nova tentativa" : null), cancel_order: !!row.cancel_order };
+    action = "execute";
   }
 
   // ── Executar estorno ──
