@@ -1,83 +1,116 @@
-# Aba RH (recrutamento) — plano
+# Grupos VIP — Fase 1: aprovar a mesma mensagem em várias campanhas
 
-Nada será alterado no que já funciona. Nada será publicado.
+## O que você vai ver
+1. Em uma campanha, você seleciona os rascunhos e clica em **Aprovar** (igual a hoje).
+2. No resumo "Aprovar rascunhos", cada mensagem que também existe em outras campanhas mostra:
+   "Esta mensagem também está em:" e, embaixo, uma linha por cópia: **[x] Vips Gv — 11/11 10:05**, **[x] Vips Gv #2 — 11/11 10:10**.
+   Todas já vêm marcadas. Dá para desmarcar cada uma.
+3. As cópias que não podem ser aprovadas aparecem com um X vermelho e o motivo (por exemplo "Sem mídia" ou "Campanha sem instância"). Elas não têm caixa.
+4. O aviso de horário no passado vale também para as cópias. A caixa "Entendi" precisa estar marcada para incluir essas mensagens.
+5. Ao clicar em **Aprovar (N)**, o aviso final mostra o resultado por campanha. Exemplo: "Live - Meio de Semana: 3 aprovadas · Vips Gv: 3 aprovadas · Vips Gv #2: 2 aprovadas, 1 bloqueada (sem mídia)".
+6. Nada é aprovado sem esse clique. Os horários de cada campanha não mudam.
 
-## 1. Auditoria (somente leitura)
+## Situação hoje (conferida no banco)
+- A tabela tem 3.804 mensagens, das quais 43 são rascunhos (42 com lote e 1 sem lote).
+- Nenhum rascunho com lote está sem texto.
+- No backfill, 31 rascunhos seriam vinculados, formando 7 grupos de cópias entre campanhas diferentes. Nenhuma assinatura se repete dentro da mesma campanha, ou seja, hoje não há ambiguidade.
+- O número exato será recontado no momento da migração. Se a contagem por mensagem agrupada der diferente, eu aviso antes de aplicar.
 
-a) **Abas do Dashboard Geral** — `src/components/pos/POSGeneralDashboard.tsx` (linha ~544): lista fixa `overview / payroll / fiscal / dre` e um `view === ...` que escolhe o painel. Folha e Fiscal são protegidas por senha da área, conferida no servidor (`src/lib/areaPassword.ts` → RPC `verify_area_password`, 5 tentativas e bloqueio de 5 min; troca só pelo admin via `change_area_password`). Permissão de admin pelo `has_role(auth.uid(),'admin')`. RH entra como 5ª aba, visível só para admin, e as funções conferem `has_role` no servidor (o botão escondido não é a proteção).
+## Regras de vínculo (sync_key)
+- A chave é por bloco: `sync_key = <chave da mensagem>:<posição do bloco>`. Todas as cópias do mesmo bloco têm a mesma chave. A chave não depende do texto, então editar uma cópia não quebra o vínculo.
+- **Backfill** (só rascunhos com lote; linhas pending, grouped, sent etc. não são tocadas):
+  - A assinatura da mensagem inteira junta o lote e a lista ordenada dos blocos (tipo + texto normalizado). A normalização é a mesma de `normalizeMessageText`: espaços colapsados, trim e minúsculas.
+  - Só vincula quando a mensagem tem pelo menos um bloco com texto. Mensagem sem texto nenhum fica sem chave, como no espelhamento de mídia.
+  - Só vincula quando a mesma assinatura aparece em **2 ou mais campanhas diferentes** e **no máximo uma vez por campanha**. Se aparecer duas vezes na mesma campanha, fica ambígua e não recebe chave.
+  - Blocos de imagem sem legenda dentro de uma mensagem agrupada entram pela posição. Eles só são vinculados porque a mensagem como um todo casou (mesmo lote, mesma quantidade de blocos e mesmos tipos na mesma ordem).
+  - Proteção contra falso positivo: o mesmo texto em lotes diferentes não casa, o mesmo texto em outra posição ou com outro tipo não casa, e mensagens agrupadas com um número diferente de blocos não casam.
+- **Cópia editada depois do vínculo:** continua vinculada, porque editar o texto não quebra a chave. No resumo, quando o texto ou a mídia da cópia estiver diferente da que você está aprovando, aparece o selo **"conteúdo diferente"**. Essa cópia vem **desmarcada** por padrão, e você marca se quiser. Decisão: a cópia nunca é aprovada no escuro com um conteúdo que você não está vendo, e o vínculo também não se perde.
+- Rascunho criado dentro do sistema, numa campanha só: fica sem chave e funciona exatamente como hoje.
 
-b) **WhatsApp por uazapi** — `supabase/functions/_shared/uazapi-credentials.ts` (`resolveUazapiCredentials`, `uazapiInstance`, `formatUazapiNumber`) resolve a instância e o token sem expor ao navegador. O ritmo/fila por instância fica em `selfservice-message-worker` (reserva atômica, 3–7 s por instância, recuperação após 2 min). Para um aviso interno, um por candidato, o plano é usar a mesma fila em vez de criar outra; se a fila exigir pedido/evento, faço um envio direto e único pelo helper de credenciais (ver Dúvida 2).
+## Casos de borda
+- **Cópia já aprovada, enviada ou cancelada:** nem aparece como irmã (a busca é só por `status='draft'`). A função confere de novo `status='draft'` com trava de linha, e a resposta é `not_draft`.
+- **Cópia sem mídia, enquete com menos de 2 opções, contato sem telefone, sem horário, {{link_atendimento}} sem modo:** bloqueada com o motivo. As outras seguem.
+- **Campanha sem instância:** a cópia é bloqueada com `missing_instance`. Cada cópia usa a instância da própria campanha e nunca a da âncora.
+- **Campanhas com instâncias diferentes:** isso é permitido. Nada de instância é copiado ou alterado.
+- **Horário no passado:** listado por cópia. Exige a mesma caixa "Entendi", e a cópia sem o "Entendi" não é enviada.
+- **Mensagem agrupada:** as irmãs são buscadas pela chave do bloco 0. Na aprovação, cada cópia faz a própria transição: o bloco 0 vira pending e os outros blocos viram grouped, pelo `message_group_id` da cópia.
+- **Âncora bloqueada:** as cópias dela não são aprovadas. Elas só seguem a âncora.
+- **Duas aprovações ao mesmo tempo:** a trava de linha e o `WHERE status='draft'` garantem que cada cópia seja aprovada uma vez só.
 
-c) **IG Automação** — regras de comentário com `trigger_type='keyword'` e `trigger_keywords` em `_shared/instagram-comment-automation.ts` (linhas ~353 e ~699); DM por `instagram-dm-automation-run`. O padrão de "1 linha, reserva atômica, sem nova tentativa" é `ig-live-cart-notify` + RPC `claim_ig_live_cart_notifications` com `kind` (`selfservice_register_dm`, ...). Dá para incluir na fase 2 um novo `kind='rh_vaga_link'` e uma ação de regra "enviar link do RH", sem mudar os `kind` nem as regras atuais.
+## Consultas da tela
+- **Ao abrir a campanha:** nada muda. A coluna `sync_key` entra na seleção que já existe, que hoje já lista as colunas.
+- **Ao abrir o resumo "Aprovar":** 1 chamada, a RPC `group_draft_sync_siblings(p_ids)`. Ela devolve as irmãs com campanha, horário, motivo de bloqueio pré-calculado e o indicador "conteúdo diferente", limitada a 200 linhas. A chamada não se repete e não há polling.
+- **Ao aprovar:** 1 chamada, a RPC `approve_group_drafts_synced`. Depois vem a recarga de mensagens que já acontece hoje.
+- Não há trigger novo e não há consulta dentro de laço. O índice parcial novo atende a busca das irmãs.
 
-d) **Função pública e IA** — `_shared/withAccessLog.ts`, `requireAuth.ts`, `staff-or-internal.ts`, `ai-rate-limit.ts` e contagem por IP em `auth-security.ts` (`countLastHour`). A IA da moderação está em `supabase/functions/ig-comment-moderate/index.ts`: Lovable AI, modelo Flash, `response_format` com esquema JSON, uma chamada por item, sem nova tentativa automática. Vou reutilizar o mesmo formato.
+## Fase 2 e Fase 3 (deixar preparado)
+- **Fase 2 (aba central):** reaproveita as duas RPCs sem mudança. Basta listar os rascunhos agrupados por `sync_key`, com uma RPC paginada nova nessa fase.
+- **Fase 3 (Claude):** ao criar o mesmo rascunho em N campanhas, o Claude gera **um UUID por mensagem** e grava `sync_key = '<uuid>:<block_order>'` em cada bloco de cada campanha, no mesmo insert em que hoje grava o `draft_batch`. Assim o casamento por texto deixa de ser necessário. Vou documentar isso na skill e no `AGENTS.md` de marketing.
 
-e) **Rota pública** — `src/App.tsx`: `/g/:code`, `/zap/:slug`, `/pedido/:eventSlug...` ficam fora do login. `/vaga/:codigo` segue o mesmo padrão, com página carregada só quando aberta.
+## Riscos e como reverter
+- **Risco: vínculo errado no backfill.** As regras acima são restritivas, e a aprovação das cópias sempre pede confirmação visual. Para reverter: `UPDATE ... SET sync_key = NULL WHERE status='draft'`.
+- **Risco: a tela nova falhar.** A RPC antiga `approve_group_drafts` fica intacta, e há um interruptor no front (sem as irmãs) que volta ao comportamento atual.
+- **Reverter a fase inteira:** remover as 2 funções novas e voltar o diálogo. A coluna pode ficar, porque é nullable e ninguém mais a lê.
+- O worker de disparo, os intervalos, a velocidade de envio e o `scheduled_at` não são tocados em nenhum ponto.
 
-## 2. O que será criado
+## Testes
+- Teste unitário da assinatura (`src/test/groupDraftSync.test.ts`): texto igual em campanhas diferentes casa; texto igual em lotes diferentes não casa; sem texto não casa; posição ou tipo diferente não casa; duplicado na mesma campanha não casa; número diferente de blocos não casa.
+- No banco, com uma transação revertida (rollback), sem aprovar de verdade:
+  - âncora + 2 cópias: todas aprovadas, o bloco 0 vira pending, os outros viram grouped e o `scheduled_at` continua idêntico;
+  - cópia sem mídia: só ela fica bloqueada;
+  - campanha sem instância: só a cópia dela fica bloqueada;
+  - cópia já em pending: `not_draft`, e a cópia não é tocada;
+  - cópia desmarcada: continua draft.
+- Conferência da contagem real do backfill antes e depois.
+- Na tela, com a sessão da equipe: abrir o resumo e ver as campanhas e os horários, desmarcar uma, ver o selo "conteúdo diferente" e o aviso de passado. A aprovação real só com a sua autorização.
 
-**Tabelas (todas com segurança ligada, sem acesso público; leitura e escrita só admin ou pelas funções do servidor):**
-- `rh_vagas` — título, resumo, ativo. Já nasce com "Vendedor(a) — Live e Lojas".
-- `rh_settings` (1 linha) — guia de atendimento, pesos, faixas de permanência, pontos por transporte e por computador, palavra-chave da fase 2, instância uazapi, número do aviso (padrão 5533991955003), aviso ligado/desligado.
-- `rh_cenarios` — vaga, ordem, contexto, mensagem do cliente, gabarito, ativo.
-- `rh_bairros_proximos` — loja (Pérola/Centro), bairro sem acento, pontos.
-- `rh_links` — código (aleatório, 10+ caracteres), hash do código, @ normalizado, vaga, estado (gerado/aberto/enviado), datas. Único por @ + vaga.
-- `rh_candidatos` — link, nome, WhatsApp, idade, bairro, cidade, transporte, aceita condições, já trabalhou, computador, situação, dispositivo, rascunho, status (novo/em análise/chamado/aprovado/reprovado), observação, consentimento e data, `deleted_at`.
-- `rh_experiencias` — candidato, onde, função, duração em meses (até 10 por candidato).
-- `rh_respostas_teste` — candidato, cenário, texto exato da resposta.
-- `rh_avaliacoes` — candidato, nota final, completa/parcial, detalhamento por critério (JSON), resumo da IA em 3 linhas, sinais de alerta, `ai_attempted_at` (impede nova avaliação automática).
-- `rh_avisos` — candidato (único), estado, reservado em, enviado em, erro, quantidade de reenvios (máximo 3).
-- Índices só para as consultas de lista: (status, nota), (vaga, criado em), @ e nome com busca por similaridade.
+## Perguntas em aberto
+1. A cópia com "conteúdo diferente" deve vir desmarcada (minha proposta) ou ficar bloqueada de vez?
+2. As irmãs devem casar só pelo lote igual (proposta) ou também entre lotes diferentes?
 
-**Funções SQL** (sem acesso público; conferem admin, exceto as do servidor):
-- `rh_create_link(username, vaga_id)` — somente servidor, idempotente; usada pela aba e depois pelo Instagram.
-- `rh_list_candidatos(status, busca, limit≤50, offset)` e `rh_list_links(limit, offset)`.
-- `rh_counts()` — novos e pendentes, numa única leitura.
-- `rh_candidato_detalhe(id)`, `rh_update_status(id, status, obs)`, `rh_delete_candidato(id)` (apaga dados pessoais e respostas, mantendo só um registro anônimo de exclusão).
-- `rh_claim_aviso(id)` — reserva atômica do aviso.
+## Detalhes técnicos
 
-**Funções do servidor:**
-- `rh-public` (aberta, mas com limite: 30/h por IP e 60/h por código; tudo validado no servidor) — `open` (devolve vaga, cenários e guia; marca "aberto"), `draft` (salva rascunho), `submit` (valida, grava, marca "enviado" e dispara a avaliação em segundo plano). Nunca devolve dados de outros candidatos.
-- `rh-score` (somente servidor/admin) — aplica as regras, faz uma chamada à IA e grava a avaliação. Se a IA falhar, grava nota parcial. Depois reserva e envia o aviso. Botões "Reavaliar com IA" e "Reenviar aviso" passam por aqui, com checagem de admin.
-- `rh-admin` (admin) — criar link e salvar configurações.
+Arquivos:
+- migração nova (via ferramenta de migração);
+- `src/components/marketing/CampaignDetailPanel.tsx`: seleção da `sync_key`, diálogo com as irmãs e chamada da RPC nova;
+- `src/lib/marketing/groupDraftSync.ts` (novo, reutiliza `normalizeMessageText`);
+- `src/test/groupDraftSync.test.ts`;
+- `src/integrations/supabase/types.ts` (gerado automaticamente);
+- `AGENTS.md` de marketing (regra da `sync_key`).
 
-**Telas:**
-- `src/pages/VagaPublicPage.tsx` (`/vaga/:codigo`), feita primeiro para celular.
-- `src/components/pos/rh/RhTab.tsx` com subabas Links, Candidatos e Configurações.
-- `src/pages/RhCandidatoPage.tsx` (`/rh/candidato/:id`, exige login e volta para o mesmo endereço depois de entrar).
-- Alteração mínima em `POSGeneralDashboard.tsx` (nova aba, só para admin) e em `App.tsx` (2 endereços).
+SQL proposto (não executado):
+```sql
+ALTER TABLE public.group_campaign_scheduled_messages ADD COLUMN sync_key text;
+CREATE INDEX idx_gcsm_sync_key_draft ON public.group_campaign_scheduled_messages (sync_key)
+  WHERE sync_key IS NOT NULL AND status = 'draft';
 
-## 3. Pontuação (servidor)
-- **Atendimento, 50 pontos:** 3 cenários × 10. Pergunta no final ou aviso de retorno vale 3 (regra); ação correta vale 3 (IA); até 200 caracteres vale 2 (regra); tom cordial vale 2 (IA).
-- **Situação, 20 pontos:** nota 0–10 da IA × 2.
-- **Permanência, 15 pontos:** média em meses, por faixas configuráveis. Sem experiência dá 7,5 pontos.
-- **Transporte e bairro, 10 pontos:** pontos por meio de transporte + tabela de bairros, com teto de 10.
-- **Computador, 5 pontos:** 0, 3 ou 5.
-- Quem não topa as condições recebe a nota normalmente, mas vai para o fim da lista e ganha uma marca.
-- Instruções fixas para a IA: avaliar só o conteúdo, ignorar características pessoais, descrever com neutralidade. A tela informa: "A IA é apoio; a decisão é sua."
+-- backfill: assinatura por mensagem (grupo ou linha solta), só drafts com lote
+WITH msg AS (
+  SELECT COALESCE(message_group_id, id) mk, campaign_id, draft_batch,
+         string_agg(message_type||'::'||lower(btrim(regexp_replace(coalesce(message_content,''),'\s+',' ','g'))),
+                    '||' ORDER BY coalesce(block_order,0)) sig,
+         bool_or(btrim(coalesce(message_content,''))<>'') has_text
+  FROM public.group_campaign_scheduled_messages
+  WHERE status='draft' AND draft_batch IS NOT NULL
+  GROUP BY 1,2,3),
+ok AS (
+  SELECT draft_batch, sig, gen_random_uuid() k FROM msg WHERE has_text
+  GROUP BY draft_batch, sig
+  HAVING count(DISTINCT campaign_id) >= 2 AND count(*) = count(DISTINCT campaign_id))
+UPDATE public.group_campaign_scheduled_messages m
+SET sync_key = ok.k::text||':'||coalesce(m.block_order,0)
+FROM msg JOIN ok USING (draft_batch, sig)
+WHERE COALESCE(m.message_group_id, m.id) = msg.mk AND m.status='draft' AND m.sync_key IS NULL;
 
-## 4. Aviso no WhatsApp
-Depois da avaliação (ou com "nota parcial" se a IA não responder em 25 s), envia uma mensagem por candidato: "Novo candidato: {nome} (@{ig}) — nota {n}/100 — vaga {vaga}. Ver respostas: {link do detalhe no ERP}". Usa a instância escolhida; se ela estiver desligada, usa a primeira uazapi conectada. Sem nova tentativa automática; um erro fica visível e pode ser reenviado até 3 vezes.
-
-## 5. Consultas ao abrir cada tela
-- **Página pública:** 1 chamada ao abrir; rascunho salvo 1,5 s após parar de digitar (só se algo mudou); 1 chamada ao enviar. Sem repetição automática.
-- **Aba RH:** 2 chamadas ao abrir (contadores + 1ª página de 50 candidatos). Links e Configurações fazem 1 chamada cada, somente quando abertos. Sem atualização automática.
-- **Detalhe:** 1 chamada, com tudo junto.
-- **Servidor por candidato enviado:** 1 chamada de IA + 1 mensagem de WhatsApp. Nenhum agendamento novo.
-
-## 6. Fases (cada uma pode ser testada e desfeita separadamente)
-1. **Banco + criação de link.** Teste: criar o mesmo @ duas vezes devolve o mesmo link; um usuário sem permissão não lê nada.
-2. **Página pública + gravação.** Teste no celular (390 px): rascunho, menor de 18, até 10 experiências, link já enviado e limite de acessos.
-3. **Pontuação.** Testes automáticos de cada regra (pesos, sem experiência = metade, computador, "não topa" no fim) + 1 avaliação real com a IA + simulação de falha (nota parcial).
-4. **Aba RH + detalhe.** Teste: paginação, busca no servidor, status e observação, apagar candidato, voltar ao detalhe depois do login.
-5. **Aviso.** Teste: 1 envio para o seu número com candidato de teste, reserva dupla não envia duas vezes, instância de reserva e reenvio limitado. Os dados de teste são apagados no final.
-6. **Fase 2 (só com autorização):** `kind='rh_vaga_link'` em `ig_live_cart_notifications` + ação nas regras de palavra-chave + áudio com transcrição.
-
-## 7. Dúvidas e riscos
-1. **Acesso:** a aba deve ser só admin, ou também com senha própria como Folha/Fiscal? Proposta: só admin, sem senha.
-2. **Fila do aviso:** a fila do autoatendimento é ligada a evento/pedido. Proposta: envio direto e único pelo helper de credenciais, porque é 1 mensagem interna por candidato e não é disparo em massa. Confirma?
-3. **Endereço do link:** usar `checkout.bananacalcados.com.br/vaga/...`? Proposta: sim.
-4. **Faixas iniciais de permanência:** menos de 3 meses = 4; 3–6 = 8; 6–12 = 12; mais de 12 = 15. **Transporte:** a pé, moto e bicicleta = 6; carro = 5; ônibus = 3; bairro próximo soma até 4. Confirma?
-5. **Guarda dos dados:** apagar automaticamente candidatos reprovados depois de X meses? Proposta: não apagar sozinho; apagar só pelo botão.
-6. **Risco:** o @ vem do link, e alguém pode repassar o link a outra pessoa. A tela mostra o @ ("Cadastro de @fulana") para reduzir esse risco.
-7. **Fase 2 (Instagram):** a resposta por comentário depende da permissão atual de mensagem privada. Vai ser conferida antes de ligar.
+-- group_draft_sync_siblings(p_ids uuid[]) -> anchor_id, id, campaign_id, campaign_name,
+--   scheduled_at, reason, content_differs  (STABLE, SECURITY DEFINER, exige has_role staff, cap 200)
+-- approve_group_drafts_synced(p_anchor_ids uuid[], p_sibling_ids uuid[], p_approved_by text)
+--   -> anchor_id, id, campaign_id, ok, reason
+--   * valida que cada sibling tem a mesma sync_key de uma âncora e outra campanha;
+--   * para cada id (âncora e depois cópias): SELECT ... FOR UPDATE, mesmas validações da
+--     approve_group_drafts (lógica extraída para um helper interno _validate_group_draft),
+--     UPDATE bloco0->pending / irmãos->grouped dentro de um bloco BEGIN..EXCEPTION por mensagem;
+--   * nunca toca scheduled_at, instância nem linhas fora de 'draft'.
+REVOKE ALL ON FUNCTION ... FROM PUBLIC, anon; GRANT EXECUTE ... TO authenticated;
+```
+A `approve_group_drafts` atual não muda. Para não ficarem duas cópias das validações, a nova função chama o mesmo helper. Mudar a antiga para usar o helper fica para depois, se você quiser.
