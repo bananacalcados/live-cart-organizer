@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { deskCall } from "@/components/exchange-desk/api";
 import { ExchangeDeskCard } from "@/components/exchange-desk/ExchangeDeskCard";
 import { TemplatesEditor } from "@/components/exchange-desk/TemplatesEditor";
+import { CentralProductChoiceToggle } from "@/components/exchange-desk/CentralProductChoiceToggle";
 import { ageLabel, ageLevel, REASON_LABEL, STATUS_LABEL, type DeskTab } from "@/lib/exchangeDesk/rules";
 
 interface Row {
@@ -63,6 +64,7 @@ export default function ExchangeDesk() {
         <Button variant="outline" size="sm" onClick={() => setTplOpen(true)}><FileText className="h-4 w-4 mr-1" />Mensagens prontas</Button>
       </header>
       <main className="p-4 max-w-6xl mx-auto space-y-3">
+        <CentralProductChoiceToggle />
         <Tabs value={tab} onValueChange={(v) => setParams({ aba: v })}>
           <TabsList>
             <TabsTrigger value="precisa">Precisa de você</TabsTrigger>

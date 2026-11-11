@@ -23,3 +23,11 @@ Deno.test('link inexistente conta como falha e bloqueia após excesso',async()=>
 Deno.test('limitador indisponível mantém fechado',async()=>{
  let calls=0;const db={rpc:async()=>{calls++;return {data:{ok:1},error:null};}};const r=await centralHandler('resolve',db,async()=>true,async()=>false)(new Request('http://localhost',{method:'POST',body:JSON.stringify({token,type:'troca'})}));await r.text();assert(r.status===429);assert(calls===0);
 });
+Deno.test('troca repassa tamanho desejado e produto ao banco, que decide pelo interruptor',async()=>{
+ const calls:any[]=[];const db={rpc:async(name:string,args:Record<string,unknown>)=>{calls.push(args);return {data:{status:'escalado',id:item},error:null};}};
+ const r=await centralHandler('submit',db,async()=>true,async()=>true)(new Request('http://localhost',{method:'POST',body:JSON.stringify({token,type:'troca',item_id:item,replacement_id:item,quantity:1,reason:'tamanho',detail:'Ficou pequeno',unused:true,desired:'  nº 37  '})}));await r.text();
+ assert(r.status===200);assert(calls[0].p_desired==='nº 37');assert(calls[0].p_replacement===item);
+});
+Deno.test('pedido de tamanho acima de 200 caracteres é recusado',async()=>{
+ let calls=0;const db={rpc:async()=>{calls++;return {data:null,error:null};}};const r=await centralHandler('submit',db,async()=>true,async()=>true)(new Request('http://localhost',{method:'POST',body:JSON.stringify({token,type:'troca',item_id:item,quantity:1,reason:'tamanho',detail:'Ficou pequeno',unused:true,desired:'x'.repeat(201)})}));await r.text();assert(r.status===400);assert(calls===0);
+});

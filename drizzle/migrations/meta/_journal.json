@@ -1331,6 +1331,13 @@
       "when": 1794421320274,
       "tag": "0189_exchange_desk_phase3",
       "breakpoints": true
+    },
+    {
+      "idx": 190,
+      "version": "7",
+      "when": 1794422795359,
+      "tag": "0190_central_require_product_choice",
+      "breakpoints": true
     }
   ]
 }

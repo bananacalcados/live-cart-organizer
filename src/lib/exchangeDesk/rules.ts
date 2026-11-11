@@ -6,14 +6,21 @@ export type DeskStatus =
   | "solicitado" | "aprovado" | "aguardando_postagem" | "em_transito" | "recebido"
   | "concluido" | "recusado" | "cancelado" | "escalado";
 export type DeskTab = "precisa" | "andamento" | "concluidas";
-export type DeskAction = "assign" | "approve" | "deny" | "request_info" | "offer_size" | "reverse" | "create_troca";
+export type DeskAction = "assign" | "approve" | "deny" | "request_info" | "offer_size" | "reverse" | "create_troca" | "choose_product";
 
 export interface DeskReq {
   status: DeskStatus;
   request_type: string | null;
   reverse_shipping_code?: string | null;
   trocas_devolucoes_id?: string | null;
+  replacement_product_id?: string | null;
 }
+
+/** Troca sem produto separado não pode ser aprovada, virar registro nem gerar reversa. */
+export function needsProductChoice(r: DeskReq): boolean {
+  return r.request_type === "troca" && !r.replacement_product_id;
+}
+const NEED_PRODUCT = "Escolha e separe o produto novo antes.";
 export interface Actor { isHuman: boolean; isStaff: boolean }
 
 export function tabOf(r: DeskReq): DeskTab {
@@ -28,7 +35,10 @@ export function canAct(r: DeskReq, action: DeskAction, actor: Actor, reason = ""
   const open = r.status === "escalado" || r.status === "solicitado";
   switch (action) {
     case "assign": return null;
+    case "choose_product":
+      return r.request_type === "troca" && open ? null : "Só para troca ainda em análise.";
     case "approve":
+      if (needsProductChoice(r)) return NEED_PRODUCT;
       if (r.status !== "escalado") return "Só dá para aprovar o que está com o atendente.";
       return reason.trim().length >= 3 ? null : "Escreva o motivo da aprovação.";
     case "deny":
@@ -39,9 +49,11 @@ export function canAct(r: DeskReq, action: DeskAction, actor: Actor, reason = ""
     case "offer_size":
       return r.request_type === "troca" && open ? null : "Só para troca ainda em análise.";
     case "reverse":
+      if (needsProductChoice(r)) return NEED_PRODUCT;
       if (r.status !== "aprovado") return "A reversa só aparece para solicitação aprovada.";
       return r.reverse_shipping_code ? "Esta solicitação já tem reversa." : null;
     case "create_troca":
+      if (needsProductChoice(r)) return NEED_PRODUCT;
       if (!["aprovado", "aguardando_postagem", "em_transito", "recebido"].includes(r.status)) return "Aprove antes de abrir o registro.";
       return r.trocas_devolucoes_id ? "Já existe registro desta solicitação." : null;
   }

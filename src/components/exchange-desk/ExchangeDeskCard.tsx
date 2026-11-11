@@ -15,12 +15,12 @@ import { POSWhatsAppReverseDialog } from "@/components/pos/POSWhatsAppReverseDia
 import { canAct, daysLeft, fillTemplate, waLink, REASON_LABEL, STATUS_LABEL, SOURCE_LABEL, TD_MOTIVO, type DeskAction } from "@/lib/exchangeDesk/rules";
 import { deskAction, deskCall, loadTemplates, type DeskTemplate } from "./api";
 
-type Form = { kind: "approve" | "deny" | "request_info" | "note" | "offer_size" | "create_troca"; reason: string; note: string; tpl?: string };
+type Form = { kind: "approve" | "deny" | "request_info" | "note" | "offer_size" | "create_troca" | "choose_product"; reason: string; note: string; tpl?: string };
 const fmtDate = (d?: string | null) => (d ? new Date(d).toLocaleDateString("pt-BR") : "—");
 const brl = (v: any) => `R$ ${Number(v || 0).toFixed(2).replace(".", ",")}`;
 const ACTION_LABEL: Record<string, string> = {
   assign: "Atribuiu", approve: "Aprovou", deny: "Negou", request_info: "Pediu mais informação", offer_size: "Ofereceu outra numeração",
-  note: "Observação", link_troca: "Abriu registro de troca", set_reverse: "Gerou reversa", open_whatsapp: "Abriu WhatsApp",
+  note: "Observação", choose_product: "Escolheu e separou o produto", link_troca: "Abriu registro de troca", set_reverse: "Gerou reversa", open_whatsapp: "Abriu WhatsApp",
 };
 
 export function ExchangeDeskCard({ id, staff, onClose, onChanged }: { id: string; staff: { id: string; name: string }[]; onClose: () => void; onChanged: () => void }) {
@@ -32,6 +32,8 @@ export function ExchangeDeskCard({ id, staff, onClose, onChanged }: { id: string
   const [form, setForm] = useState<Form | null>(null);
   const [sizes, setSizes] = useState<{ id: string; size: string; available: number }[] | null>(null);
   const [busy, setBusy] = useState(false);
+  const [choices, setChoices] = useState<{ id: string; name: string; size: string | null; color: string | null; available: number; flagged: boolean }[] | null>(null);
+  const [picked, setPicked] = useState("");
   const [confirmReverse, setConfirmReverse] = useState(false);
   const [reverseOpen, setReverseOpen] = useState(false);
   const [antecipado, setAntecipado] = useState(false);
@@ -68,6 +70,18 @@ export function ExchangeDeskCard({ id, staff, onClose, onChanged }: { id: string
     try { setSizes(await deskCall("exchange_desk_sizes", { p_id: id })); } catch { setSizes([]); }
   };
 
+  const openChoices = async () => {
+    setForm({ kind: "choose_product", reason: "", note: "" }); setPicked(""); setChoices(null);
+    try { setChoices(await deskCall("exchange_desk_choice_options", { p_id: id })); } catch { setChoices([]); }
+  };
+  const chooseProduct = async () => {
+    if (!picked) return;
+    setBusy(true);
+    try { await deskCall("exchange_desk_choose_product", { p_id: id, p_product: picked, p_note: form?.note || null }); toast({ title: "Produto separado" }); setForm(null); await load(); onChanged(); }
+    catch (e) { toast({ title: "Não deu certo", description: e instanceof Error ? e.message : "", variant: "destructive" }); }
+    finally { setBusy(false); }
+  };
+
   const createTroca = async () => {
     if (!d.sale?.store_id) { toast({ title: "Venda sem loja", description: "Abra a troca manualmente no PDV.", variant: "destructive" }); return; }
     const item = (d.items || []).find((i: any) => i.id === r.original_item_id);
@@ -93,7 +107,7 @@ export function ExchangeDeskCard({ id, staff, onClose, onChanged }: { id: string
   };
 
   const formTitle: Record<Form["kind"], string> = {
-    approve: "Aprovar (exceção)", deny: "Negar", request_info: "Pedir mais informação", note: "Observação interna", offer_size: "Oferecer outra numeração", create_troca: "Abrir registro da troca",
+    approve: "Aprovar (exceção)", deny: "Negar", request_info: "Pedir mais informação", note: "Observação interna", offer_size: "Oferecer outra numeração", create_troca: "Abrir registro da troca", choose_product: "Escolher e separar produto",
   };
 
   return (
@@ -130,7 +144,9 @@ export function ExchangeDeskCard({ id, staff, onClose, onChanged }: { id: string
               <div><b>O que a cliente escreveu:</b> {r.reason_subcategory || r.customer_verbatim || "—"}</div>
               <div><b>Condição do produto:</b> {r.auto_approved ? "Declarou sem uso" : "Não registrada — confirme com a cliente"}</div>
               <div><b>Item:</b> {r.requested_quantity || 1}× {r.product_name} {r.product_size ? `nº ${r.product_size}` : ""}</div>
-              {d.replacement && <div><b>Quer trocar por:</b> {d.replacement.name} nº {d.replacement.size}</div>}
+              {r.request_type === "troca" && r.customer_product_request && <div><b>A cliente procura:</b> {r.customer_product_request}</div>}
+              {r.request_type === "troca" && !d.replacement && <div className="text-destructive"><b>Produto novo:</b> ainda não separado</div>}
+              {d.replacement && <div><b>{r.product_chosen_by ? "Produto separado pela equipe:" : "Quer trocar por:"}</b> {d.replacement.name} nº {d.replacement.size}</div>}
               {d.troca && <div><b>Registro no sistema:</b> {d.troca.codigo} ({d.troca.status})</div>}
               <div><b>NF de devolução:</b> {d.nfe_devolucao ? `${d.nfe_devolucao.status === "authorized" ? "Autorizada" : d.nfe_devolucao.status} nº ${d.nfe_devolucao.numero ?? "—"}` : "Ainda não existe"}</div>
               {r.reverse_shipping_code && <div><b>Código de postagem:</b> {r.reverse_shipping_code}</div>}
@@ -149,7 +165,9 @@ export function ExchangeDeskCard({ id, staff, onClose, onChanged }: { id: string
             </Select>
             {can("offer_size") === null && <Button size="sm" variant="outline" onClick={openSizes}>Oferecer outra numeração</Button>}
             {can("request_info") === null && <Button size="sm" variant="outline" onClick={() => setForm({ kind: "request_info", reason: "", note: "", tpl: "pedir_foto" })}>Pedir mais informação</Button>}
-            {r.status === "escalado" && <Button size="sm" onClick={() => setForm({ kind: "approve", reason: "", note: "" })}>Aprovar</Button>}
+            {can("choose_product") === null && <Button size="sm" variant={d.replacement ? "outline" : "default"} onClick={openChoices}>{d.replacement ? "Trocar produto separado" : "Escolher e separar produto"}</Button>}
+            {r.status === "escalado" && can("approve", "xxx") === null && <Button size="sm" onClick={() => setForm({ kind: "approve", reason: "", note: "" })}>Aprovar</Button>}
+            {r.status === "escalado" && can("approve", "xxx") !== null && <span className="text-xs text-muted-foreground self-center">{can("approve", "xxx")}</span>}
             {can("deny", "xxx") === null && <Button size="sm" variant="destructive" onClick={() => setForm({ kind: "deny", reason: "", note: "", tpl: "negada" })}>Negar</Button>}
             {can("create_troca") === null && <Button size="sm" onClick={() => setForm({ kind: "create_troca", reason: "", note: "" })}>Abrir registro da {r.request_type === "troca" ? "troca" : "devolução"}</Button>}
             {can("reverse") === null && <Button size="sm" onClick={() => setConfirmReverse(true)}>Gerar reversa dos Correios</Button>}
@@ -164,6 +182,17 @@ export function ExchangeDeskCard({ id, staff, onClose, onChanged }: { id: string
               {form.kind === "offer_size" && (
                 <div className="text-sm">{sizes === null ? "Buscando numerações…" : sizes.length === 0 ? "Nenhuma outra numeração com estoque." :
                   <>Com estoque: {sizes.map((s) => <Badge key={s.id} variant="outline" className="mr-1">nº {s.size} ({s.available})</Badge>)}</>}</div>
+              )}
+              {form.kind === "choose_product" && (
+                <div className="space-y-2 text-sm">
+                  {choices === null ? "Buscando produtos…" : choices.length === 0 ? "Nenhuma numeração com estoque ou liberada em \"Produtos para troca\"." :
+                    <div className="flex flex-wrap gap-2">{choices.map((c) => (
+                      <Button key={c.id} size="sm" variant={picked === c.id ? "default" : "outline"} onClick={() => setPicked(c.id)}>
+                        nº {c.size || "único"}{c.color ? ` · ${c.color}` : ""} · {c.flagged ? "sem estoque (liberado)" : `${c.available} livre(s)`}
+                      </Button>))}</div>}
+                  <p className="text-xs text-muted-foreground">Separar só reserva o produto pra esta troca; o estoque não muda agora.</p>
+                  <Button size="sm" disabled={!picked || busy} onClick={chooseProduct}>Separar este produto</Button>
+                </div>
               )}
               {(form.kind === "approve" || form.kind === "deny") && (
                 <Input placeholder={form.kind === "approve" ? "Motivo da exceção (obrigatório)" : "Motivo da negativa (obrigatório)"} value={form.reason} maxLength={300} onChange={(e) => setForm({ ...form, reason: e.target.value })} />
@@ -180,7 +209,7 @@ export function ExchangeDeskCard({ id, staff, onClose, onChanged }: { id: string
                 <div className="text-xs bg-muted p-2 rounded whitespace-pre-wrap">{msg(form.kind === "offer_size" ? "oferecer_numeracao" : form.kind === "deny" ? "negada" : "pedir_foto")}</div>
               )}
               <div className="flex gap-2 flex-wrap">
-                {form.kind === "create_troca" ? <Button size="sm" disabled={busy} onClick={createTroca}>Confirmar</Button> :
+                {form.kind === "choose_product" ? null : form.kind === "create_troca" ? <Button size="sm" disabled={busy} onClick={createTroca}>Confirmar</Button> :
                   <Button size="sm" disabled={busy || (form.kind === "approve" || form.kind === "deny") && form.reason.trim().length < 3}
                     onClick={async () => {
                       const ok = await run(form.kind, { p_reason: form.reason || undefined, p_note: form.note || undefined }, "Registrado");

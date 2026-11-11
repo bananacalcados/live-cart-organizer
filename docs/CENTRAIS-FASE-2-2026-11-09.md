@@ -117,3 +117,9 @@ Nenhuma função das Centrais grava estoque ou ajustes. A reserva é só um núm
 2. Concorrência com sobreposição real não pôde ser forçada pela ferramenta.
 3. Interação da tela administrativa não aberta no navegador nesta rodada (confirmada por leitura do código/rota).
 4. Produto original fora do cadastro da loja: troca sem opções (cliente pede ajuda).
+
+## Ajuste 2026-11-11 — "Exigir que a cliente escolha o produto novo"
+- Interruptor `support_settings.central_require_product_choice` (padrão ligado = comportamento anterior), editável só por admin em Administração > Produtos para troca e em /atendimento/trocas.
+- Desligado: a página de troca não mostra produtos; coleta motivo e, opcional, o tamanho/modelo procurado (máx. 200). O servidor ignora produto enviado, não reserva e escala com "Cliente não escolheu o produto: escolha e separe o produto". Devolução não muda.
+- Painel: "Escolher e separar produto" (mesmo modelo com estoque livre ou liberado em Produtos para troca) grava a escolha e a reserva lógica; aprovar, abrir registro e reversa de troca ficam bloqueados no servidor até haver produto separado.
+- Testes: vitest 31/31, deno 8/8; simulação no banco (desfeita) passou em todos os pontos; estoque não mudou.

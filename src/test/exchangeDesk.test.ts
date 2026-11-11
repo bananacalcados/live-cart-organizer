@@ -3,7 +3,25 @@ import { canAct, tabOf, ageLevel, daysLeft, fillTemplate, waLink, type DeskReq }
 
 const staff = { isHuman: true, isStaff: true };
 const robot = { isHuman: false, isStaff: true };
-const esc: DeskReq = { status: "escalado", request_type: "troca" };
+const esc: DeskReq = { status: "escalado", request_type: "troca", replacement_product_id: "p1" };
+const semProduto: DeskReq = { status: "escalado", request_type: "troca", replacement_product_id: null };
+
+describe("troca sem produto escolhido pela cliente", () => {
+  it("não aprova sem produto separado", () => {
+    expect(canAct(semProduto, "approve", staff, "cliente antiga")).toBe("Escolha e separe o produto novo antes.");
+  });
+  it("não abre registro nem gera reversa sem produto separado", () => {
+    expect(canAct({ ...semProduto, status: "aprovado" }, "create_troca", staff)).not.toBeNull();
+    expect(canAct({ ...semProduto, status: "aprovado" }, "reverse", staff)).not.toBeNull();
+  });
+  it("atendente pode escolher e separar enquanto está em análise", () => {
+    expect(canAct(semProduto, "choose_product", staff)).toBeNull();
+    expect(canAct({ ...semProduto, status: "aprovado" }, "choose_product", staff)).not.toBeNull();
+  });
+  it("devolução não precisa de produto", () => {
+    expect(canAct({ status: "escalado", request_type: "devolucao" }, "approve", staff, "cliente antiga")).toBeNull();
+  });
+});
 
 describe("painel do atendente — transições", () => {
   it("só humano nega", () => {

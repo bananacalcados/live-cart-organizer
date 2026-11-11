@@ -7765,6 +7765,7 @@ export type Database = {
           channel_origin: string | null
           created_at: string
           customer_name: string | null
+          customer_product_request: string | null
           customer_reported_received_at: string | null
           customer_verbatim: string | null
           deadline_at: string | null
@@ -7788,6 +7789,8 @@ export type Database = {
           order_ref: string | null
           original_item_id: string | null
           phone: string
+          product_chosen_at: string | null
+          product_chosen_by: string | null
           product_name: string
           product_size: string | null
           product_sku: string | null
@@ -7823,6 +7826,7 @@ export type Database = {
           channel_origin?: string | null
           created_at?: string
           customer_name?: string | null
+          customer_product_request?: string | null
           customer_reported_received_at?: string | null
           customer_verbatim?: string | null
           deadline_at?: string | null
@@ -7846,6 +7850,8 @@ export type Database = {
           order_ref?: string | null
           original_item_id?: string | null
           phone: string
+          product_chosen_at?: string | null
+          product_chosen_by?: string | null
           product_name: string
           product_size?: string | null
           product_sku?: string | null
@@ -7881,6 +7887,7 @@ export type Database = {
           channel_origin?: string | null
           created_at?: string
           customer_name?: string | null
+          customer_product_request?: string | null
           customer_reported_received_at?: string | null
           customer_verbatim?: string | null
           deadline_at?: string | null
@@ -7904,6 +7911,8 @@ export type Database = {
           order_ref?: string | null
           original_item_id?: string | null
           phone?: string
+          product_chosen_at?: string | null
+          product_chosen_by?: string | null
           product_name?: string
           product_size?: string | null
           product_sku?: string | null
@@ -25019,6 +25028,7 @@ export type Database = {
           central_auto_reverse: boolean
           central_base_url: string
           central_public_enabled: boolean
+          central_require_product_choice: boolean
           exchange_window_days: number
           id: boolean
           max_offer_attempts: number
@@ -25030,6 +25040,7 @@ export type Database = {
           central_auto_reverse?: boolean
           central_base_url?: string
           central_public_enabled?: boolean
+          central_require_product_choice?: boolean
           exchange_window_days?: number
           id?: boolean
           max_offer_attempts?: number
@@ -25041,6 +25052,7 @@ export type Database = {
           central_auto_reverse?: boolean
           central_base_url?: string
           central_public_enabled?: boolean
+          central_require_product_choice?: boolean
           exchange_window_days?: number
           id?: boolean
           max_offer_attempts?: number
@@ -29467,19 +29479,34 @@ export type Database = {
         Returns: undefined
       }
       central_revoke_link: { Args: { p_id: string }; Returns: boolean }
-      central_submit_atomic: {
-        Args: {
-          p_detail: string
-          p_hash: string
-          p_item: string
-          p_quantity: number
-          p_reason: string
-          p_replacement?: string
-          p_type: string
-          p_unused?: boolean
-        }
-        Returns: Json
-      }
+      central_submit_atomic:
+        | {
+            Args: {
+              p_detail: string
+              p_hash: string
+              p_item: string
+              p_quantity: number
+              p_reason: string
+              p_replacement?: string
+              p_type: string
+              p_unused?: boolean
+            }
+            Returns: Json
+          }
+        | {
+            Args: {
+              p_desired: string
+              p_detail: string
+              p_hash: string
+              p_item: string
+              p_quantity: number
+              p_reason: string
+              p_replacement: string
+              p_type: string
+              p_unused: boolean
+            }
+            Returns: Json
+          }
       change_area_password: {
         Args: { p_area: string; p_current: string; p_new: string }
         Returns: boolean
@@ -30063,6 +30090,11 @@ export type Database = {
           p_reason?: string
           p_troca_id?: string
         }
+        Returns: Json
+      }
+      exchange_desk_choice_options: { Args: { p_id: string }; Returns: Json }
+      exchange_desk_choose_product: {
+        Args: { p_id: string; p_note?: string; p_product: string }
         Returns: Json
       }
       exchange_desk_count: { Args: never; Returns: number }
