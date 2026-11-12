@@ -1,6 +1,7 @@
 # AustPay — duplicidade de NF-e
 - [x] Trava de estorno: registro/conferência/nota, exceção admin auditada, lista com 54 pendências (R$ 19.939,63), 46 testes e simulação autenticada somente leitura; sem estornar/emitir/cancelar/publicar
 - [x] Suporte: histórico multi-instância e sugestão única; roteiro v2, CPF protegido; 58 comparações preservadas, 29 testes e tela conferida sem envio/publicação
+- [x] Suporte rodada 3: resolvido=nada, prazo pelo envio, escalada silenciosa, CPF/comentário, consolidação restrita, sugestão única, tom; 58 reprocessadas, 37 testes, tela conferida
 - [x] Diagnosticar rejeições 539: numeração reiniciada apesar da sequência do CNPJ já configurada em 2767
 - [x] Criar reserva atômica por venda/modelo e trava contra tentativas simultâneas, sem apagar notas autorizadas
 - [x] Ligar NF-e/NFC-e/devoluções à numeração reservada, preservar retry com o mesmo número e implantar

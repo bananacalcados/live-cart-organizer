@@ -16,14 +16,18 @@ interface Item {
   decision: string | null; reason: string | null; handoff_summary: string | null; would_route_support: boolean | null;
   tracking_info: { etapa?: string; enviado_em?: string | null; url?: string | null } | null;
   review_class_ok: boolean | null; review_correct_category: string | null; review_reply_ok: boolean | null; review_comment: string | null; review_ideal_reply: string | null; reviewed_at: string | null;
+  replay3_status?: string | null; replay3_result?: (NonNullable<Item["replay_result"]> & { reason?: string; human_recent_2h?: boolean; prazo_por_envio?: boolean; silent_handoff?: boolean; primary_label?: string; handoff_summary?: string | null }) | null;
   replay_status?: string | null; replay_result?: { decision?: string; agent_text?: string; link_type?: string; triage_category?: string; conversation?: Item["conversation"]; other_instances?: { id: string; label: string }[]; cpf_different_phone?: boolean; tokens_in?: number; tokens_out?: number; review?: { class_ok?: boolean | null; correct_category?: string | null; reply_ok?: boolean | null; comment?: string | null; ideal_reply?: string | null; at?: string | null } } | null;
 }
 interface Stats { total: number; ok: number; erro: number; pendente: number; por_tipo: Record<string, number>; suporte: number; amostra: number; revisadas: number; class_ok: number; class_err: number; reply_ok: number; reply_err: number }
-const DECISION: Record<string, string> = { enviar_link: "Mandar link", presencial: "Compra na loja", fila: "Passar para pessoa", conversa: "Seguir conversa", consolidar_em_outra_instancia: "Manter no outro número" };
+const DECISION: Record<string, string> = { enviar_link: "Mandar link", presencial: "Compra na loja", fila: "Passar para pessoa", conversa: "Seguir conversa", consolidar_em_outra_instancia: "Manter no outro número", nada: "Não responder (já resolvido)", outra_instancia: "Sugestão no outro número" };
+interface Comparison3 extends Comparison { before_no_human: Record<string, number>; after_no_human: Record<string, number>; human_recent: number }
+const ROWS = [["link_troca", "Link de troca"], ["link_devolucao", "Link de devolução"], ["conversa", "Conversa"], ["fila", "Pessoa"], ["consolidar_em_outra_instancia", "Manter no outro número"], ["outra_instancia", "Sugestão no outro número"], ["nada", "Não responder (resolvido)"], ["presencial", "Presencial"], ["sem", "Sem resposta de suporte"]];
+const decLabel = (r?: { decision?: string; link_type?: string } | null) => r?.link_type && r.decision === "enviar_link" ? `Link de ${r.link_type === "troca" ? "troca" : "devolução"}` : DECISION[r?.decision || ""] || "—";
 interface Comparison { before: Record<string, number>; after: Record<string, number>; pending: number; tokens_in: number; tokens_out: number }
 const pct = (a: number, b: number) => (a + b ? `${Math.round((a / (a + b)) * 100)}%` : "—");
 
-function Review({ it, onSaved }: { it: Item; onSaved: () => void }) {
+function Review({ it, onSaved, round }: { it: Item; onSaved: () => void; round: number }) {
   const [classOk, setClassOk] = useState<boolean | null>(it.review_class_ok);
   const [correct, setCorrect] = useState(it.review_correct_category || "");
   const [replyOk, setReplyOk] = useState<boolean | null>(it.review_reply_ok);
@@ -37,7 +41,7 @@ function Review({ it, onSaved }: { it: Item; onSaved: () => void }) {
     if (hasReply && replyOk === null) { toast.error("Marque se a resposta está aprovada"); return; }
     setBusy(true);
     try {
-      await deskCall(it.replay_result ? "support_training_replay_review" : "support_training_review", { p_id: it.id, p_class_ok: classOk, p_correct_category: classOk ? null : correct, p_reply_ok: hasReply ? replyOk : null, p_comment: comment, p_ideal_reply: ideal });
+      await deskCall(round === 3 ? "support_training_replay3_review" : round === 2 ? "support_training_replay_review" : "support_training_review", { p_id: it.id, p_class_ok: classOk, p_correct_category: classOk ? null : correct, p_reply_ok: hasReply ? replyOk : null, p_comment: comment, p_ideal_reply: ideal });
       toast.success("Revisão salva"); onSaved();
     } catch (e) { toast.error(e instanceof Error ? e.message : "Erro"); }
     finally { setBusy(false); }
@@ -88,10 +92,16 @@ function ItemCard({ it, onSaved }: { it: Item; onSaved: () => void }) {
       </div>
       {it.triage?.justificativa && <p className="text-sm text-muted-foreground">Por quê: {it.triage.justificativa}</p>}
       {it.agent_text && <p className="text-sm"><b>Resposta sugerida:</b> {it.agent_text}</p>}
-      {it.replay_result && <div className="grid gap-3 border-y py-3 md:grid-cols-2 text-sm">
-        <div><h3 className="font-semibold">Antes · {DECISION[it.decision || ""] || "—"}</h3><p className="whitespace-pre-wrap break-words">{it.agent_text || "Sem resposta"}</p></div>
-        <div><h3 className="font-semibold">Depois · {it.replay_result.link_type ? `Link de ${it.replay_result.link_type === "troca" ? "troca" : "devolução"}` : DECISION[it.replay_result.decision || ""] || "—"}</h3><p className="whitespace-pre-wrap break-words">{it.replay_result.agent_text || "Sem resposta"}</p></div>
+      {it.replay_result && <div className={`grid gap-3 border-y py-3 text-sm ${it.replay3_result ? "md:grid-cols-3" : "md:grid-cols-2"}`}>
+        <div><h3 className="font-semibold">Rodada 1 · {DECISION[it.decision || ""] || "—"}</h3><p className="whitespace-pre-wrap break-words">{it.agent_text || "Sem resposta"}</p></div>
+        <div><h3 className="font-semibold">Rodada 2 · {decLabel(it.replay_result)}</h3><p className="whitespace-pre-wrap break-words">{it.replay_result.agent_text || "Sem resposta"}</p></div>
+        {it.replay3_result && <div><h3 className="font-semibold">Rodada 3 · {decLabel(it.replay3_result)}</h3><p className="whitespace-pre-wrap break-words">{it.replay3_result.agent_text || (it.replay3_result.decision === "fila" ? "Sem mensagem à cliente (vai para SUPORTE com resumo)" : "Sem resposta")}</p>
+          {it.replay3_result.handoff_summary && <p className="text-xs text-muted-foreground">Resumo para o atendente: {it.replay3_result.handoff_summary}</p>}
+          {it.replay3_result.primary_label && <p className="text-xs text-muted-foreground">Sugestão única fica em: {it.replay3_result.primary_label}</p>}
+        </div>}
       </div>}
+      {(it.replay3_result?.prazo_por_envio || it.replay3_result?.reason === "prazo_garantido_pela_data_de_envio") && <Badge variant="outline">Prazo garantido pela data de envio</Badge>}
+      {it.replay3_result?.human_recent_2h && <Badge variant="secondary">Loja respondeu nas últimas 2h (agente não agiria)</Badge>}
       {!!it.replay_result?.other_instances?.length && <p className="text-xs">Outros números: {it.replay_result.other_instances.map(i => i.label).join(" · ")}</p>}
       {it.replay_result?.cpf_different_phone && <Badge variant="outline">Pedido localizado por CPF (telefone diferente)</Badge>}
       {it.handoff_summary && <p className="text-sm">Resumo para o atendente: {it.handoff_summary}</p>}
@@ -103,8 +113,8 @@ function ItemCard({ it, onSaved }: { it: Item; onSaved: () => void }) {
           {it.agent_actions.map((a, i) => <div key={i}>{ACTION[a.acao] || a.acao} → {JSON.stringify(a.resultado).slice(0, 300)}</div>)}
         </details>
       )}
-      {it.replay_result && <p className="text-xs font-medium">Revisar resultado novo</p>}
-      <Review it={it.replay_result ? { ...it, agent_text: it.replay_result.agent_text ?? null, review_class_ok: it.replay_result.review?.class_ok ?? null, review_correct_category: it.replay_result.review?.correct_category ?? null, review_reply_ok: it.replay_result.review?.reply_ok ?? null, review_comment: it.replay_result.review?.comment ?? null, review_ideal_reply: it.replay_result.review?.ideal_reply ?? null, reviewed_at: it.replay_result.review?.at ?? null } : it} onSaved={onSaved} />
+      {(it.replay3_result || it.replay_result) && <p className="text-xs font-medium">Revisar resultado mais novo</p>}
+      {(() => { const r = it.replay3_result ?? it.replay_result; return <Review round={it.replay3_result ? 3 : it.replay_result ? 2 : 1} it={r ? { ...it, agent_text: r.agent_text ?? null, review_class_ok: r.review?.class_ok ?? null, review_correct_category: r.review?.correct_category ?? null, review_reply_ok: r.review?.reply_ok ?? null, review_comment: r.review?.comment ?? null, review_ideal_reply: r.review?.ideal_reply ?? null, reviewed_at: r.review?.at ?? null } : it} onSaved={onSaved} />; })()}
     </div>
   );
 }
@@ -117,6 +127,7 @@ export function TrainingPanel() {
   const [rows, setRows] = useState<Item[]>([]);
   const [stats, setStats] = useState<Stats | null>(null);
   const [comparison, setComparison] = useState<Comparison | null>(null);
+  const [comparison3, setComparison3] = useState<Comparison3 | null>(null);
   const [loading, setLoading] = useState(false);
   const [hasMore, setHasMore] = useState(false);
 
@@ -124,7 +135,7 @@ export function TrainingPanel() {
     (supabase as any).from("support_training_runs").select("id,label,created_at,eligible_conversations,selected_conversations").order("created_at", { ascending: false }).limit(20)
       .then(({ data }: any) => { setRuns(data || []); if (data?.[0]) setRun(data[0].id); });
   }, []);
-  const loadStats = useCallback(() => { if (run) { deskCall<Stats>("support_training_stats", { p_run: run }).then(setStats).catch(() => setStats(null)); deskCall<Comparison>("support_training_comparison", { p_run: run }).then(setComparison).catch(() => setComparison(null)); } }, [run]);
+  const loadStats = useCallback(() => { if (run) { deskCall<Stats>("support_training_stats", { p_run: run }).then(setStats).catch(() => setStats(null)); deskCall<Comparison>("support_training_comparison", { p_run: run }).then(setComparison).catch(() => setComparison(null)); deskCall<Comparison3>("support_training_comparison3", { p_run: run }).then(setComparison3).catch(() => setComparison3(null)); } }, [run]);
   const load = useCallback(async (offset: number) => {
     if (!run) return;
     setLoading(true);
@@ -153,6 +164,14 @@ export function TrainingPanel() {
         {[["link_troca", "Link de troca"], ["link_devolucao", "Link de devolução"], ["conversa", "Conversa"], ["fila", "Pessoa"], ["consolidar_em_outra_instancia", "Manter no outro número"], ["presencial", "Presencial"], ["sem", "Sem resposta de suporte"]].map(([key, label]) => <p key={key}>{label}: {comparison.before[key] || 0} → {comparison.after[key] || 0}</p>)}
         <p>Tokens do reprocessamento: {comparison.tokens_in.toLocaleString("pt-BR")} de entrada · {comparison.tokens_out.toLocaleString("pt-BR")} de saída</p>
         {comparison.pending > 0 && <p>Aguardando: {comparison.pending}</p>}
+      </section>}
+      {comparison3 && <section className="border-b pb-3 text-sm space-y-2">
+        <h2 className="font-semibold">Rodada 2 × rodada 3</h2>
+        <div className="overflow-x-auto"><table className="text-sm"><thead><tr className="text-left"><th className="pr-4">Decisão</th><th className="pr-4">Rodada 2</th><th className="pr-4">Rodada 3</th><th className="pr-4">R2 sem humano 2h</th><th>R3 sem humano 2h</th></tr></thead>
+          <tbody>{ROWS.map(([k, l]) => <tr key={k}><td className="pr-4">{l}</td><td className="pr-4">{comparison3.before[k] || 0}</td><td className="pr-4">{comparison3.after[k] || 0}</td><td className="pr-4">{comparison3.before_no_human[k] || 0}</td><td>{comparison3.after_no_human[k] || 0}</td></tr>)}</tbody></table></div>
+        <p className="text-muted-foreground">{comparison3.human_recent} conversas tiveram resposta de pessoa da loja nas 2h anteriores — no uso real o agente não age nelas.</p>
+        <p>Tokens da rodada 3: {comparison3.tokens_in.toLocaleString("pt-BR")} de entrada · {comparison3.tokens_out.toLocaleString("pt-BR")} de saída</p>
+        {comparison3.pending > 0 && <p>Aguardando: {comparison3.pending}</p>}
       </section>}
       <div className="flex flex-wrap gap-2">
         <Button size="sm" variant={group === "suporte" ? "default" : "outline"} onClick={() => setGroup("suporte")}>Suporte ({stats?.suporte ?? 0})</Button>

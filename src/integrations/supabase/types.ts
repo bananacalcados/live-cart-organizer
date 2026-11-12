@@ -25332,6 +25332,7 @@ export type Database = {
           mode_at_creation: string
           other_instances: Json | null
           phone: string
+          prazo_por_envio: boolean
           reason: string
           routed_at: string | null
           routed_auto: boolean
@@ -25378,6 +25379,7 @@ export type Database = {
           mode_at_creation: string
           other_instances?: Json | null
           phone: string
+          prazo_por_envio?: boolean
           reason: string
           routed_at?: string | null
           routed_auto?: boolean
@@ -25424,6 +25426,7 @@ export type Database = {
           mode_at_creation?: string
           other_instances?: Json | null
           phone?: string
+          prazo_por_envio?: boolean
           reason?: string
           routed_at?: string | null
           routed_auto?: boolean
@@ -25713,6 +25716,9 @@ export type Database = {
           replay_result: Json | null
           replay_started_at: string | null
           replay_status: string | null
+          replay3_result: Json | null
+          replay3_started_at: string | null
+          replay3_status: string | null
           review_class_ok: boolean | null
           review_comment: string | null
           review_correct_category: string | null
@@ -25754,6 +25760,9 @@ export type Database = {
           replay_result?: Json | null
           replay_started_at?: string | null
           replay_status?: string | null
+          replay3_result?: Json | null
+          replay3_started_at?: string | null
+          replay3_status?: string | null
           review_class_ok?: boolean | null
           review_comment?: string | null
           review_correct_category?: string | null
@@ -25795,6 +25804,9 @@ export type Database = {
           replay_result?: Json | null
           replay_started_at?: string | null
           replay_status?: string | null
+          replay3_result?: Json | null
+          replay3_started_at?: string | null
+          replay3_status?: string | null
           review_class_ok?: boolean | null
           review_comment?: string | null
           review_correct_category?: string | null
@@ -33541,6 +33553,7 @@ export type Database = {
           mode_at_creation: string
           other_instances: Json | null
           phone: string
+          prazo_por_envio: boolean
           reason: string
           routed_at: string | null
           routed_auto: boolean
@@ -33594,6 +33607,9 @@ export type Database = {
           replay_result: Json | null
           replay_started_at: string | null
           replay_status: string | null
+          replay3_result: Json | null
+          replay3_started_at: string | null
+          replay3_status: string | null
           review_class_ok: boolean | null
           review_comment: string | null
           review_correct_category: string | null
@@ -33621,6 +33637,7 @@ export type Database = {
         }
       }
       support_training_comparison: { Args: { p_run: string }; Returns: Json }
+      support_training_comparison3: { Args: { p_run: string }; Returns: Json }
       support_training_list: {
         Args: {
           p_group?: string
@@ -33651,6 +33668,9 @@ export type Database = {
           replay_result: Json | null
           replay_started_at: string | null
           replay_status: string | null
+          replay3_result: Json | null
+          replay3_started_at: string | null
+          replay3_status: string | null
           review_class_ok: boolean | null
           review_comment: string | null
           review_correct_category: string | null
@@ -33701,6 +33721,9 @@ export type Database = {
           replay_result: Json | null
           replay_started_at: string | null
           replay_status: string | null
+          replay3_result: Json | null
+          replay3_started_at: string | null
+          replay3_status: string | null
           review_class_ok: boolean | null
           review_comment: string | null
           review_correct_category: string | null
@@ -33728,6 +33751,70 @@ export type Database = {
         }
       }
       support_training_replay_review: {
+        Args: {
+          p_class_ok: boolean
+          p_comment: string
+          p_correct_category: string
+          p_id: string
+          p_ideal_reply: string
+          p_reply_ok: boolean
+        }
+        Returns: undefined
+      }
+      support_training_replay3_claim: {
+        Args: { p_n?: number; p_run: string }
+        Returns: {
+          agent_actions: Json | null
+          agent_text: string | null
+          attempts: number
+          channel: string
+          conversation: Json | null
+          created_at: string
+          customer_name: string | null
+          decision: string | null
+          error: string | null
+          handoff_summary: string | null
+          id: string
+          instance_name: string | null
+          is_support: boolean | null
+          last_incoming_at: string | null
+          orders_ctx: Json | null
+          phone: string
+          processed_at: string | null
+          reason: string | null
+          replay_result: Json | null
+          replay_started_at: string | null
+          replay_status: string | null
+          replay3_result: Json | null
+          replay3_started_at: string | null
+          replay3_status: string | null
+          review_class_ok: boolean | null
+          review_comment: string | null
+          review_correct_category: string | null
+          review_group: string | null
+          review_ideal_reply: string | null
+          review_reply_ok: boolean | null
+          reviewed_at: string | null
+          reviewed_by: string | null
+          run_id: string
+          status: string
+          tokens_in: number | null
+          tokens_out: number | null
+          tracking_info: Json | null
+          triage: Json | null
+          triage_category: string | null
+          triage_confidence: number | null
+          whatsapp_number_id: string | null
+          would_route_support: boolean | null
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "support_training_items"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      support_training_replay3_review: {
         Args: {
           p_class_ok: boolean
           p_comment: string

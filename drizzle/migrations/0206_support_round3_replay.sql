@@ -1,0 +1,23 @@
+ALTER TABLE public.support_auto_suggestions DROP CONSTRAINT IF EXISTS support_auto_suggestions_decision_check;
+ALTER TABLE public.support_auto_suggestions ADD CONSTRAINT support_auto_suggestions_decision_check CHECK (decision = ANY (ARRAY['enviar_link','presencial','instagram_whatsapp','fila','conversa','consolidar_em_outra_instancia','nada']));
+ALTER TABLE public.support_auto_suggestions ADD COLUMN IF NOT EXISTS prazo_por_envio boolean NOT NULL DEFAULT false;
+ALTER TABLE public.support_training_items ADD COLUMN IF NOT EXISTS replay3_status text, ADD COLUMN IF NOT EXISTS replay3_result jsonb, ADD COLUMN IF NOT EXISTS replay3_started_at timestamptz;
+CREATE OR REPLACE FUNCTION public.support_training_replay3_claim(p_run uuid, p_n integer DEFAULT 1) RETURNS SETOF public.support_training_items LANGUAGE plpgsql SECURITY DEFINER SET search_path=public AS $$ BEGIN
+ IF auth.role() IS DISTINCT FROM 'service_role' THEN RAISE EXCEPTION 'forbidden'; END IF;
+ RETURN QUERY UPDATE public.support_training_items t SET replay3_status='processando',replay3_started_at=now() WHERE t.id IN (SELECT id FROM public.support_training_items WHERE run_id=p_run AND replay3_status='pendente' ORDER BY last_incoming_at DESC,id LIMIT least(greatest(p_n,1),2) FOR UPDATE SKIP LOCKED) RETURNING t.*;
+END $$;
+REVOKE ALL ON FUNCTION public.support_training_replay3_claim(uuid,integer) FROM PUBLIC,anon,authenticated; GRANT EXECUTE ON FUNCTION public.support_training_replay3_claim(uuid,integer) TO service_role;
+CREATE OR REPLACE FUNCTION public.support_training_comparison3(p_run uuid) RETURNS jsonb LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path=public AS $$ DECLARE r jsonb; BEGIN IF NOT public._exchange_desk_staff(auth.uid()) THEN RAISE EXCEPTION 'forbidden'; END IF;
+WITH rows AS (SELECT CASE WHEN replay_result->>'decision'='enviar_link' THEN 'link_'||(replay_result->>'link_type') ELSE coalesce(replay_result->>'decision','sem') END b,
+ CASE WHEN replay3_result->>'decision'='enviar_link' THEN 'link_'||(replay3_result->>'link_type') ELSE coalesce(replay3_result->>'decision','sem') END a,
+ coalesce((replay3_result->>'human_recent_2h')::boolean,false) h, replay3_status st, replay3_result res FROM public.support_training_items WHERE run_id=p_run AND replay3_status IS NOT NULL)
+SELECT jsonb_build_object(
+ 'before',(SELECT coalesce(jsonb_object_agg(k,n),'{}') FROM (SELECT b k,count(*) n FROM rows GROUP BY b)x),
+ 'after',(SELECT coalesce(jsonb_object_agg(k,n),'{}') FROM (SELECT a k,count(*) n FROM rows WHERE st='ok' GROUP BY a)x),
+ 'before_no_human',(SELECT coalesce(jsonb_object_agg(k,n),'{}') FROM (SELECT b k,count(*) n FROM rows WHERE NOT h GROUP BY b)x),
+ 'after_no_human',(SELECT coalesce(jsonb_object_agg(k,n),'{}') FROM (SELECT a k,count(*) n FROM rows WHERE st='ok' AND NOT h GROUP BY a)x),
+ 'human_recent',count(*) FILTER(WHERE h),'pending',count(*) FILTER(WHERE st IN ('pendente','processando')),'errors',count(*) FILTER(WHERE st='erro'),
+ 'tokens_in',coalesce(sum((res->>'tokens_in')::bigint),0),'tokens_out',coalesce(sum((res->>'tokens_out')::bigint),0)) INTO r FROM rows; RETURN r; END $$;
+REVOKE ALL ON FUNCTION public.support_training_comparison3(uuid) FROM PUBLIC,anon; GRANT EXECUTE ON FUNCTION public.support_training_comparison3(uuid) TO authenticated;
+CREATE OR REPLACE FUNCTION public.support_training_replay3_review(p_id uuid, p_class_ok boolean, p_correct_category text, p_reply_ok boolean, p_comment text, p_ideal_reply text) RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path=public AS $$ BEGIN IF NOT public.has_role(auth.uid(),'admin') THEN RAISE EXCEPTION 'forbidden'; END IF; IF p_correct_category IS NOT NULL AND p_correct_category NOT IN ('troca','devolucao','troca_ou_devolucao_ambiguo','rastreio','outro_suporte','venda','nada') THEN RAISE EXCEPTION 'invalid category'; END IF; IF length(coalesce(p_comment,''))>2000 OR length(coalesce(p_ideal_reply,''))>2000 THEN RAISE EXCEPTION 'too long'; END IF; UPDATE public.support_training_items SET replay3_result=jsonb_set(replay3_result,'{review}',jsonb_build_object('class_ok',p_class_ok,'correct_category',p_correct_category,'reply_ok',p_reply_ok,'comment',p_comment,'ideal_reply',p_ideal_reply,'by',auth.uid(),'at',now())) WHERE id=p_id AND replay3_status='ok'; END $$;
+REVOKE ALL ON FUNCTION public.support_training_replay3_review(uuid,boolean,text,boolean,text,text) FROM PUBLIC,anon; GRANT EXECUTE ON FUNCTION public.support_training_replay3_review(uuid,boolean,text,boolean,text,text) TO authenticated;

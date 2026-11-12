@@ -2,7 +2,7 @@
 // agente em modo sombra e pelo treino. Só leitura; o id real dos pedidos nunca vai para a IA.
 import type { AgentDeps, ConvMessage, OrderCtx, TrackingInfo } from "./support-ai.ts";
 import { firstName } from "./support-ai.ts";
-import { cpfIdentityConfirmed, humanOtherInstances, unifyMessages, validCpf, type SupportFacts } from "./support-policy.ts";
+import { consolidationAllowed, cpfIdentityConfirmed, humanOtherInstances, unifyMessages, validCpf, type SupportFacts } from "./support-policy.ts";
 
 export const ONLINE_CHANNELS = ["site", "live", "link_online", "whatsapp"];
 export const TRACK_BASE = "https://checkout.bananacalcados.com.br/rastreio/";
@@ -12,7 +12,7 @@ export type SupportContext = {
   saleIds: Map<string, string>;
   deps: Omit<AgentDeps, "offersAlreadyMade" | "maxOffers">;
   otherInstances: { id: string; label: string }[];
-  configure: (facts: SupportFacts) => void;
+  configure: (facts: SupportFacts, category?: string) => void;
 };
 
 // deno-lint-ignore no-explicit-any
@@ -33,7 +33,7 @@ export async function buildSupportContext(sb: Sb, s: { phone: string; whatsapp_n
     conv = (data ?? []).filter((m: any) => m.message).reverse().map((m: any) => ({ from: m.direction === "incoming" ? "cliente" : "loja", text: m.message, at: m.created_at, instance_id: m.whatsapp_number_id, instance: "Instagram", human: m.direction === "outgoing" && !!m.sender_user_id }));
   } else conv = await loadConversation(sb, s.phone, s.whatsapp_number_id, opts.until);
   const s8 = String(s.phone || "").replace(/\D/g, "").slice(-8);
-  const saleIds = new Map<string, string>(); const itemSku = new Map<string, string | null>();
+  const saleIds = new Map<string, string>(); const saleShip = new Map<string, string | null>(); const itemSku = new Map<string, string | null>();
   const sims = new Map<string, any>();
   let orders: OrderCtx[] = []; let nome: string | null = null;
   let facts: SupportFacts = {};
@@ -42,12 +42,13 @@ export async function buildSupportContext(sb: Sb, s: { phone: string; whatsapp_n
   const { data: conversationNames } = await sb.from("whatsapp_conversations").select("sender_name").eq("phone", s.phone).limit(1);
   const conversationName = firstName(conversationNames?.[0]?.sender_name);
   if (s.channel !== "instagram" && s8.length === 8) {
-    let saleQuery = sb.from("pos_sales").select("id,created_at,sales_channel,status,customer_name,status_cancelamento");
+    let saleQuery = sb.from("pos_sales").select("id,created_at,sales_channel,status,customer_name,status_cancelamento,shipped_at,expedition_finished_at");
     saleQuery = opts.saleId ? saleQuery.eq("id", opts.saleId) : saleQuery.eq("phone_suffix8", s8);
     const { data: sales } = await saleQuery.gte("created_at", new Date(Date.now() - 60 * 864e5).toISOString())
       .in("status", ["completed", "paid"]).order("created_at", { ascending: false }).limit(5);
     const valid = (sales ?? []).filter((x: any) => String(x.status_cancelamento ?? "") !== "cancelado");
     const ids = valid.map((x: any) => x.id);
+    for (const x of valid) saleShip.set(x.id, x.shipped_at ?? x.expedition_finished_at ?? null);
     const [{ data: items }, { data: simRows }] = await Promise.all([
       ids.length ? sb.from("pos_sale_items").select("sale_id,product_name,size,variant_name,quantity,sku").in("sale_id", ids) : Promise.resolve({ data: [] }),
       ids.length ? sb.from("shipment_simulations").select("id,sale_id,tracking_code,stage,stage_history,posted_at,delivered_at,incident_type,merged_into_id,real_events,created_at").in("sale_id", ids) : Promise.resolve({ data: [] }),
@@ -92,6 +93,11 @@ export async function buildSupportContext(sb: Sb, s: { phone: string; whatsapp_n
       const { data: vs } = await sb.from("pos_products").select("size,stock").eq("parent_sku", p.parent_sku).gt("stock", 0).limit(200);
       return { tamanhos: [...new Set((vs ?? []).map((v: any) => String(v.size ?? "").trim()).filter(Boolean))].sort() as string[] };
     },
+    shippedAt: async (ref) => {
+      const id = saleIds.get(ref) ?? "";
+      const t = trackingFromSim(sims.get(id), false);
+      return t?.enviado_em ?? saleShip.get(id) ?? null;
+    },
     tracking: async (ref) => trackingFromSim(sims.get(saleIds.get(ref) ?? ""), opts.shareLastEvent),
     cpfLookup: async () => {
       const cpfMessage = [...conv].reverse().find(m => m.from === "cliente" && /\b\d{3}\.?\d{3}\.?\d{3}-?\d{2}\b/.test(m.text));
@@ -116,15 +122,17 @@ export async function buildSupportContext(sb: Sb, s: { phone: string; whatsapp_n
         for (const [ref, id] of loaded.saleIds) saleIds.set(ref, id);
         deps.checkEligibility = loaded.deps.checkEligibility;
         deps.tracking = loaded.deps.tracking;
+        deps.shippedAt = loaded.deps.shippedAt;
         deps.sizesInStock = loaded.deps.sizesInStock;
         await sb.from("support_cpf_attempts").update({ confirmed: true }).eq("id", candidate.id).eq("confirmed", false);
       }
       return { found: true, first_name: candidate.first_name, product: candidate.product, month: candidate.month, confirmed, different_phone: true };
     },
   };
-  return { conv, orders, nome, saleIds, deps, otherInstances, configure: (value) => {
+  return { conv, orders, nome, saleIds, deps, otherInstances, configure: (value, category = "") => {
     facts = value;
-    deps.consolidation = humanIds.includes(value.same_subject_instance ?? "") ? otherInstances.find(i => i.id === value.same_subject_instance) ?? null : null;
+    const target = value.same_subject_instance ?? "";
+    deps.consolidation = humanIds.includes(target) && consolidationAllowed(conv, target, category) ? otherInstances.find(i => i.id === target) ?? null : null;
   } };
 }
 

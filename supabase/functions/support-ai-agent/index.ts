@@ -7,6 +7,7 @@ import {
   type CallLog, finalDecision, runAgent, runTriage, shouldRouteSupport, triageIgnores, triageToIntent,
 } from "../_shared/support-ai.ts";
 import { buildSupportContext } from "../_shared/support-context.ts";
+import { primaryInstance } from "../_shared/support-policy.ts";
 
 const cors = { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-cron-secret" };
 const json = (b: unknown, s = 200) => new Response(JSON.stringify(b), { status: s, headers: { ...cors, "Content-Type": "application/json" } });
@@ -41,10 +42,16 @@ Deno.serve(withAccessLog("support-ai-agent", async (req) => {
   const ctx = await buildSupportContext(sb, s, { shareLastEvent: !!st.tracking_share_last_event });
   const { conv, orders, nome, saleIds } = ctx;
 
+  // Uma sugestão por cliente: só no número onde a conversa de suporte dela está mais ativa (se esse número também é atendido).
+  const primary = s.channel === "whatsapp" ? primaryInstance(conv) : null;
+  if (primary && primary !== s.whatsapp_number_id && (st.auto_reply_instance_ids ?? []).includes(primary)) {
+    await sb.from("support_auto_suggestions").update({ status: "ignorada", reason: "outra_instancia_mais_ativa" }).eq("id", s.id).eq("status", "processando");
+    return json({ ignored: "outra_instancia_mais_ativa" });
+  }
   const cfg = { apiKey, baseURL: "https://ai.gateway.lovable.dev/v1", timeoutMs: st.ai_timeout_ms ?? 30000 };
   try {
     const triage = await runTriage(cfg, st.ai_triage_model, conv, orders, log);
-    ctx.configure(triage.facts ?? {});
+    ctx.configure(triage.facts ?? {}, triage.categoria);
     const base = { triage, triage_category: triage.categoria, triage_confidence: triage.confianca, intent: triageToIntent(triage.categoria) };
     if (triageIgnores(triage.categoria)) {
       await flushLogs();
@@ -59,10 +66,15 @@ Deno.serve(withAccessLog("support-ai-agent", async (req) => {
       .in("status", ["enviada"]).gte("created_at", new Date(Date.now() - 30 * 864e5).toISOString());
 
     const outcome = await runAgent(cfg, st.ai_agent_model, script?.body ?? "", nome, triage, conv, {
-      ...ctx.deps, offersAlreadyMade: offers ?? 0, maxOffers: st.max_offer_attempts ?? 1,
+      ...ctx.deps, offersAlreadyMade: offers ?? 0, maxOffers: st.max_offer_attempts ?? 1, supportPhone: st.support_whatsapp_phone ?? null,
     }, log);
 
     const dec = finalDecision(outcome, orders);
+    if (outcome.resolved) {
+      await flushLogs();
+      await sb.from("support_auto_suggestions").update({ ...base, ai_status: "ok", status: "ignorada", decision: "nada", reason: dec.reason }).eq("id", s.id).eq("status", "processando");
+      return json({ ignored: "caso_ja_resolvido" });
+    }
     const linkSale = outcome.link ? saleIds.get(outcome.link.ref) : null;
     const linkRef = outcome.link?.ref;
     const linkOrder = linkRef ? orders.find((o) => o.ref === linkRef) : null;
@@ -76,6 +88,7 @@ Deno.serve(withAccessLog("support-ai-agent", async (req) => {
       sale_id: linkSale ?? (orders.length === 1 ? saleIds.get("P1") : null), sale_channel: linkOrder ? "online" : null,
       link_type: outcome.link?.tipo ?? null, customer_name: nome,
       would_route_support: shouldRouteSupport(triage.categoria, !!outcome.handoff),
+      prazo_por_envio: !!outcome.prazoPorEnvio,
       tracking_info: outcome.tracking ? { pedido: outcome.tracking.ref, ...outcome.tracking.info } : null,
       other_instances: ctx.otherInstances, consolidation_target: outcome.consolidation ?? null,
       cpf_different_phone: outcome.cpfDifferentPhone ?? false,

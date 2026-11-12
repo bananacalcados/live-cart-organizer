@@ -3,7 +3,7 @@
 import { createOpenAI } from "npm:@ai-sdk/openai@4";
 import { jsonSchema, Output, stepCountIs, streamText, tool } from "npm:ai@7";
 import { createLovableAiGatewayRunIdFetch } from "./run-id.ts";
-import { CONSOLIDATION_TEXT, preferredLink, type SupportFacts } from "./support-policy.ts";
+import { alreadyResolved, CONSOLIDATION_TEXT, cpfRequestAllowed, linkText, preferredLink, publicCommentReply, silentHandoffText, type SupportFacts, waitingMinutes, withinWindowByShipping } from "./support-policy.ts";
 
 export const TRIAGE_CATEGORIES = ["venda", "troca", "devolucao", "troca_ou_devolucao_ambiguo", "rastreio", "outro_suporte", "nada"] as const;
 export type TriageCategory = typeof TRIAGE_CATEGORIES[number];
@@ -140,6 +140,10 @@ export type AgentDeps = {
   offersAlreadyMade: number;
   maxOffers: number;
   consolidation?: { id: string; label: string } | null;
+  publicComment?: boolean;
+  supportPhone?: string | null;
+  now?: number;
+  shippedAt?: (ref: string) => Promise<string | null>;
   cpfLookup?: () => Promise<{ found?: boolean; error?: string; first_name?: string; product?: string; month?: string; confirmed?: boolean; different_phone?: boolean }>;
 };
 export type AgentAction = { acao: string; pedido: Record<string, unknown>; resultado: unknown };
@@ -151,6 +155,9 @@ export type AgentOutcome = {
   tracking: { ref: string; info: TrackingInfo } | null;
   consolidation?: { id: string; label: string } | null;
   cpfDifferentPhone?: boolean;
+  resolved?: boolean;
+  prazoPorEnvio?: boolean;
+  publicComment?: boolean;
 };
 
 export async function runAgent(cfg: GatewayConfig, model: string, script: string, nome: string | null, triage: Triage,
@@ -161,26 +168,38 @@ export async function runAgent(cfg: GatewayConfig, model: string, script: string
   const refOk = (ref: string) => deps.orders.find((o) => o.ref === ref);
   const tipoSchema = { type: "string", enum: ["troca", "devolucao"] };
 
+  const now = deps.now ?? Date.now();
+  // Escalar em silêncio: vai para a linha SUPORTE com resumo; texto à cliente só se ela espera há >30 min e houver algo útil.
+  const handoff = (motivo: string, resumo: string): AgentOutcome => ({ ...out, text: silentHandoffText(motivo, waitingMinutes(conv, now), nome), handoff: { motivo, resumo } });
+  if (alreadyResolved(conv)) return { ...out, resolved: true };
+  if (deps.publicComment) return { ...out, publicComment: true, text: publicCommentReply(nome, deps.supportPhone ?? null), handoff: { motivo: "comentario_publico", resumo: triage.justificativa } };
   if (deps.consolidation) return { ...out, text: CONSOLIDATION_TEXT, consolidation: deps.consolidation };
-  if (triage.facts?.danger) return { ...out, text: "Uma pessoa da nossa equipe vai continuar seu atendimento, tá bom?", handoff: { motivo: "situacao_sensivel", resumo: triage.justificativa } };
+  if (triage.facts?.danger) return handoff("situacao_sensivel", triage.justificativa);
   if (!deps.orders.length && deps.cpfLookup) {
+    if (!cpfRequestAllowed(triage.categoria, conv, false)) return handoff("pedido_nao_localizado", triage.justificativa);
     const candidate = await deps.cpfLookup();
     rec("buscar_pedido_por_cpf", {}, candidate);
-    if (!candidate.found) return { ...out, text: candidate.error ? "Uma pessoa da equipe vai ajudar a localizar sua compra." : "Pode me informar o CPF de quem fez a compra?", handoff: candidate.error ? { motivo: candidate.error, resumo: "CPF não confirmou identidade/pedido" } : null };
+    if (!candidate.found) return candidate.error ? handoff(candidate.error, "CPF não confirmou identidade/pedido") : { ...out, text: `${nome ? `${nome}, ` : ""}não achei sua compra por este número 😕 Pode me passar o CPF de quem fez a compra?` };
     if (!candidate.confirmed) return { ...out, text: `Encontrei um pedido no nome de ${candidate.first_name}. É o do ${candidate.product} comprado em ${candidate.month}?` };
     out.cpfDifferentPhone = candidate.different_phone;
   }
   const selected = deps.orders.length === 1 ? deps.orders[0] : deps.orders.find(o => o.ref === triage.facts?.selected_ref);
-  if (deps.orders.length > 1 && !selected) return { ...out, text: "Uma pessoa da equipe vai ajudar a identificar qual pedido você quer trocar ou devolver.", handoff: { motivo: "varios_pedidos_sem_identificacao", resumo: triage.justificativa } };
+  if (deps.orders.length > 1 && !selected) return handoff("varios_pedidos_sem_identificacao", triage.justificativa);
   const wanted = preferredLink(triage.categoria, triage.facts ?? {}, deps.offersAlreadyMade);
   if (selected?.canal === "online" && wanted) {
     const eligibility = await deps.checkEligibility(selected.ref, wanted);
     rec("checar_elegibilidade", { pedido: selected.ref, tipo: wanted }, eligibility);
-    if (eligibility.elegivel !== "eligible") return { ...out, text: "Uma pessoa da equipe vai continuar seu atendimento e conferir seu pedido.", handoff: { motivo: eligibility.motivo, resumo: triage.justificativa } };
+    if (eligibility.elegivel !== "eligible") {
+      // Sem data de entrega: a entrega é sempre depois do envio, então envio + 7 dias está garantidamente no prazo.
+      const shipped = eligibility.motivo === "sem_data_de_entrega" && deps.shippedAt ? await deps.shippedAt(selected.ref) : null;
+      if (!withinWindowByShipping(shipped, now)) return handoff(eligibility.motivo, triage.justificativa);
+      out.prazoPorEnvio = true;
+      rec("prazo_pela_data_de_envio", { pedido: selected.ref }, { enviado_em: shipped, garantido: true });
+    }
     out.link = { ref: selected.ref, tipo: wanted };
     out.exchangeOffered = triage.categoria === "devolucao" && wanted === "troca";
     rec("preparar_link", { pedido: selected.ref, tipo: wanted }, { ok: true });
-    out.text = wanted === "troca" ? "A gente troca pra você, é só registrar aqui e escolher: {{link}}. O código de postagem vem em seguida." : "Pode registrar sua devolução aqui: {{link}}. O código de postagem vem em seguida.";
+    out.text = linkText(wanted, nome, !!triage.facts?.originality, out.exchangeOffered);
     return out;
   }
 
@@ -266,7 +285,7 @@ CONTEXTO DO SISTEMA (não invente nada além disso):
 - Ofertas de troca já feitas nesta conversa: ${deps.offersAlreadyMade} de no máximo ${deps.maxOffers}
 - Rastreio (cadê meu pedido, não chegou, quando chega): use consultar_rastreio e escreva {{rastreio}} onde vai o link; resposta curta. Sem envio ainda: diga a etapa, sem inventar prazo. Vários pedidos online e ela não disse qual: pergunte qual. Sem rastreio, atraso grande ou extravio: escale para humano.
 - Use as ferramentas para pedidos, prazos e numerações. Os pedidos se chamam P1, P2…; itens I1, I2…
-- Responda apenas com a próxima mensagem para a cliente, em português. Se escalar para humano, escreva uma mensagem curta avisando que uma pessoa da equipe vai continuar.`;
+- Responda apenas com a próxima mensagem para a cliente, em português. Chame pelo primeiro nome, frase calorosa e curta, terminando com uma pergunta quando fizer sentido. Se escalar para humano, não escreva nada para a cliente (o sistema decide).`;
 
   const t0 = Date.now();
   try {
@@ -281,7 +300,9 @@ CONTEXTO DO SISTEMA (não invente nada além disso):
     });
     out.text = (await result.text).trim().slice(0, 1000);
     log({ kind: "agente", model, ok: true, ms: Date.now() - t0, ...(await usage(result)) });
-    if (!out.text) throw new Error("resposta_vazia");
+    if (out.handoff) { out.text = silentHandoffText(out.handoff.motivo, waitingMinutes(conv, now), nome); return out; }
+    // Sem texto e sem ferramenta: trata como escalada silenciosa (nunca resposta vazia para a cliente).
+    if (!out.text) { out.handoff = { motivo: "ia_sem_resposta", resumo: triage.justificativa }; return out; }
     if (out.link && !out.text.includes("{{link}}")) out.text += "\n{{link}}";
     if (!out.link) out.text = out.text.replaceAll("{{link}}", "").trim();
     // O link de rastreio é colocado pelo sistema, nunca digitado pela IA.
@@ -295,10 +316,11 @@ CONTEXTO DO SISTEMA (não invente nada além disso):
 }
 
 /** Decisão final é do sistema, a partir das ações validadas. */
-export function finalDecision(o: Pick<AgentOutcome, "link" | "handoff"> & { tracking?: AgentOutcome["tracking"]; consolidation?: AgentOutcome["consolidation"] }, orders: OrderCtx[]): { decision: string; reason: string } {
+export function finalDecision(o: Pick<AgentOutcome, "link" | "handoff"> & { tracking?: AgentOutcome["tracking"]; consolidation?: AgentOutcome["consolidation"]; resolved?: boolean; prazoPorEnvio?: boolean }, orders: OrderCtx[]): { decision: string; reason: string } {
+  if (o.resolved) return { decision: "nada", reason: "caso_ja_resolvido" };
   if (o.consolidation) return { decision: "consolidar_em_outra_instancia", reason: "atendimento_humano_mesmo_assunto:" + o.consolidation.id };
   if (o.handoff) return { decision: "fila", reason: "ia_escalou:" + o.handoff.motivo };
-  if (o.link) return { decision: "enviar_link", reason: "um_pedido_elegivel" };
+  if (o.link) return { decision: "enviar_link", reason: o.prazoPorEnvio ? "prazo_garantido_pela_data_de_envio" : "um_pedido_elegivel" };
   if (o.tracking) {
     const h = trackingNeedsHuman(o.tracking.info);
     if (h) return { decision: "fila", reason: "rastreio:" + h };

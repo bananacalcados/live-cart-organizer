@@ -1443,6 +1443,20 @@
       "when": 1794443404060,
       "tag": "0205_refund_facts_invoker_security",
       "breakpoints": true
+    },
+    {
+      "idx": 206,
+      "version": "7",
+      "when": 1794444012554,
+      "tag": "0206_support_round3_replay",
+      "breakpoints": true
+    },
+    {
+      "idx": 207,
+      "version": "7",
+      "when": 1794444694470,
+      "tag": "0207_support_training_list_round3",
+      "breakpoints": true
     }
   ]
 }
