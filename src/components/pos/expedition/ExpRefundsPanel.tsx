@@ -7,6 +7,7 @@ import { refundApi, type RefundListParams, type RefundListRow } from "@/lib/refu
 import { RefundRowCard } from "@/components/refunds/RefundRowCard";
 import { RefundDecisionButtons } from "@/components/refunds/RefundDecisionButtons";
 import { RefundRequestDialog } from "@/components/refunds/RefundRequestDialog";
+import { RefundFiscalPendingPanel } from "@/components/refunds/RefundFiscalPendingPanel";
 
 const PAGE = 50;
 
@@ -27,6 +28,7 @@ function periodRange(period: string, from: string, to: string): { from?: string;
 /** Expedição > ESTORNOS: aguardando aprovação, em andamento e histórico (tudo paginado no servidor). */
 export function ExpRefundsPanel({ refreshKey = 0, storeId }: { refreshKey?: number; storeId?: string }) {
   const [isAdmin, setIsAdmin] = useState(false);
+  const [fiscalRefresh, setFiscalRefresh] = useState(0);
   const [pending, setPending] = useState<RefundListRow[]>([]);
   const [active, setActive] = useState<RefundListRow[]>([]);
   const [history, setHistory] = useState<RefundListRow[]>([]);
@@ -86,11 +88,12 @@ export function ExpRefundsPanel({ refreshKey = 0, storeId }: { refreshKey?: numb
     } finally { setLoadingMore(false); }
   };
 
-  const reload = () => void loadAll();
+  const reload = () => { setFiscalRefresh(value => value + 1); void loadAll(); };
 
   return (
     <div className="space-y-6">
       <div className="flex justify-end"><RefundRequestDialog onDone={reload} /></div>
+      <RefundFiscalPendingPanel refreshKey={refreshKey + fiscalRefresh} />
       {error && <p className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">{error}</p>}
 
       <section>

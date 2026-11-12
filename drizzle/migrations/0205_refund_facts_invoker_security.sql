@@ -1,0 +1,2 @@
+ALTER FUNCTION public.refund_return_facts(text,uuid) SECURITY INVOKER;
+COMMENT ON FUNCTION public.refund_return_facts(text,uuid) IS 'Service-only read-only fiscal refund preflight. Invoker privileges preserve existing RLS; no gateway or SEFAZ calls.';

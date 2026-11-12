@@ -9764,6 +9764,9 @@ export type Database = {
           created_at: string
           e2e_id: string | null
           error_message: string | null
+          fiscal_override_at: string | null
+          fiscal_override_by: string | null
+          fiscal_override_reason: string | null
           gateway: string
           id: string
           idempotency_key: string
@@ -9803,6 +9806,9 @@ export type Database = {
           created_at?: string
           e2e_id?: string | null
           error_message?: string | null
+          fiscal_override_at?: string | null
+          fiscal_override_by?: string | null
+          fiscal_override_reason?: string | null
           gateway?: string
           id?: string
           idempotency_key: string
@@ -9842,6 +9848,9 @@ export type Database = {
           created_at?: string
           e2e_id?: string | null
           error_message?: string | null
+          fiscal_override_at?: string | null
+          fiscal_override_by?: string | null
+          fiscal_override_reason?: string | null
           gateway?: string
           id?: string
           idempotency_key?: string
@@ -29348,6 +29357,23 @@ export type Database = {
         }
         Relationships: []
       }
+      estornos_sem_nf_devolucao: {
+        Row: {
+          cliente: string | null
+          data_estorno: string | null
+          estorno_id: string | null
+          fiscal_override_by: string | null
+          fiscal_override_reason: string | null
+          nota_venda_chave: string | null
+          nota_venda_numero: number | null
+          source: string | null
+          source_id: string | null
+          tem_registro_devolucao: boolean | null
+          valor_estorno: number | null
+          venda_id: string | null
+        }
+        Relationships: []
+      }
       fiscal_report_double_exit_notes: {
         Row: {
           ambiente: string | null
@@ -32759,6 +32785,10 @@ export type Database = {
         }[]
       }
       refund_config: { Args: never; Returns: Json }
+      refund_return_facts: {
+        Args: { p_id: string; p_source: string }
+        Returns: Json
+      }
       register_manual_refund: { Args: { p_row: Json }; Returns: string }
       register_template_category_change: {
         Args: {

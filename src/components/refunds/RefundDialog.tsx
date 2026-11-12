@@ -10,6 +10,8 @@ import { confirmationAmountMatches, isWithinRefundWindow, needsApproval, parseBr
 import { useToast } from "@/hooks/use-toast";
 import { RefundWindowNotice } from "./RefundWindowNotice";
 import { ManualRefundDialog } from "./ManualRefundDialog";
+import { RefundFiscalNotice } from "./RefundFiscalNotice";
+import type { RefundFiscalCheck } from "@/lib/refunds";
 
 interface Props {
   source: RefundSource;
@@ -47,6 +49,9 @@ export function RefundDialog({ source, sourceId, label, customerName, onDone }: 
   const [submitting, setSubmitting] = useState(false);
   const [resultMessage, setResultMessage] = useState<string | null>(null);
   const [doneRefund, setDoneRefund] = useState<{ id: string; status?: string } | null>(null);
+  const [fiscal, setFiscal] = useState<RefundFiscalCheck | null>(null);
+  const [force, setForce] = useState(false);
+  const [justification, setJustification] = useState("");
 
   const parsedAmount = useMemo(() => parseBrlAmount(amount), [amount]);
   const remaining = preview?.remaining ?? 0;
@@ -87,11 +92,16 @@ export function RefundDialog({ source, sourceId, label, customerName, onDone }: 
     return `Cartão ${brand}${last4}${inst}`;
   }, [preview]);
 
-  const goConfirm = () => {
+  const goConfirm = async () => {
     const err = validateRefundAmount(parsedAmount, remaining);
     if (err) { setError(err); return; }
     if (!reason) { setError("Escolha o motivo do estorno."); return; }
     if (reason === "outro" && !reasonText.trim()) { setError("Descreva o motivo em \"outro\"."); return; }
+    try {
+      const check = await refundApi.fiscalCheck(source, sourceId, reason);
+      setFiscal(check);
+      if (!check.allowed && !(isAdmin && force && justification.trim().length >= 3)) { setError(check.error); return; }
+    } catch (e) { setError(e instanceof Error ? e.message : "Conferência indisponível."); return; }
     setError(null);
     setTypedAmount("");
     setPassword("");
@@ -128,6 +138,8 @@ export function RefundDialog({ source, sourceId, label, customerName, onDone }: 
         reason,
         reason_text: reason === "outro" ? reasonText.trim() : null,
         cancel_order: canSuggestCancel ? cancelOrder : false,
+        fiscal_override: force,
+        fiscal_override_reason: justification,
       });
       setResultMessage(
         res.pending_approval
@@ -228,7 +240,7 @@ export function RefundDialog({ source, sourceId, label, customerName, onDone }: 
                 <label className="text-xs text-pos-white/60">Motivo (obrigatório)</label>
                 <select
                   value={reason}
-                  onChange={(e) => setReason(e.target.value)}
+                  onChange={(e) => { setReason(e.target.value); setFiscal(null); setForce(false); setJustification(""); }}
                   className="w-full rounded-md border border-pos-white/20 bg-pos-white/5 px-3 py-2 text-pos-white"
                 >
                   <option value="">Selecione…</option>
@@ -248,6 +260,7 @@ export function RefundDialog({ source, sourceId, label, customerName, onDone }: 
                 </div>
               )}
 
+              <RefundFiscalNotice check={fiscal} isAdmin={isAdmin} force={force} justification={justification} onForce={setForce} onJustification={setJustification} onRegistered={() => { setFiscal(null); setError(null); }} />
               {canSuggestCancel && (
                 <label className="flex items-start gap-2 rounded-md border border-pos-white/15 bg-pos-white/5 p-3 text-xs cursor-pointer">
                   <input type="checkbox" checked={cancelOrder} onChange={(e) => setCancelOrder(e.target.checked)} className="mt-0.5" />

@@ -88,7 +88,12 @@ async function call<T = any>(body: Record<string, unknown>): Promise<T> {
   const { data, error } = await supabase.functions.invoke("mp-refund", { body });
   if (error) {
     // functions.invoke joga erro genérico em HTTP != 2xx; tenta extrair a mensagem real
-    const msg = (data as any)?.error || error.message || "Falha ao falar com o servidor de estornos.";
+    let payload = data;
+    const response = (error as any).context;
+    if (!payload && response && typeof response.json === "function") {
+      try { payload = await response.json(); } catch { /* retain safe fallback */ }
+    }
+    const msg = (payload as any)?.error || error.message || "Falha ao falar com o servidor de estornos.";
     throw new Error(msg);
   }
   if ((data as any)?.error && (data as any)?.ok !== true) throw new Error((data as any).error);
@@ -96,7 +101,9 @@ async function call<T = any>(body: Record<string, unknown>): Promise<T> {
 }
 
 export const refundApi = {
-  registerManual: (payload: {source:RefundSource;source_id:string;gateway:string;amount:number;reason:string;manual_reference:string;manual_done_at:string;note:string;password:string}) => call<{ok:boolean;refund_id:string;status:string;message:string}>({action:'register_manual',...payload}),
+  fiscalCheck: (source: RefundSource, id: string, reason: string) => call<RefundFiscalCheck>({ action: "fiscal_check", source, id, reason }),
+  fiscalPending: (page = 0) => call<{ rows: RefundFiscalPending[]; hasMore: boolean }>({ action: "fiscal_pending", page, limit: 50 }),
+  registerManual: (payload: {source:RefundSource;source_id:string;gateway:string;amount:number;reason:string;manual_reference:string;manual_done_at:string;note:string;password:string;fiscal_override?:boolean;fiscal_override_reason?:string}) => call<{ok:boolean;refund_id:string;status:string;message:string}>({action:'register_manual',...payload}),
   preview: (source: RefundSource, id: string) => call<RefundPreview>({ action: "preview", source, id }),
   execute: (payload: {
     source: RefundSource;
@@ -105,6 +112,8 @@ export const refundApi = {
     reason: string;
     reason_text?: string | null;
     cancel_order?: boolean;
+    fiscal_override?: boolean;
+    fiscal_override_reason?: string;
   }) => call<{ ok: boolean; pending_approval?: boolean; refund_id?: string; status?: string; message?: string }>({ action: "execute", ...payload }),
   list: () => call<{ ok: boolean; readyToSend?: { id: string; amount: number; customer_name: string | null }[]; isAdmin: boolean }>({ action: "list" }),
   listScope: (p: RefundListParams) => call<{ ok: boolean; rows: RefundListRow[]; hasMore: boolean; isAdmin: boolean }>({ action: "list", ...p }),
@@ -114,7 +123,7 @@ export const refundApi = {
     call<{ ok: boolean; sent_at: string }>({ action: "send_receipt", ...p }),
   checkGateway: (id: string) => call<{ ok: boolean; refunded: boolean; can_retry?: boolean; message: string }>({ action: "check_gateway", id }),
   retry: (id: string) => call<{ ok: boolean; pending_approval?: boolean; status?: string; message?: string; error?: string }>({ action: "retry", id }),
-  approve: (id: string) => call<{ ok: boolean; message?: string }>({ action: "approve", id }),
+  approve: (id: string, fiscal_override = false, fiscal_override_reason = "") => call<{ ok: boolean; message?: string }>({ action: "approve", id, fiscal_override, fiscal_override_reason }),
   reject: (id: string, reason: string) => call<{ ok: boolean; message?: string }>({ action: "reject", id, rejected_reason: reason }),
   eligibility: (items: { source: RefundSource; id: string }[]) =>
     call<{ ok: boolean; results: RefundEligibility[] }>({ action: "eligibility", items }),
@@ -132,6 +141,16 @@ export const REFUND_REASONS = [
   { value: "troca_com_diferenca", label: "Troca com diferença" },
   { value: "outro", label: "Outro" },
 ] as const;
+
+export interface RefundFiscalCheck {
+  allowed: boolean; error: string | null; warning: string | null; missing: string[];
+  facts: { sale_id: string | null; registered: boolean; received: boolean; return_note_ready: boolean };
+}
+export interface RefundFiscalPending {
+  estorno_id: string; venda_id: string | null; cliente: string | null; data_estorno: string; valor_estorno: number;
+  source: RefundSource; source_id: string; nota_venda_numero: number | null; nota_venda_chave: string | null;
+  tem_registro_devolucao: boolean; fiscal_override_by: string | null; fiscal_override_reason: string | null;
+}
 
 export const REFUND_STATUS_LABELS: Record<string, string> = {
   aguardando_aprovacao: "Aguardando aprovação",

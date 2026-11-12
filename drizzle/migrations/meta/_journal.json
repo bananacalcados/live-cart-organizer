@@ -1422,6 +1422,27 @@
       "when": 1794441264848,
       "tag": "0202_support_replay_review_preserve",
       "breakpoints": true
+    },
+    {
+      "idx": 203,
+      "version": "7",
+      "when": 1794442974243,
+      "tag": "0203_refund_return_fiscal_guard",
+      "breakpoints": true
+    },
+    {
+      "idx": 204,
+      "version": "7",
+      "when": 1794443030198,
+      "tag": "0204_manual_refund_fiscal_audit",
+      "breakpoints": true
+    },
+    {
+      "idx": 205,
+      "version": "7",
+      "when": 1794443404060,
+      "tag": "0205_refund_facts_invoker_security",
+      "breakpoints": true
     }
   ]
 }

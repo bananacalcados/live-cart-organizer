@@ -7,6 +7,8 @@ import { reauthWithPassword, refundApi, type RefundListRow, type RefundPreview }
 import {ManualRefundDialog} from './ManualRefundDialog';
 import {RefundWindowNotice} from './RefundWindowNotice';
 import { useToast } from "@/hooks/use-toast";
+import { RefundFiscalNotice } from "./RefundFiscalNotice";
+import type { RefundFiscalCheck } from "@/lib/refunds";
 
 /** Aprovar / Recusar (só admin). Os dois exigem a senha do sistema; recusar exige motivo. */
 export function RefundDecisionButtons({ refundId, row, onDone }: { refundId: string; row?:RefundListRow; onDone?: () => void }) {
@@ -18,8 +20,16 @@ export function RefundDecisionButtons({ refundId, row, onDone }: { refundId: str
   const [preview,setPreview]=useState<RefundPreview|null>(null);
   const [windowLoading,setWindowLoading]=useState(false);
   const [windowError,setWindowError]=useState('');
+  const [fiscal, setFiscal] = useState<RefundFiscalCheck | null>(null);
+  const [force, setForce] = useState(false);
+  const [justification, setJustification] = useState("");
   const startApprove=async()=>{
     setMode('approve');setPreview(null);setWindowError('');
+    setFiscal(null); setForce(false); setJustification("");
+    if (row) {
+      try { setFiscal(await refundApi.fiscalCheck(row.source, row.source_id, row.reason)); }
+      catch (e) { setWindowError(e instanceof Error ? e.message : "Conferência indisponível."); return; }
+    }
     if(row?.gateway!=='austpay')return;
     setWindowLoading(true);
     try{setPreview(await refundApi.preview(row.source,row.source_id));}catch(e){setWindowError(e instanceof Error?e.message:'Consulta indisponível.');}finally{setWindowLoading(false);}
@@ -33,7 +43,7 @@ export function RefundDecisionButtons({ refundId, row, onDone }: { refundId: str
     setBusy(true);
     try {
       await reauthWithPassword(password);
-      const res = mode === "approve" ? await refundApi.approve(refundId) : await refundApi.reject(refundId, reason.trim());
+      const res = mode === "approve" ? await refundApi.approve(refundId, force, justification) : await refundApi.reject(refundId, reason.trim());
       toast({ title: res.message || (mode === "approve" ? "Estorno aprovado" : "Estorno recusado") });
       close();
       onDone?.();
@@ -65,6 +75,7 @@ export function RefundDecisionButtons({ refundId, row, onDone }: { refundId: str
               </div>
             )}
             {mode === "approve" && <p className="text-muted-foreground">Ao aprovar, o estorno é enviado à operadora na hora, se estiver dentro da janela.</p>}
+            {mode === "approve" && <RefundFiscalNotice check={fiscal} isAdmin force={force} justification={justification} onForce={setForce} onJustification={setJustification} onRegistered={() => { if (row) void refundApi.fiscalCheck(row.source, row.source_id, row.reason).then(setFiscal); }} />}
             <div>
               <label className="text-xs text-muted-foreground">Confirme sua senha do sistema</label>
               <Input type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="current-password" />
@@ -73,7 +84,7 @@ export function RefundDecisionButtons({ refundId, row, onDone }: { refundId: str
               <button onClick={close} className="rounded-md border border-border px-3 py-2 hover:bg-muted">Cancelar</button>
               <button
                 onClick={() => void confirm()}
-                disabled={busy || !password || (mode === "reject" && !reason.trim()) || (mode==='approve' && (windowLoading || !!windowError || preview?.gateway_window_open===false))}
+                disabled={busy || !password || (mode === "reject" && !reason.trim()) || (mode==='approve' && (windowLoading || !!windowError || preview?.gateway_window_open===false || (!!fiscal && !fiscal.allowed && !(force && justification.trim().length >= 3))))}
                 className={`inline-flex items-center gap-1 rounded-md px-3 py-2 font-bold disabled:opacity-50 ${mode === "approve" ? "bg-primary text-primary-foreground" : "bg-destructive text-destructive-foreground"}`}
               >
                 {busy && <Loader2 className="h-4 w-4 animate-spin" />} Confirmar

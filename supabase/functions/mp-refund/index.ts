@@ -20,6 +20,7 @@ import { ensureRefundReceipt, signedReceiptUrl } from "../_shared/refund-receipt
 import { planReceiptSend, executeReceiptSend } from "../_shared/refund-receipt-send.ts";
 import { applyRefundListFilters } from "../_shared/refund-list.ts";
 import { validateManualRefund, persistManualRefund } from "../_shared/refund-manual.ts";
+import { checkRefundFiscal } from "../_shared/refund-fiscal.ts";
 
 
 const REASONS = ["cancelamento_antes_envio", "devolucao", "troca_com_diferenca", "outro"] as const;
@@ -215,6 +216,25 @@ serve(withAccessLog("mp-refund", async (req) => {
   try { body = await req.json(); } catch { return json({ error: "Corpo inválido." }, 400); }
   let action = String(body?.action || "");
 
+  const fiscalCheck = async (source: string, id: string, reason: string) => {
+    return await checkRefundFiscal(supabase, source, id, reason, !!isAdmin, body.fiscal_override === true, String(body.fiscal_override_reason || ""));
+  };
+  const overrideFields = (overridden: boolean) => overridden ? {
+    fiscal_override_by: userId, fiscal_override_reason: String(body.fiscal_override_reason).trim(), fiscal_override_at: new Date().toISOString(),
+  } : {};
+  if (action === "fiscal_check") {
+    if (!["order", "pos_sale"].includes(body.source) || !/^[0-9a-f-]{36}$/i.test(String(body.id)) || !REASONS.includes(body.reason)) return json({ error: "Compra ou motivo inválido." }, 400);
+    try { return json({ ok: true, ...await fiscalCheck(body.source, body.id, body.reason) }); }
+    catch { return json({ error: "Não foi possível conferir a devolução e as notas." }, 503); }
+  }
+  if (action === "fiscal_pending") {
+    const limit = Math.min(100, Math.max(1, Number(body.limit) || 50));
+    const page = Math.max(0, Number(body.page) || 0);
+    const { data, error } = await supabase.from("estornos_sem_nf_devolucao").select("estorno_id,venda_id,cliente,data_estorno,valor_estorno,source,source_id,fiscal_override_by,fiscal_override_reason,nota_venda_numero,nota_venda_chave,tem_registro_devolucao").order("data_estorno", { ascending: false }).order("estorno_id").range(page * limit, page * limit + limit);
+    if (error) return json({ error: "Não foi possível carregar pendências fiscais." }, 500);
+    return json({ ok: true, rows: (data || []).slice(0, limit), hasMore: (data || []).length > limit });
+  }
+
   // This action records evidence only. No provider refund endpoint is called.
   if (action === "register_manual") {
     if (!isAdmin) return json({ error: "Só administradores podem registrar estornos manuais." }, 403);
@@ -226,6 +246,8 @@ serve(withAccessLog("mp-refund", async (req) => {
     if (loginError || login.user?.id!==userId) return json({error:"Senha incorreta."},403);
     const src=await loadSource(supabase,body.source,body.source_id);
     if (!src || src.paymentError) return json({error:"Compra não verificável."},400);
+    const fiscal = await fiscalCheck(body.source, body.source_id, body.reason);
+    if (!fiscal.allowed) return json({ error: fiscal.error, fiscal }, 409);
     const linkedIds=[src.id,...(src.austpayReferenceIds||[])];
     const {data:splits,error:splitError}=await supabase.from('payment_splits').select('id').or(`sale_id.in.(${linkedIds.join(',')}),order_id.in.(${linkedIds.join(',')})`).limit(1);
     if(splitError||splits?.length) return json({error:'Compra com pagamento dividido ou não verificável; registro manual bloqueado.'},400);
@@ -254,7 +276,7 @@ serve(withAccessLog("mp-refund", async (req) => {
     }
     if (!paymentId || !captured || gateway!==body.gateway || body.amount>captured || !src.isPaid) return json({error:"Gateway ou valor não confere com a compra paga."},400);
     const payload={gateway,source:body.source,source_id:src.id,payment_id:paymentId,mp_account_id:gateway==='mercadopago'?gw.check.account?.account_id:null,amount:body.amount,refund_type:Math.abs(body.amount-captured)<0.005?'integral':'parcial',reason:body.reason,reason_text:body.note?.trim()||null,manual_reference:body.manual_reference.trim(),manual_done_at:body.manual_done_at,manual_registered_by:userId,card_brand:gateway==='austpay'?p.card_data?.brand:gateway==='mercadopago'?(p.payment_method_id==='pix'?null:p.payment_method_id):p?.cardBrand||null,card_last4:p?.card_data?.last_digits||p?.card?.last_four_digits||p?.cardLast4||null,installments:p?.installments||null};
-    const {id,error}=await persistManualRefund(supabase,payload,!!isAdmin);
+    const {id,error}=await persistManualRefund(supabase,{...payload,...overrideFields(fiscal.overridden)},!!isAdmin);
     if (error || !id) return json({error:error||"Não foi possível registrar; confira se já existe estorno."},409);
     await runRefundPostActions(supabase,{...payload,id,status:'concluido_manual'},userEmail);
     return json({ok:true,refund_id:id,status:'concluido_manual',message:'Estorno feito no painel registrado; nenhum dinheiro movimentado pelo sistema.'});
@@ -702,6 +724,9 @@ serve(withAccessLog("mp-refund", async (req) => {
     // Trava contra duplicidade: já existe estorno em andamento para este pagamento?
     // (O índice único parcial gateway_refunds_one_in_flight_per_payment garante
     // a mesma regra no banco — duas abas ao mesmo tempo não passam as duas.)
+    const fiscal = await fiscalCheck(source, id, reason);
+    if (!fiscal.allowed) return json({ error: fiscal.error, fiscal }, 409);
+    const fiscalAudit = overrideFields(fiscal.overridden);
     const gw = await checkAny(supabase, src, amount);
     const { data: inFlight } = await supabase
       .from("gateway_refunds")
@@ -721,7 +746,7 @@ serve(withAccessLog("mp-refund", async (req) => {
     if (gw.gateway === "austpay") {
       const p = check.payment;
       const needsApproval = !isAdmin && (cfg.approval_threshold == null || amount > cfg.approval_threshold);
-      const row = { gateway: "austpay", source, source_id: id, payment_id: gw.payId, mp_account_id: null, amount, refund_type: "integral", reason, reason_text: reasonText,
+      const row = { ...fiscalAudit, gateway: "austpay", source, source_id: id, payment_id: gw.payId, mp_account_id: null, amount, refund_type: "integral", reason, reason_text: reasonText,
         status: needsApproval ? "aguardando_aprovacao" : "processando", idempotency_key: crypto.randomUUID(), card_brand: p.card_data?.brand || "cartao", card_last4: p.card_data?.last_digits || null, installments: p.installments, requested_by: userId, cancel_order: cancelOrder };
       const { data: ins, error } = await supabase.from("gateway_refunds").insert(row).select("id").single();
       if (error) return json({ error: error.code === "23505" ? "Já existe estorno em andamento." : "Falha ao registrar estorno." }, error.code === "23505" ? 409 : 500);
@@ -732,6 +757,7 @@ serve(withAccessLog("mp-refund", async (req) => {
     if (gw.gateway === "appmax") {
       const ap = check.payment;
       const axRow = {
+        ...fiscalAudit,
         gateway: "appmax", source, source_id: id, mp_account_id: null, payment_id: String(gw.payId),
         amount, refund_type: "integral", reason, reason_text: reasonText,
         status: needsApprovalAx ? "aguardando_aprovacao" : "processando", idempotency_key: crypto.randomUUID(),
@@ -757,6 +783,7 @@ serve(withAccessLog("mp-refund", async (req) => {
     const needsApproval = !isAdmin && (cfg.approval_threshold == null || amount > cfg.approval_threshold);
 
     const row = {
+      ...fiscalAudit,
       gateway: "mercadopago",
       source,
       source_id: id,
@@ -817,11 +844,14 @@ serve(withAccessLog("mp-refund", async (req) => {
 
     const src = await loadSource(supabase, row.source, row.source_id);
     if (!src) return json({ error: "Venda/pedido não encontrado." }, 404);
+    const fiscal = await fiscalCheck(row.source, row.source_id, row.reason);
+    if (!fiscal.allowed) return json({ error: fiscal.error, fiscal }, 409);
+    const audit = overrideFields(fiscal.overridden);
     if (row.gateway === "austpay") {
       if (src.paymentError || src.austpayTransactionId !== row.payment_id) return json({ error: "Cobrança AustPay não confere com a solicitação." }, 400);
       const check = await austpayCheckPayment(supabase, src, Number(row.amount));
       if (!check.ok) return json({ error: check.error }, 400);
-      const { data: claimed, error } = await supabase.from("gateway_refunds").update({ status: "processando", approved_by: userId, approved_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq("id", row.id).eq("status", "aguardando_aprovacao").select("id").maybeSingle();
+      const { data: claimed, error } = await supabase.from("gateway_refunds").update({ ...audit, status: "processando", approved_by: userId, approved_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq("id", row.id).eq("status", "aguardando_aprovacao").select("id").maybeSingle();
       if (error || !claimed) return json({ error: "Esta solicitação já foi processada por outro administrador." }, 409);
       return json(await executeAustpay(supabase, { ...row, status: "processando" }, src));
     }
@@ -832,7 +862,8 @@ serve(withAccessLog("mp-refund", async (req) => {
         await supabase.from("gateway_refunds").update({ status: "falhou", error_message: c.error, updated_at: new Date().toISOString() }).eq("id", refundId);
         return json({ error: c.error }, 400);
       }
-      await supabase.from("gateway_refunds").update({ status: "processando", approved_by: userId, approved_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq("id", refundId);
+      const { data: claimed, error: claimError } = await supabase.from("gateway_refunds").update({ ...audit, status: "processando", approved_by: userId, approved_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq("id", refundId).eq("status", "aguardando_aprovacao").select("id").maybeSingle();
+      if (claimError || !claimed) return json({ error: claimError?.message || "Solicitação já processada." }, 409);
       return json(await executeAppmax(supabase, row, userEmail));
     }
     const check = await checkPayment(supabase, src, Number(row.amount));
@@ -841,7 +872,8 @@ serve(withAccessLog("mp-refund", async (req) => {
       return json({ error: check.error }, 400);
     }
 
-    await supabase.from("gateway_refunds").update({ status: "processando", approved_by: userId, approved_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq("id", refundId);
+    const { data: claimed, error: claimError } = await supabase.from("gateway_refunds").update({ ...audit, status: "processando", approved_by: userId, approved_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq("id", refundId).eq("status", "aguardando_aprovacao").select("id").maybeSingle();
+    if (claimError || !claimed) return json({ error: claimError?.message || "Solicitação já processada." }, 409);
     const result = await executeMpRefund(supabase, row, check.account, check.payment, userEmail);
     return json(result);
   }
