@@ -7855,6 +7855,8 @@ export type Database = {
           shipping_carrier: string | null
           status: Database["public"]["Enums"]["exchange_status"]
           support_ticket_id: string | null
+          test_simulated_at: string | null
+          test_simulation: Json | null
           tiny_order_id: string | null
           trocas_devolucoes_id: string | null
           updated_at: string
@@ -7917,6 +7919,8 @@ export type Database = {
           shipping_carrier?: string | null
           status?: Database["public"]["Enums"]["exchange_status"]
           support_ticket_id?: string | null
+          test_simulated_at?: string | null
+          test_simulation?: Json | null
           tiny_order_id?: string | null
           trocas_devolucoes_id?: string | null
           updated_at?: string
@@ -7979,6 +7983,8 @@ export type Database = {
           shipping_carrier?: string | null
           status?: Database["public"]["Enums"]["exchange_status"]
           support_ticket_id?: string | null
+          test_simulated_at?: string | null
+          test_simulation?: Json | null
           tiny_order_id?: string | null
           trocas_devolucoes_id?: string | null
           updated_at?: string
@@ -30437,6 +30443,10 @@ export type Database = {
         Args: { p_hash: string; p_type: string }
         Returns: Json
       }
+      central_link_access: {
+        Args: { p_hash: string; p_type: string }
+        Returns: string
+      }
       central_options: {
         Args: {
           p_hash: string
@@ -30502,6 +30512,10 @@ export type Database = {
             Returns: Json
           }
       central_test_link_ok: { Args: { p_hash: string }; Returns: boolean }
+      central_test_simulation_finish: {
+        Args: { p_request_id: string; p_simulation: Json }
+        Returns: Json
+      }
       change_area_password: {
         Args: { p_area: string; p_current: string; p_new: string }
         Returns: boolean

@@ -113,8 +113,9 @@ Deno.serve(withAccessLog("nfe-devolucao-emitir", async (req) => {
 { const denied = await requireStaffOrInternal(req, ["pos","expedition","management"], false); if (denied) return denied; }
 
   try {
-    const { troca_devolucao_id: trocaIdIn, reverse_shipment_id, ambiente: forcedAmb, cfop_override, dry_run } = await req.json();
-    if (!trocaIdIn && !reverse_shipment_id) throw new Error("troca_devolucao_id obrigatório");
+    const { troca_devolucao_id: trocaIdIn, reverse_shipment_id, central_request_id, ambiente: forcedAmb, cfop_override, dry_run } = await req.json();
+    const centralTest = !!central_request_id && dry_run === true;
+    if (!trocaIdIn && !reverse_shipment_id && !centralTest) throw new Error("troca_devolucao_id obrigatório");
 
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL")!,
@@ -123,11 +124,24 @@ Deno.serve(withAccessLog("nfe-devolucao-emitir", async (req) => {
 
     // Modo REVERSA (logística reversa Correios): a nota é emitida ANTES da postagem,
     // com os itens que a cliente vai devolver (gravados na reversa), para viajar com o pacote.
-    const isReverse = !trocaIdIn && !!reverse_shipment_id;
+    const isReverse = !trocaIdIn && (!!reverse_shipment_id || centralTest);
     const troca_devolucao_id: string | null = isReverse ? null : trocaIdIn;
     let rv: any = null;
     let evt: any = null;
-    if (isReverse) {
+    if (centralTest) {
+      // Prévia da Central: monta o mesmo evento em memória. Nunca cria TD, reversa ou documento.
+      const { data: request } = await supabase.from("exchange_requests")
+        .select("id, sale_id, original_item_id, requested_quantity, is_test").eq("id", central_request_id).maybeSingle();
+      if (!request?.is_test) throw new Error("Prévia da Central permitida somente para solicitação de TESTE");
+      rv = { sale_id: request.sale_id, devolucao_doc_id: null, customer_cpf: null, address: null };
+      evt = {
+        pedido_original_id: request.sale_id, devolucao_doc_id: null, chave_acesso_original: null,
+        trocas_devolucoes_itens: [{
+          direcao: "devolvido", estado_estoque: "retornado_vendavel", quantidade: Number(request.requested_quantity || 0),
+          sale_item_id: request.original_item_id, sku: null, barcode: null, produto_nome: null, valor_unitario: 0,
+        }],
+      };
+    } else if (isReverse) {
       const { data: r } = await supabase.from("correios_reverse_shipments")
         .select("id, sale_id, return_items, devolucao_doc_id, customer_cpf, address").eq("id", reverse_shipment_id).maybeSingle();
       if (!r) throw new Error("Reversa não encontrada");

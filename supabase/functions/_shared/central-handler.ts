@@ -41,10 +41,11 @@ export function centralHandler(kind: 'resolve' | 'submit', db: Db, enabled: () =
       // Closed by flag: answer before touching tokens or counters.
       const raw = await req.json().catch(() => null);
       if (!await enabled()) {
-        // Central fechada: só links marcados como TESTE passam (sem tocar em contadores).
+        // Fechada: TESTE passa; link real válido vê preparação; inexistente/tipo errado/vencido é genérico.
         const tk = typeof raw?.token === 'string' && /^[A-Za-z0-9_-]{32,128}$/.test(raw.token) ? raw.token : null;
-        const { data: ok } = tk ? await db.rpc('central_test_link_ok', { p_hash: await hashCentralToken(tk) }) : { data: false };
-        if (ok !== true) return response({ error: 'A central está em preparação. Fale com a nossa equipe.' },503);
+        const { data: access } = tk ? await db.rpc('central_link_access', { p_hash: await hashCentralToken(tk), p_type: typeof raw?.type === 'string' ? raw.type : '' }) : { data: null };
+        if (access === 'real') return response({ error: 'A central está em preparação. Fale com a nossa equipe.' },503);
+        if (access !== 'test') return response({ error: GENERIC },404);
       }
       const ipKey = 'ip:' + await hashCentralToken('central-ip:' + clientIp(req));
       const parsed = (kind==='resolve' ? resolveSchema : submitSchema).safeParse(raw);

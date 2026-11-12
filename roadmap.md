@@ -1,3 +1,9 @@
+# Teste completo da Central
+- [x] Quatro links em 360px: troca/devolução da Dayse, Ana fora do prazo e Leila sem entrega confirmada
+- [x] Dry-runs fiscal/Correios com código fictício, destinatário do XML e WhatsApp somente montado; clique duplo idempotente
+- [x] Links inválido/tipo errado/vencido genéricos; equipe gera TESTE enquanto fechada; painel etiqueta e exclusão conferidos
+- [x] Solicitações e links auxiliares apagados; 66 testes; nenhuma NF-e/reversa/mensagem real, Central fechada e front não publicado
+
 # Central automática e caixa de saída do assistente
 - [x] Central: registro/troca, simulação fiscal, reversa idempotente, código na página e mensagem; falhas escaladas, sem nota/reversa real nos testes
 - [x] Assistente: outbox restrito às 4 instâncias, 30/hora, 1.000 caracteres, janela Meta e histórico; rotina existente por minuto reutilizada, sem cron novo
@@ -9,7 +15,7 @@
 - [x] Suporte ao vivo: sombra e 4 instâncias preservadas, filtro 60 dias/palavras/humano, reservas diárias de 2 milhões, quadro conferido e 43 testes; sem envio/movimento/publicação
 - [ ] Suporte: habilitar silêncio de 2 minutos após disponibilidade do agendamento HTTP gerenciado; fila preparada e desligada, gatilho imediato preservado
 - [x] Trava de estorno: registro/conferência/nota, exceção admin auditada, lista com 54 pendências (R$ 19.939,63), 46 testes e simulação autenticada somente leitura; sem estornar/emitir/cancelar/publicar
-- [x] Suporte: histórico multi-instância e sugestão única; roteiro v2, CPF protegido; 58 comparações preservadas, 29 testes e tela conferida sem envio/publicação
+- [x] Suporte: histórico multi-instância e sugestão única; roteiro v2, CPF protegida; 58 comparações preservadas, 29 testes e tela conferida sem envio/publicação
 - [x] Suporte rodada 3: resolvido=nada, prazo pelo envio, escalada silenciosa, CPF/comentário, consolidação restrita, sugestão única, tom; 58 reprocessadas, 37 testes, tela conferida
 - [x] Diagnosticar rejeições 539: numeração reiniciada apesar da sequência do CNPJ já configurada em 2767
 - [x] Criar reserva atômica por venda/modelo e trava contra tentativas simultâneas, sem apagar notas autorizadas
@@ -27,7 +33,7 @@
 - [x] Vincular promoção progressiva ativa da live ao produto preparado, preservando o cálculo e os pedidos existentes
 - [x] Selecionar vários produtos e aplicar preço especial/frete grátis em uma única ação
 - [x] Testar regras, edição individual/em grupo, cálculo do carrinho e leiaute; 25 testes, T130 restaurado, sem publicar
-
+ 
 # Enviar cor para a Shopify
 - [x] Criar envio por código com dry-run, confirmação, proteção de duplicidade e sem sincronização completa
 - [x] Integrar botão nos códigos pendentes e ao de-para existente
@@ -116,7 +122,7 @@
 - [x] Copiar promoção e produtos sem alterar a original, tratando nome duplicado
 - [x] Vincular a cópia ao catálogo e às ofertas da live atual e informar divergências
 - [x] Testar “3 por 200” de 05/11 para 07/11 e conferir os vínculos
-
+ 
 # Segurança — Fase 4
 - [x] A1 shopify-create-order: só pedido pago, dados do banco, auth
 - [x] A2 shopify-create-live-order: idem
@@ -146,7 +152,7 @@
 
 # Grupo VIP no link da live
 - [ ] Plano aguardando aprovação (substituído pelo pedido da Central)
-
+ 
 # Moderação de comentários do Instagram
 - [x] Fila, IA, ocultar, direct de rastreio, tela e testes (interruptor desligado)
 - [ ] Confirmar permissão de ocultar com um comentário de teste real (aguarda o dono ligar)
