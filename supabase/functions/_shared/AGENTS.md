@@ -9,3 +9,5 @@
 - Fiscal exit notes: online/live/link/WhatsApp/pickup sales never get NFC-e (shared _shared/fiscal/sale-fiscal-rules.ts in nfce-emitir); online NF-e requires valid CPF and full address with no invented fallback; claim_fiscal_emission locks per sale and refuses a second active exit note of any model (finalidade 4 excluded); nfce-retry-pending retries model 65 only — so one sale never gets two exit notes.
 - Online sale CPF is filled at insert from the linked pos_customers by trigger trg_set_pos_sale_cpf_from_customer (only when empty); Conferência hydration stays as reinforcement.
 - Refund initiation and approval use refund-fiscal plus DB start guards: return registration, receipt and production return NF-e are required; admin exceptions record authenticated actor/reason, and pending reconciliation reads a service-only invoker view. Provider completion observations must never be blocked by initiation rules.
+
+- Cancel-before-ship refunds: refund-fiscal cancelBeforeShipStep, enforced again by guard_refund_return_fiscal.

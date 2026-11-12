@@ -83,5 +83,3 @@
 - Finish with zero no-RLS tables; anon EXECUTE only for the documented public list.
 - Code search: RPC search_product_code_keys (fuzzy, cap 200).
 - Ship date: shipped_at set only by DB triggers (expedition concluído / first carrier event); envio+7 reads it, none → human.
-- Pasted tracking links: normalized by parse_tracking_input trigger, mirrored in src/lib/logistics/trackingInput.ts.
-- Cancel-before-ship refunds: refund-fiscal cancelBeforeShipStep + guard_refund_return_fiscal.
