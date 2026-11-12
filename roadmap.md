@@ -1,3 +1,10 @@
+# Ajustes aprovados — suporte, trocas e comprovantes (12/11)
+- [ ] Resposta vazia sem pendência vira "nada"; retirar Jaqueline da fila sem apagar histórico
+- [ ] Sugerir numeração +1/−1 nas trocas abertas e mostrar no cartão e na separação
+- [ ] Enviar automaticamente comprovantes novos, com idempotência e erro visível; enviar somente o autorizado da Vânia e listar os antigos
+- [ ] Criar consulta de estorno para o agente, preservando travas e roteiro enxuto
+- [ ] Testar cada regra, conferir envio/horário da Vânia, modo automático e ausência de envios antigos
+
 # Falhas da IA do suporte (12/11)
 - [x] Diagnosticar as cinco respostas vazias: falha local, sem chamada válida registrada para os cinco IDs; respostas completas do lote eram de outras conversas
 - [x] Corrigir histórico/mídia e conclusão da IA, com até duas tentativas registradas e modelo alternativo na última; vazio sem ferramenta também tenta de novo

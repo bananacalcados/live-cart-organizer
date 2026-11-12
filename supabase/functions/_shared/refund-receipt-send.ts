@@ -1,6 +1,5 @@
-// Fase 4 — envio do comprovante de estorno à cliente pelo WhatsApp.
-// Nunca automático: só ação manual (prévia + Enviar). Reaproveita as funções de
-// envio de mídia já existentes por provider; não cria provedor novo.
+// Envio manual e automático do comprovante de estorno à cliente pelo WhatsApp.
+// O mesmo texto, PDF e providers do PDV; claim no banco impede envios paralelos.
 
 export const DEFAULT_RECEIPT_MESSAGE =
   "Olá, {nome}! Seu estorno de {valor} referente à compra de {data_compra} foi realizado. Segue o comprovante em anexo. {aviso_prazo}";
@@ -78,15 +77,24 @@ export async function planReceiptSend(supabase: any, refundId: string, preferred
   };
   if (!phone) return { ...base, blocked: "A cliente não tem WhatsApp cadastrado nesta venda/pedido — não é possível enviar." };
 
-  // Instância: a da conversa aberta (se informada) ou a última conversa com a cliente.
   let numberId: string | null = preferredNumberId || null;
   if (!numberId) {
-    const { data: last } = await supabase.from("whatsapp_messages")
-      .select("whatsapp_number_id").in("phone", [phone, phone.slice(2)])
-      .not("whatsapp_number_id", "is", null).order("created_at", { ascending: false }).limit(1);
-    numberId = last?.[0]?.whatsapp_number_id || null;
+    const { data: settings } = await supabase.from("support_settings").select("auto_reply_instance_ids").eq("id", true).maybeSingle();
+    const attendanceIds = Array.isArray(settings?.auto_reply_instance_ids) ? settings.auto_reply_instance_ids.filter(Boolean) : [];
+    if (attendanceIds.length) {
+      const { data: last } = await supabase.from("whatsapp_messages")
+        .select("whatsapp_number_id").in("phone", [phone, phone.slice(2)]).in("whatsapp_number_id", attendanceIds)
+        .order("created_at", { ascending: false }).limit(1);
+      numberId = last?.[0]?.whatsapp_number_id || null;
+    }
+    if (!numberId) {
+      let fallback = supabase.from("whatsapp_numbers").select("id").eq("is_active", true).ilike("label", "%Pérola%").limit(1);
+      if (attendanceIds.length) fallback = fallback.in("id", attendanceIds);
+      const { data: perola } = await fallback;
+      numberId = perola?.[0]?.id || null;
+    }
   }
-  if (!numberId) return { ...base, blocked: "Não há conversa de WhatsApp com esta cliente — abra o atendimento por uma instância antes de enviar." };
+  if (!numberId) return { ...base, blocked: "Não encontrei uma conversa nas instâncias de atendimento nem o Whats Pérola para enviar." };
   const { data: inst } = await supabase.from("whatsapp_numbers").select("id, provider, label, phone_display, is_active").eq("id", numberId).maybeSingle();
   if (!inst || inst.is_active === false) return { ...base, blocked: "A instância da conversa está desativada." };
   const provider = ["meta", "uazapi", "wasender"].includes(inst.provider) ? inst.provider : "zapi";
@@ -102,13 +110,28 @@ export async function planReceiptSend(supabase: any, refundId: string, preferred
   return { ...base, instance };
 }
 
-export async function executeReceiptSend(supabase: any, plan: ReceiptSendPlan, text: string, userId: string, userName: string | null) {
+export type ReceiptSendOptions = { automatic?: boolean; allowResend?: boolean };
+
+export async function executeReceiptSend(
+  supabase: any, plan: ReceiptSendPlan, text: string, userId: string | null,
+  userName: string | null, options: ReceiptSendOptions = {},
+) {
   const row = plan.refund;
   const inst = plan.instance;
   if (!inst || !row) return {ok:false,error:"Comprovante ou instância não disponível."};
+  const automatic = options.automatic === true;
+  const fail = async (error: string) => {
+    await supabase.rpc("refund_receipt_send_failed", { p_id: row.id, p_automatic: automatic, p_error: error });
+    return { ok: false, error };
+  };
+  const { data: claimed, error: claimError } = await supabase.rpc("refund_receipt_claim", {
+    p_id: row.id, p_automatic: automatic, p_allow_resend: options.allowResend === true,
+  });
+  if (claimError || !claimed) return { ok: false, error: claimError?.message || "Este comprovante já foi enviado ou está sendo enviado." };
+
   const { data: signed } = await supabase.storage.from("refund-receipts").createSignedUrl(row.receipt_path, 3600);
   const url = signed?.signedUrl;
-  if (!url) return { ok: false, error: "Não consegui gerar o link do comprovante." };
+  if (!url) return fail("Não consegui gerar o link do comprovante.");
 
   const fn = inst.provider === "meta" ? "meta-whatsapp-send"
     : inst.provider === "uazapi" ? "uazapi-send-media"
@@ -125,20 +148,21 @@ export async function executeReceiptSend(supabase: any, plan: ReceiptSendPlan, t
   const data = await resp.json().catch(() => ({}));
   if (!resp.ok || data?.success === false || data?.error) {
     const detail = typeof data?.error === "string" ? data.error : data?.error?.message || `HTTP ${resp.status}`;
-    return { ok: false, error: `O WhatsApp recusou o envio: ${detail}` };
+    return fail(`O WhatsApp recusou o envio: ${detail}`);
   }
   const messageId = data?.messageId ?? data?.data?.messageId ?? data?.data?.messageid ?? data?.data?.id ?? data?.data?.zaapId ?? null;
 
-  // Histórico da conversa, como as outras mensagens enviadas pelo sistema.
   await supabase.from("whatsapp_messages").insert({
     phone: plan.phone, message: text, direction: "outgoing", status: "sent",
     message_id: messageId != null ? String(messageId) : null, whatsapp_number_id: inst.id, channel: "whatsapp",
-    media_type: "document", media_url: url, sender_user_id: userId, sender_name: userName,
+    media_type: "document", media_url: url, sender_user_id: userId, sender_name: userName || "Sistema",
   });
   const now = new Date().toISOString();
-  await supabase.from("gateway_refunds").update({
+  const { error: savedError } = await supabase.from("gateway_refunds").update({
     receipt_sent_at: now, receipt_sent_by: userId, receipt_sent_to: plan.phoneMasked,
-    receipt_sent_channel: `${inst.provider} · ${inst.label}`, updated_at: now,
+    receipt_sent_channel: `${inst.provider} · ${inst.label}`, receipt_auto_status: "sent",
+    receipt_auto_error: null, receipt_send_claimed_at: null, updated_at: now,
   }).eq("id", row.id);
+  if (savedError) return fail(`O documento foi enviado, mas o registro precisa de conferência: ${savedError.message}`);
   return { ok: true, sent_at: now };
 }

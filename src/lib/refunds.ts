@@ -63,6 +63,8 @@ export interface RefundRow {
   receipt_sent_at?: string | null;
   receipt_sent_to?: string | null;
   receipt_sent_channel?: string | null;
+  receipt_auto_status?: "legacy" | "pending" | "sending" | "sent" | "failed";
+  receipt_auto_error?: string | null;
 }
 
 export interface ReceiptSendPreview {

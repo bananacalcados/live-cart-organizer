@@ -39,13 +39,38 @@ export function isAckOnly(t: string): boolean {
   const s = normal(t || "").replace(/[!.,?]+/g, " ").replace(/\s+/g, " ").trim();
   return !!s && ACK.test(s);
 }
+/** Confirmação de que a cliente mesma encontrou/recebeu a solução, sem pedido novo. */
+export function isResolutionConfirmation(t: string): boolean {
+  const s = normal(t || "");
+  if (!s || /\?/.test(s) || /\b(nao|não|ainda nao|ainda não)\b.{0,30}\b(achei|encontrei|recebi|consegui)\b/.test(s)) return false;
+  return /\b(achei|encontrei|recebi|consegui)\b.{0,45}\b(rastreio|codigo|código|pedido|comprovante|estorno|reembolso)\b/.test(s)
+    || /\b(rastreio|pedido|comprovante)\b.{0,35}\b(achei|encontrei|recebi)\b/.test(s)
+    || /\b(estou|vou ficar|fico)\b.{0,20}\bacompanhando\b/.test(s) && /\b(obrigad|valeu|gratidao|gratidão)\b/.test(s);
+}
+/** Só sobra pergunta/pedido se a parte final da cliente trouxer um pedido explícito. */
+export function hasPendingCustomerRequest(conv: UnifiedMessage[]): boolean {
+  if (alreadyResolved(conv)) return false;
+  const tail: UnifiedMessage[] = [];
+  for (let i = conv.length - 1; i >= 0 && conv[i].from === "cliente"; i--) tail.unshift(conv[i]);
+  if (!tail.length || tail.every(m => isAckOnly(m.text) || isResolutionConfirmation(m.text))) return false;
+  const s = normal(tail.map(m => m.text).join(" "));
+  return /\?/.test(s) || /\b(quero|preciso|pode|podem|consegue|conseguem|ajuda|ajudar|favor|cade|quando|como|onde|qual|quais|manda|mandar|envia|enviar|reenvia|reenviar|troca|trocar|devolucao|devolver|estorno|estornar|reembolso|reembolsar|nao recebi|nao chegou|nao consegui|nao encontrei|nao achei)\b/.test(s);
+}
 /** 1) Caso já resolvido: depois da última resposta da loja a cliente só agradece/confirma. */
 export function alreadyResolved(conv: UnifiedMessage[]): boolean {
   let i = conv.length - 1; const tail: UnifiedMessage[] = [];
   while (i >= 0 && conv[i].from === "cliente") tail.unshift(conv[i--]);
   if (i < 0 || !tail.length) return false;
   if (conv[i].text.trim().endsWith("?") && !/c[oó]digo|estorno|chegou|resolvid/i.test(conv[i].text)) return false;
-  return tail.every(m => isAckOnly(m.text));
+  return tail.every(m => isAckOnly(m.text) || isResolutionConfirmation(m.text));
+}
+/** Pergunta de status/comprovante de estorno; pedido novo de dinheiro de volta continua sensível. */
+export function isRefundStatusQuestion(conv: UnifiedMessage[]): boolean {
+  const last = [...conv].reverse().find(m => m.from === "cliente");
+  const s = normal(last?.text || "");
+  if (!/\b(estorno|reembolso|comprovante)\b/.test(s)) return false;
+  if (/procon|reclame|defeit|avaria|falsific|replica|quero (o )?(estorno|reembolso)|quero meu dinheiro|quero cancelar/.test(s)) return false;
+  return /\?|\b(cade|quando|como|onde|status|comprovante|reenvia|reenviar|manda|mandar|foi feito|ja foi|já foi)\b/.test(s);
 }
 /** 2) Sem data de entrega: dentro do prazo garantido até envio + 7 dias. */
 export function withinWindowByShipping(shippedAt: string | null | undefined, now: number, days = 7): boolean {

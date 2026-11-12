@@ -9,6 +9,7 @@ import { runRefundPostActions } from "../_shared/refund-post-actions.ts";
 import { closeAppmaxRefund } from "../_shared/refund-gateways/appmax-close.ts";
 import { closeAustpayRefund } from "../_shared/refund-gateways/austpay-close.ts";
 import { ensureRefundReceipt, RECEIPT_LAYOUT_SINCE } from "../_shared/refund-receipt.ts";
+import { executeReceiptSend, planReceiptSend } from "../_shared/refund-receipt-send.ts";
 import { grantSelfserviceCashback } from "../_shared/selfservice-cashback.ts";
 
 const corsHeaders = {
@@ -253,6 +254,26 @@ serve(withAccessLog("mercadopago-poll-pending", async (req) => {
     errors.push({ receipts: err.message });
   }
 
+  // Comprovantes novos: só a trigger marca pending. Registros legacy nunca entram aqui.
+  let receiptsSent = 0;
+  try {
+    const { data: automatic } = await supabase.from("gateway_refunds").select("id")
+      .eq("status", "concluido").eq("receipt_auto_status", "pending").is("receipt_sent_at", null)
+      .not("receipt_path", "is", null).order("completed_at", { ascending: true }).limit(2);
+    for (const receipt of automatic || []) {
+      const plan = await planReceiptSend(supabase, receipt.id);
+      if (!plan.ok || plan.blocked || !plan.instance || !plan.message) {
+        const error = plan.error || plan.blocked || "Não foi possível montar o envio automático.";
+        await supabase.rpc("refund_receipt_send_failed", { p_id: receipt.id, p_automatic: true, p_error: error });
+        errors.push({ receipt_auto: receipt.id, err: error });
+        continue;
+      }
+      const sent = await executeReceiptSend(supabase, plan, plan.message, null, "Sistema", { automatic: true });
+      if (sent.ok) receiptsSent++;
+      else errors.push({ receipt_auto: receipt.id, err: sent.error });
+    }
+  } catch (err: any) { errors.push({ receipts_auto: err.message }); }
+
   // Repair notifications that failed before enqueue; bounded, no new cron.
   // The queue's unique key is the self-service idempotency boundary.
   try {
@@ -288,7 +309,7 @@ serve(withAccessLog("mercadopago-poll-pending", async (req) => {
   } catch (err: any) { errors.push({ confirmation_recovery: err.message }); }
 
   return new Response(
-    JSON.stringify({ ok: true, accounts: accounts.length, checked, confirmed, refundsChecked, refundsDone, receiptsMade, errors: errors.slice(0, 5) }),
+    JSON.stringify({ ok: true, accounts: accounts.length, checked, confirmed, refundsChecked, refundsDone, receiptsMade, receiptsSent, errors: errors.slice(0, 5) }),
     { headers: { ...corsHeaders, "Content-Type": "application/json" } }
   );
 }));

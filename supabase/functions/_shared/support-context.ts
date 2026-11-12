@@ -4,6 +4,7 @@ import type { AgentDeps, ConvMessage, OrderCtx, TrackingInfo } from "./support-a
 import { firstName } from "./support-ai.ts";
 import { consolidationAllowed, cpfIdentityConfirmed, humanOtherInstances, unifyMessages, validCpf, type SupportFacts } from "./support-policy.ts";
 import { customerReceiptFromConversation } from "./support-received-date.ts";
+import { consultSupportRefund } from "./support-refund.ts";
 
 export const ONLINE_CHANNELS = ["site", "live", "link_online", "whatsapp"];
 export const TRACK_BASE = "https://checkout.bananacalcados.com.br/rastreio/";
@@ -26,7 +27,7 @@ export async function loadConversation(sb: Sb, phone: string, numberId: string |
 }
 
 export async function buildSupportContext(sb: Sb, s: { phone: string; whatsapp_number_id: string | null; channel: string },
-  opts: { shareLastEvent: boolean; until?: string; saleId?: string; sourceKey?: string }): Promise<SupportContext> {
+  opts: { shareLastEvent: boolean; until?: string; saleId?: string; sourceKey?: string; allowReceiptSend?: boolean }): Promise<SupportContext> {
   let conv: ConvMessage[];
   if (s.channel === "instagram") {
     const { data, error } = await sb.from("whatsapp_messages").select("message,direction,created_at,whatsapp_number_id,sender_user_id").eq("phone", s.phone).eq("channel", "instagram").lte("created_at", opts.until ?? new Date().toISOString()).order("created_at", { ascending: false }).limit(60);
@@ -101,6 +102,10 @@ export async function buildSupportContext(sb: Sb, s: { phone: string; whatsapp_n
     },
     customerReceivedDate: async (_ref, shippedAt) => customerReceiptFromConversation(conv, shippedAt, Date.parse(opts.until ?? new Date().toISOString())),
     tracking: async (ref) => trackingFromSim(sims.get(saleIds.get(ref) ?? ""), opts.shareLastEvent),
+    consultRefund: async (ref) => {
+      const id = saleIds.get(ref);
+      return id ? await consultSupportRefund(sb, id, opts.allowReceiptSend === true) : { status: "erro", error: "venda_nao_identificada" };
+    },
     cpfLookup: async () => {
       const cpfMessage = [...conv].reverse().find(m => m.from === "cliente" && /\b\d{3}\.?\d{3}\.?\d{3}-?\d{2}\b/.test(m.text));
       const raw = cpfMessage?.text.match(/\b\d{3}\.?\d{3}\.?\d{3}-?\d{2}\b/)?.[0];
@@ -126,6 +131,7 @@ export async function buildSupportContext(sb: Sb, s: { phone: string; whatsapp_n
         deps.tracking = loaded.deps.tracking;
         deps.shippedAt = loaded.deps.shippedAt;
         deps.sizesInStock = loaded.deps.sizesInStock;
+        deps.consultRefund = loaded.deps.consultRefund;
         await sb.from("support_cpf_attempts").update({ confirmed: true }).eq("id", candidate.id).eq("confirmed", false);
       }
       return { found: true, first_name: candidate.first_name, product: candidate.product, month: candidate.month, confirmed, different_phone: true };

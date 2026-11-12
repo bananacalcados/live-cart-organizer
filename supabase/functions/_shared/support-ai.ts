@@ -1,9 +1,11 @@
 // Fase 4b — triagem e agente de suporte por IA (modo sombra).
 // A IA só sugere texto e pede ações por ferramenta; quem decide e valida é o servidor.
 import { createOpenAI } from "npm:@ai-sdk/openai@4";
-import { jsonSchema, NoObjectGeneratedError, Output, stepCountIs, streamText, tool } from "npm:ai@7";
+import { jsonSchema, stepCountIs, streamText, tool } from "npm:ai@7";
+import { z } from "npm:zod@3";
 import { createLovableAiGatewayRunIdFetch } from "./run-id.ts";
-import { alreadyResolved, CONSOLIDATION_TEXT, cpfRequestAllowed, linkText, preferredLink, publicCommentReply, silentHandoffText, type SupportFacts, waitingMinutes, withinWindowByShipping } from "./support-policy.ts";
+import { alreadyResolved, CONSOLIDATION_TEXT, cpfRequestAllowed, isRefundStatusQuestion, linkText, preferredLink, publicCommentReply, silentHandoffText, type SupportFacts, waitingMinutes, withinWindowByShipping } from "./support-policy.ts";
+import { completedRefundText, type SupportRefundConsult } from "./support-refund.ts";
 
 export const TRIAGE_CATEGORIES = ["venda", "troca", "devolucao", "troca_ou_devolucao_ambiguo", "rastreio", "outro_suporte", "nada"] as const;
 export type TriageCategory = typeof TRIAGE_CATEGORIES[number];
@@ -85,7 +87,7 @@ const TRIAGE_SCHEMA = jsonSchema<Triage>({
     motivo_tamanho: { type: "boolean", description: "a cliente cita tamanho/numeração/modelo/ficou pequeno ou grande" },
     facts: { type: "object", additionalProperties: false, required: ["originality", "danger", "selected_ref", "insisted_return", "exchange_offer_made", "same_subject_instance", "confirmed_product"], properties: {
       originality: { type: "boolean", description: "alegação ou suspeita de falsificado, réplica ou não original" },
-      danger: { type: "boolean", description: "defeito/avaria, irritação, Procon/Reclame Aqui, pedido de estorno/valor/dinheiro ou assunto não entendido. Simples pedido de devolução não é estorno financeiro" },
+      danger: { type: "boolean", description: "defeito/avaria, irritação, Procon/Reclame Aqui, novo pedido de estorno/dinheiro ou assunto não entendido. Pergunta simples sobre status/comprovante de estorno NÃO é risco" },
       selected_ref: { type: ["string", "null"], description: "P1/P2 se cliente identificou inequivocamente o pedido; null se não" },
       insisted_return: { type: "boolean", description: "insistiu na devolução depois de oferta humana de troca com link no histórico" },
       exchange_offer_made: { type: "boolean", description: "já houve oferta de troca pela loja nesse mesmo assunto, em qualquer número; não repetir oferta" },
@@ -105,7 +107,8 @@ Leia as últimas mensagens (a mais recente é a última) e o contexto de pedidos
 - outro_suporte: extravio, defeito, avaria, pagamento de pedido já feito, reclamação.
 - nada: saudação, agradecimento, assunto sem relação.
 Considere o histórico unificado e marque fatos do assunto ATUAL, não reclamações antigas já resolvidas. Indique outra instância só se uma pessoa respondeu sobre esse mesmo assunto nas últimas 72h; mensagens automáticas não contam.
-Seja conservador: na dúvida entre troca e devolução use troca_ou_devolucao_ambiguo.`;
+Seja conservador: na dúvida entre troca e devolução use troca_ou_devolucao_ambiguo.
+Responda SOMENTE com um objeto JSON válido, sem markdown, contendo categoria, confianca, justificativa, motivo_tamanho e facts com todos os campos pedidos.`;
 
 export type GatewayConfig = { apiKey: string; baseURL: string; timeoutMs: number; guardedFetch?: typeof fetch };
 export type CallLog = { kind: "triagem" | "agente"; model: string; ok: boolean; error?: string; ms: number; inTok?: number; outTok?: number };
@@ -125,21 +128,35 @@ async function usage(result: any) {
   try { const u = await result.totalUsage; return { inTok: u?.inputTokens, outTok: u?.outputTokens }; } catch { return {}; }
 }
 
+const TRIAGE_TEXT_SCHEMA = z.object({
+  categoria: z.enum(TRIAGE_CATEGORIES),
+  confianca: z.number().min(0).max(1),
+  justificativa: z.string().max(300),
+  motivo_tamanho: z.boolean(),
+  facts: z.object({
+    originality: z.boolean(), danger: z.boolean(), selected_ref: z.string().nullable(),
+    insisted_return: z.boolean(), exchange_offer_made: z.boolean(),
+    same_subject_instance: z.string().nullable(), confirmed_product: z.string().nullable(),
+  }).strict(),
+}).strict();
+const AGENT_TEXT_SCHEMA = z.string().max(4000);
+
 export function parseTriageOutput(value: unknown): Triage {
   let parsed = value;
   if (typeof value === "string") {
     const text = value.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "");
+    if (!text) throw new Error("triagem_vazia_ou_invalida");
     parsed = JSON.parse(text);
   }
-  const out = parsed as Triage;
-  if (!out || !TRIAGE_CATEGORIES.includes(out.categoria) || typeof out.justificativa !== "string" || typeof out.motivo_tamanho !== "boolean" || !out.facts || typeof out.facts !== "object") {
-    throw new Error("triagem_vazia_ou_invalida");
-  }
-  return {
-    ...out,
-    confianca: Math.max(0, Math.min(1, Number(out.confianca) || 0)),
-    justificativa: out.justificativa.slice(0, 300),
-  };
+  const checked = TRIAGE_TEXT_SCHEMA.safeParse(parsed);
+  if (!checked.success) throw new Error("triagem_vazia_ou_invalida");
+  return checked.data;
+}
+
+export function parseAgentText(value: unknown): string {
+  const checked = AGENT_TEXT_SCHEMA.safeParse(value);
+  if (!checked.success) throw new Error("resposta_do_agente_invalida");
+  return checked.data.trim().slice(0, 1000);
 }
 
 export async function runTriage(cfg: GatewayConfig, model: string, conv: ConvMessage[], orders: OrderCtx[], log: (c: CallLog) => void): Promise<Triage> {
@@ -149,23 +166,11 @@ export async function runTriage(cfg: GatewayConfig, model: string, conv: ConvMes
       model: provider(cfg).responses(model),
       instructions: TRIAGE_INSTRUCTIONS,
       messages: [{ role: "user", content: `PEDIDOS (60 dias):\n${JSON.stringify(orders)}\n\nCONVERSA:\n${conversationTranscript(conv)}` }],
-      output: Output.object({ schema: TRIAGE_SCHEMA }),
       ...(cfg.guardedFetch ? { maxRetries: 0 } : {}),
       abortSignal: AbortSignal.timeout(cfg.timeoutMs),
       providerOptions: { openai: reasoningOpts as any },
     });
-    let raw: unknown;
-    try {
-      raw = await result.output;
-    } catch (error) {
-      if (!NoObjectGeneratedError.isInstance(error)) throw error;
-      // O gateway pode entregar o JSON completo mesmo quando o SDK não monta result.output.
-      const text = typeof error.text === "string" && error.text.trim()
-        ? error.text
-        : await result.text;
-      raw = parseTriageOutput(text);
-    }
-    const out = parseTriageOutput(raw);
+    const out = parseTriageOutput(await result.text);
     log({ kind: "triagem", model, ok: true, ms: Date.now() - t0, ...(await usage(result)) });
     return out;
   } catch (e) {
@@ -203,10 +208,11 @@ export type AgentDeps = {
   shippedAt?: (ref: string) => Promise<string | null>;
   customerReceivedDate?: (ref: string, shippedAt: string | null) => Promise<{ date: string | null; claimed: boolean }>;
   cpfLookup?: () => Promise<{ found?: boolean; error?: string; first_name?: string; product?: string; month?: string; confirmed?: boolean; different_phone?: boolean }>;
+  consultRefund?: (ref: string) => Promise<SupportRefundConsult>;
 };
 export type AgentAction = { acao: string; pedido: Record<string, unknown>; resultado: unknown };
-export function agentOutcomeIsEmpty(out: Pick<AgentOutcome, "text" | "actions" | "link" | "handoff" | "tracking" | "consolidation">): boolean {
-  return !out.text.trim() && out.actions.length === 0 && !out.link && !out.handoff && !out.tracking && !out.consolidation;
+export function agentOutcomeIsEmpty(out: Pick<AgentOutcome, "text" | "actions" | "link" | "handoff" | "tracking" | "consolidation" | "refund">): boolean {
+  return !out.text.trim() && out.actions.length === 0 && !out.link && !out.handoff && !out.tracking && !out.consolidation && !out.refund;
 }
 
 export type AgentOutcome = {
@@ -221,6 +227,7 @@ export type AgentOutcome = {
   prazoPorEnvio?: boolean;
   prazoPorRecebimentoInformado?: boolean;
   publicComment?: boolean;
+  refund?: SupportRefundConsult | null;
 };
 
 export async function runAgent(cfg: GatewayConfig, model: string, script: string, nome: string | null, triage: Triage,
@@ -237,7 +244,8 @@ export async function runAgent(cfg: GatewayConfig, model: string, script: string
   if (alreadyResolved(conv)) return { ...out, resolved: true };
   if (deps.publicComment) return { ...out, publicComment: true, text: publicCommentReply(nome, deps.supportPhone ?? null), handoff: { motivo: "comentario_publico", resumo: triage.justificativa } };
   if (deps.consolidation) return { ...out, text: CONSOLIDATION_TEXT, consolidation: deps.consolidation };
-  if (triage.facts?.danger) return handoff("situacao_sensivel", triage.justificativa);
+  const refundQuestion = isRefundStatusQuestion(conv);
+  if (triage.facts?.danger && !refundQuestion) return handoff("situacao_sensivel", triage.justificativa);
   if (!deps.orders.length && deps.cpfLookup) {
     if (!cpfRequestAllowed(triage.categoria, conv, false)) return handoff("pedido_nao_localizado", triage.justificativa);
     const candidate = await deps.cpfLookup();
@@ -248,7 +256,7 @@ export async function runAgent(cfg: GatewayConfig, model: string, script: string
   }
   const selected = deps.orders.length === 1 ? deps.orders[0] : deps.orders.find(o => o.ref === triage.facts?.selected_ref);
   if (deps.orders.length > 1 && !selected) return handoff("varios_pedidos_sem_identificacao", triage.justificativa);
-  const wanted = preferredLink(triage.categoria, triage.facts ?? {}, deps.offersAlreadyMade);
+  const wanted = refundQuestion ? null : preferredLink(triage.categoria, triage.facts ?? {}, deps.offersAlreadyMade);
   const eligibilityWithEvidence = async (ref: string, tipo: "troca" | "devolucao") => {
     let eligibility = await deps.checkEligibility(ref, tipo);
     rec("checar_elegibilidade", { pedido: ref, tipo }, eligibility);
@@ -353,6 +361,17 @@ export async function runAgent(cfg: GatewayConfig, model: string, script: string
         });
       },
     }),
+    consultar_estorno: tool({
+      description: "Consulta o estorno real de um pedido. Se concluído, reenvia o comprovante pelo envio padrão; pendente/falhou exige humano.",
+      inputSchema: jsonSchema<{ pedido: string }>({ type: "object", additionalProperties: false, required: ["pedido"], properties: { pedido: { type: "string" } } }),
+      execute: async ({ pedido }) => {
+        if (!refOk(pedido) || !deps.consultRefund) return rec("consultar_estorno", { pedido }, { erro: "pedido_inexistente" });
+        const result = await deps.consultRefund(pedido);
+        if (result.status === "concluido" && result.receiptSent) out.refund = result;
+        else out.handoff = { motivo: `estorno_${result.status}`, resumo: result.error || `Consulta de estorno: ${result.status}` };
+        return rec("consultar_estorno", { pedido }, result);
+      },
+    }),
     escalar_humano: tool({
       description: "Passa a conversa para uma pessoa da equipe, com um resumo curto.",
       inputSchema: jsonSchema<{ motivo: string; resumo: string }>({ type: "object", additionalProperties: false, required: ["motivo", "resumo"], properties: { motivo: { type: "string" }, resumo: { type: "string" } } }),
@@ -367,6 +386,7 @@ CONTEXTO DO SISTEMA (não invente nada além disso):
 - Triagem: ${triage.categoria} (confiança ${triage.confianca.toFixed(2)}; motivo de tamanho: ${triage.motivo_tamanho ? "sim" : "não"})
 - Ofertas de troca já feitas nesta conversa: ${deps.offersAlreadyMade} de no máximo ${deps.maxOffers}
 - Rastreio (cadê meu pedido, não chegou, quando chega): use consultar_rastreio e escreva {{rastreio}} onde vai o link; resposta curta. Sem envio ainda: diga a etapa, sem inventar prazo. Vários pedidos online e ela não disse qual: pergunte qual. Sem rastreio, atraso grande ou extravio: escale para humano.
+- perguntas de estorno: usar a ferramenta consultar_estorno; nunca prometer prazo além do texto padrão
 - Use as ferramentas para pedidos, prazos e numerações. Os pedidos se chamam P1, P2…; itens I1, I2…
 - Responda apenas com a próxima mensagem para a cliente, em português. Chame pelo primeiro nome, frase calorosa e curta, terminando com uma pergunta quando fizer sentido. Se escalar para humano, não escreva nada para a cliente (o sistema decide).`;
 
@@ -384,8 +404,9 @@ CONTEXTO DO SISTEMA (não invente nada além disso):
       abortSignal: AbortSignal.timeout(cfg.timeoutMs),
       providerOptions: { openai: reasoningOpts as any },
     });
-    out.text = (await result.text).trim().slice(0, 1000);
+    out.text = parseAgentText(await result.text);
     log({ kind: "agente", model, ok: true, ms: Date.now() - t0, ...(await usage(result)) });
+    if (out.refund && !out.handoff) out.text = completedRefundText(nome, out.refund);
     if (out.handoff) { out.text = silentHandoffText(out.handoff.motivo, waitingMinutes(conv, now), nome); return out; }
     // Vazio sem nenhuma ação é falha da tentativa: o chamador tenta o modelo alternativo.
     if (!out.text && agentOutcomeIsEmpty(out)) throw new Error("No output generated. Check the stream for errors.");

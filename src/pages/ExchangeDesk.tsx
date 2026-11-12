@@ -150,6 +150,7 @@ export default function ExchangeDesk({ storeId }: { storeId: string }) {
                   <div className="mt-1 text-sm">
                     {r.requested_quantity || 1}× {r.product_name || "Produto"}{r.product_size ? ` (nº ${r.product_size})` : ""}
                     {r.desired_size ? ` → nº ${r.desired_size}` : ""} · {REASON_LABEL[r.reason || ""] || "Motivo não informado"}
+                    {r.suggested_size && <span className="ml-2 font-medium">Numeração sugerida: {r.suggested_size}</span>}
                     {tab !== "precisa" && <> · {STATUS_LABEL[r.status] || r.status}</>}
                   </div>
                   {r.escalated_reason && r.status === "escalado" && <div className="mt-1 text-sm text-muted-foreground">Por que veio pra você: {r.escalated_reason}</div>}

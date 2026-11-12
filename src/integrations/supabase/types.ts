@@ -7854,6 +7854,7 @@ export type Database = {
           sale_id: string | null
           shipping_carrier: string | null
           status: Database["public"]["Enums"]["exchange_status"]
+          suggested_size: string | null
           support_ticket_id: string | null
           test_simulated_at: string | null
           test_simulation: Json | null
@@ -7918,6 +7919,7 @@ export type Database = {
           sale_id?: string | null
           shipping_carrier?: string | null
           status?: Database["public"]["Enums"]["exchange_status"]
+          suggested_size?: string | null
           support_ticket_id?: string | null
           test_simulated_at?: string | null
           test_simulation?: Json | null
@@ -7982,6 +7984,7 @@ export type Database = {
           sale_id?: string | null
           shipping_carrier?: string | null
           status?: Database["public"]["Enums"]["exchange_status"]
+          suggested_size?: string | null
           support_ticket_id?: string | null
           test_simulated_at?: string | null
           test_simulation?: Json | null
@@ -9785,9 +9788,12 @@ export type Database = {
           payment_id: string
           reason: string
           reason_text: string | null
+          receipt_auto_error: string | null
+          receipt_auto_status: string
           receipt_code: string | null
           receipt_generated_at: string | null
           receipt_path: string | null
+          receipt_send_claimed_at: string | null
           receipt_sent_at: string | null
           receipt_sent_by: string | null
           receipt_sent_channel: string | null
@@ -9827,9 +9833,12 @@ export type Database = {
           payment_id: string
           reason: string
           reason_text?: string | null
+          receipt_auto_error?: string | null
+          receipt_auto_status?: string
           receipt_code?: string | null
           receipt_generated_at?: string | null
           receipt_path?: string | null
+          receipt_send_claimed_at?: string | null
           receipt_sent_at?: string | null
           receipt_sent_by?: string | null
           receipt_sent_channel?: string | null
@@ -9869,9 +9878,12 @@ export type Database = {
           payment_id?: string
           reason?: string
           reason_text?: string | null
+          receipt_auto_error?: string | null
+          receipt_auto_status?: string
           receipt_code?: string | null
           receipt_generated_at?: string | null
           receipt_path?: string | null
+          receipt_send_claimed_at?: string | null
           receipt_sent_at?: string | null
           receipt_sent_by?: string | null
           receipt_sent_channel?: string | null
@@ -31225,6 +31237,10 @@ export type Database = {
       }
       exchange_desk_sizes: { Args: { p_id: string }; Returns: Json }
       exchange_desk_staff_list: { Args: never; Returns: Json }
+      exchange_suggested_size: {
+        Args: { p_reason: string; p_size: string; p_verbatim: string }
+        Returns: string
+      }
       exchange_support_conversations: {
         Args: { p_limit?: number; p_offset?: number; p_search?: string }
         Returns: Json
@@ -33077,6 +33093,14 @@ export type Database = {
         }[]
       }
       refund_config: { Args: never; Returns: Json }
+      refund_receipt_claim: {
+        Args: { p_allow_resend?: boolean; p_automatic: boolean; p_id: string }
+        Returns: boolean
+      }
+      refund_receipt_send_failed: {
+        Args: { p_automatic: boolean; p_error: string; p_id: string }
+        Returns: undefined
+      }
       refund_return_facts: {
         Args: { p_id: string; p_source: string }
         Returns: Json

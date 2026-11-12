@@ -152,6 +152,7 @@ export function ExchangeDeskCard({ id, staff, onClose, onChanged, onOpenChat }: 
               <div><b>O que a cliente escreveu:</b> {r.reason_subcategory || r.customer_verbatim || "—"}</div>
               <div><b>Condição do produto:</b> {r.auto_approved ? "Declarou sem uso" : "Não registrada — confirme com a cliente"}</div>
               <div><b>Item:</b> {r.requested_quantity || 1}× {r.product_name} {r.product_size ? `nº ${r.product_size}` : ""}</div>
+              {r.request_type === "troca" && r.suggested_size && <div className="rounded-md bg-muted p-2"><b>Numeração sugerida: {r.suggested_size}</b> <span className="text-xs text-muted-foreground">(somente para orientar a separação)</span></div>}
               {r.request_type === "troca" && r.customer_product_request && <div><b>A cliente procura:</b> {r.customer_product_request}</div>}
               {r.request_type === "troca" && !d.replacement && <div className="text-destructive"><b>Produto novo:</b> ainda não separado</div>}
               {d.replacement && <div><b>{r.product_chosen_by ? "Produto separado pela equipe:" : "Quer trocar por:"}</b> {d.replacement.name} nº {d.replacement.size}</div>}
@@ -195,6 +196,7 @@ export function ExchangeDeskCard({ id, staff, onClose, onChanged, onOpenChat }: 
               )}
               {form.kind === "choose_product" && (
                 <div className="space-y-2 text-sm">
+                  {r.suggested_size && <p className="rounded-md bg-muted p-2"><b>Numeração sugerida: {r.suggested_size}</b> — confira o relato e o estoque antes de separar.</p>}
                   {choices === null ? "Buscando produtos…" : choices.length === 0 ? "Nenhuma numeração com estoque ou liberada em \"Produtos para troca\"." :
                     <div className="flex flex-wrap gap-2">{choices.map((c) => (
                       <Button key={c.id} size="sm" variant={picked === c.id ? "default" : "outline"} onClick={() => setPicked(c.id)}>

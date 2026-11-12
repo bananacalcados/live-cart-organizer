@@ -22,4 +22,10 @@ describe("mensagem do comprovante de estorno", () => {
   it("mascara telefone", () => {
     expect(maskPhone("5533999998888")).toBe("5533*****8888");
   });
+  it("mensagem autorizada da Vânia mantém o padrão e acrescenta a frase do segundo estorno", () => {
+    const standard = renderReceiptMessage(DEFAULT_RECEIPT_MESSAGE, { nome: "Vânia", valor: 459.99, dataCompra: "2026-11-01T15:00:00Z", codigo: "GJ6J6P6U", isPix: true });
+    const message = `${standard} Esse é o comprovante do segundo estorno, do New Balance 9060 😊`;
+    expect(message.replace(/\u00a0/g, " ")).toContain("Seu estorno de R$ 459,99");
+    expect(message.endsWith("Esse é o comprovante do segundo estorno, do New Balance 9060 😊")).toBe(true);
+  });
 });

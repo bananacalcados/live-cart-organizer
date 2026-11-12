@@ -1,5 +1,5 @@
 import { assert, assertEquals, assertFalse } from "jsr:@std/assert@1";
-import { alreadyResolved, consolidationAllowed, cpfRequestAllowed, linkText, primaryInstance, publicCommentReply, silentHandoffText, waitingMinutes, withinWindowByShipping, humanRepliedRecently, type UnifiedMessage } from "./support-policy.ts";
+import { alreadyResolved, consolidationAllowed, cpfRequestAllowed, hasPendingCustomerRequest, linkText, primaryInstance, publicCommentReply, silentHandoffText, waitingMinutes, withinWindowByShipping, humanRepliedRecently, type UnifiedMessage } from "./support-policy.ts";
 import { finalDecision, runAgent, type Triage } from "./support-ai.ts";
 const m = (from: "cliente" | "loja", text: string, at: string, instance_id = "A", human = from === "loja"): UnifiedMessage => ({ from, text, at, instance_id, human });
 const cfg = { apiKey: "x", baseURL: "http://127.0.0.1:1", timeoutMs: 10 };
@@ -13,6 +13,14 @@ Deno.test("1 caso resolvido: agradecimento/emoji depois da loja = nada", async (
   const o = await runAgent(cfg, "x", "", "Maria", tri("troca"), [m("loja", "Segue o código de postagem", "1"), m("cliente", "👍", "2")], deps(), () => {});
   assertEquals(finalDecision(o, [order]).decision, "nada"); assertEquals(o.text, "");
 });
+Deno.test("1b resposta vazia depois de confirmação de rastreio não é falha", () => {
+  const encerrada = [m("cliente", "cadê meu rastreio?", "1"), m("loja", "Segue o rastreio", "2"), m("cliente", "Eu achei o rastreio. Estou acompanhando aqui. Muito obrigada.", "3")];
+  assert(alreadyResolved(encerrada));
+  assertFalse(hasPendingCustomerRequest(encerrada));
+  assert(hasPendingCustomerRequest([m("loja", "Vou verificar", "1"), m("cliente", "Mas quando chega meu pedido?", "2")]));
+  assert(hasPendingCustomerRequest([m("loja", "Segue o rastreio", "1"), m("cliente", "Não achei o rastreio, pode reenviar?", "2")]));
+});
+
 Deno.test("2 prazo garantido pela data de envio", async () => {
   const now = Date.parse("2026-11-11T12:00:00Z");
   assert(withinWindowByShipping("2026-11-06", now)); assertFalse(withinWindowByShipping("2026-11-01", now)); assertFalse(withinWindowByShipping(null, now));

@@ -338,7 +338,7 @@ serve(withAccessLog("mp-refund", async (req) => {
     }
     const text = String(body?.message ?? plan.message ?? "").trim().slice(0, 1000);
     if (!text) return json({ error: "Escreva a mensagem." }, 400);
-    const r = await executeReceiptSend(supabase, plan, text, userId, userEmail);
+    const r = await executeReceiptSend(supabase, plan, text, userId, userEmail, { allowResend: body?.confirm_resend === true });
     if (!r.ok) return json({ error: r.error }, 502);
     return json({ ok: true, sent_at: r.sent_at });
   }
@@ -398,7 +398,7 @@ serve(withAccessLog("mp-refund", async (req) => {
     if (scope) {
       const limit = Math.min(100, Math.max(1, Number(body?.limit) || 50));
       const page = Math.max(0, Number(body?.page) || 0);
-      const cols = "id, gateway, mp_account_id, source, source_id, payment_id, amount, refund_type, reason, reason_text, status, error_message, card_brand, card_last4, installments, requested_by, approved_by, approved_at, rejected_reason, created_at, completed_at, receipt_code, receipt_path, receipt_sent_at, receipt_sent_to, manual_reference, manual_done_at, manual_registered_by";
+      const cols = "id, gateway, mp_account_id, source, source_id, payment_id, amount, refund_type, reason, reason_text, status, error_message, card_brand, card_last4, installments, requested_by, approved_by, approved_at, rejected_reason, created_at, completed_at, receipt_code, receipt_path, receipt_sent_at, receipt_sent_to, receipt_auto_status, receipt_auto_error, manual_reference, manual_done_at, manual_registered_by";
       const q: any = applyRefundListFilters(supabase.from("gateway_refunds").select(cols), { ...body, scope });
       const search = String(body?.search || "").trim().toLowerCase().slice(0, 60);
       let rows: any[]; let hasMore: boolean;

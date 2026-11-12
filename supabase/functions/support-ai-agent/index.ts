@@ -9,7 +9,7 @@ import {
 import { buildSupportContext } from "../_shared/support-context.ts";
 import { primaryInstance } from "../_shared/support-policy.ts";
 import { budgetGateway } from "../_shared/support-budget-gateway.ts";
-import { humanRepliedRecently } from "../_shared/support-policy.ts";
+import { hasPendingCustomerRequest, humanRepliedRecently } from "../_shared/support-policy.ts";
 import { runSupportAiWithRetry, type SupportAiAttempt } from "../_shared/support-ai-retry.ts";
 
 const cors = { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-cron-secret" };
@@ -47,7 +47,7 @@ Deno.serve(withAccessLog("support-ai-agent", async (req) => {
   // Gateway middleware records every real HTTP call, including tool continuations, once.
   const flushLogs = () => Promise.resolve();
 
-  const ctx = await buildSupportContext(sb, s, { shareLastEvent: !!st.tracking_share_last_event });
+  const ctx = await buildSupportContext(sb, s, { shareLastEvent: !!st.tracking_share_last_event, allowReceiptSend: true });
   const { conv, orders, nome, saleIds } = ctx;
   if (humanRepliedRecently(conv, Date.now())) {
     await sb.from("support_auto_suggestions").update({ status: "ignorada", reason: "humano_2h" }).eq("id", s.id).eq("status", "processando");
@@ -135,6 +135,14 @@ Deno.serve(withAccessLog("support-ai-agent", async (req) => {
   } catch (e) {
     await flushLogs();
     const msg = String((e as Error)?.message || e);
+    if (/No output generated|triagem_vazia_ou_invalida/i.test(msg) && !hasPendingCustomerRequest(conv)) {
+      await sb.from("support_auto_suggestions").update({
+        ai_status: "ok", ai_error: null, status: "ignorada", decision: "nada",
+        reason: "conversa_encerrada_sem_pedido", suggested_text: null, handoff_summary: null,
+        would_route_support: false, auto_send_after: null,
+      }).eq("id", s.id).eq("status", "processando");
+      return json({ ignored: "conversa_encerrada_sem_pedido" });
+    }
     console.error("support-ai-agent", msg);
     return fallback(msg.slice(0, 300));
   }

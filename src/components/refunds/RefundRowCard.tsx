@@ -39,6 +39,7 @@ export function RefundRowCard({ r, actions, onChanged, storeId }: { r: RefundLis
           <p className="text-xs text-destructive">Recusado por {r.approved_by_name || "—"}{r.rejected_reason ? ` — ${r.rejected_reason}` : ""}</p>
         )}
         {r.status === "falhou" && r.error_message && <p className="text-xs text-destructive">{r.error_message}</p>}
+        {r.receipt_auto_status === "failed" && r.receipt_auto_error && <p className="text-xs text-destructive">Comprovante automático não enviado: {r.receipt_auto_error}</p>}
       </div>
       <div className="flex shrink-0 flex-col items-end gap-1">
         <span className="text-xs font-semibold text-muted-foreground">{REFUND_STATUS_LABELS[r.status] || r.status}</span>
