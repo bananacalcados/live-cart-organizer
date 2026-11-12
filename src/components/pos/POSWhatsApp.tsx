@@ -95,6 +95,8 @@ interface Props {
   initialPhone?: string;
   /** Instância exata da conversa aberta pela fila de suporte/tarefas. */
   initialWhatsappNumberId?: string | null;
+  /** Já existe um Dialog externo: não abre o Dialog interno do modo Linhas. */
+  embeddedInDialog?: boolean;
   onExitFullScreen?: () => void;
 }
 
@@ -144,7 +146,7 @@ interface CrmCustomerData {
   }[];
 }
 
-export function POSWhatsApp({ storeId, initialFilter, initialPhone, initialWhatsappNumberId, onExitFullScreen }: Props) {
+export function POSWhatsApp({ storeId, initialFilter, initialPhone, initialWhatsappNumberId, embeddedInDialog = false, onExitFullScreen }: Props) {
   const currentUserId = useCurrentUserId();
   const sender = useChatSender();
 
@@ -2436,7 +2438,7 @@ export function POSWhatsApp({ storeId, initialFilter, initialPhone, initialWhats
       {/* Content - Split view */}
       <div className="flex-1 flex overflow-hidden min-w-0">
         {/* Visão em Linhas (etapas de atendimento) */}
-        {viewMode === "lanes" && !teamChatActive ? (
+        {viewMode === "lanes" && !teamChatActive && !embeddedInDialog ? (
           <div className="flex-1 min-w-0 min-h-0">
             <POSWhatsAppLanes
               storeId={storeId}
@@ -2921,8 +2923,8 @@ export function POSWhatsApp({ storeId, initialFilter, initialPhone, initialWhats
           )}
           </>
           );
-          if (viewMode !== "lanes") return chatPanel;
-          // Visão em Linhas: o chat abre em janela por cima das linhas.
+          if (viewMode !== "lanes" || embeddedInDialog) return chatPanel;
+          // Visão em Linhas: o chat abre em janela por cima das linhas, exceto quando já está em um Dialog externo.
           return (
             <Dialog open onOpenChange={(o) => { if (!o) { setSelectedPhone(null); setSelectedConvKey(null); } }}>
               <DialogContent className={cn(
