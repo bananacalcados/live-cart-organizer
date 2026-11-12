@@ -200,3 +200,8 @@
 - [ ] Rastreio corrigido e rotina de 15 minutos ativa; 225 entregas recuperadas, 231 pedidos ainda aguardando a sequência de reprocessamento em andamento
 - [x] Fila elegível processada começando pela Arlete: 5 enviados, 0 pendentes, 0 falhas; demais escalados/ignorados com motivo
 - [x] Pausa de emergência testada; nenhum erro de envio, NF ou reversa, modo automático preservado
+
+# Follow-up F e recibos de grupo (12/11)
+- [x] Isolar a resolução do Instagram por item, mantendo falhas para nova tentativa sem perder o lote
+- [x] Descartar GroupReceipts somente da Pérola/Carol antes do processamento, preservando mensagens, recibos 1:1 e movimentação de grupos
+- [x] Conferir eventos reais após o reimplante, testes e registros finais; sem publicar o front
