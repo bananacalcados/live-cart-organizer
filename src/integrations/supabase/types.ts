@@ -33570,6 +33570,10 @@ export type Database = {
         Args: { p_order_id: string }
         Returns: undefined
       }
+      selfservice_orders_by_instagram: {
+        Args: { p_event_id: string; p_instagram: string; p_phone: string }
+        Returns: string[]
+      }
       selfservice_queue_backstop_refresh: { Args: never; Returns: undefined }
       selfservice_queue_backstop_tick: { Args: never; Returns: undefined }
       selfservice_queue_claim: {

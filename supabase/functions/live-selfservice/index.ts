@@ -582,8 +582,25 @@ Deno.serve(withAccessLog("live-selfservice", async (req) => {
     async function openOrders() {
       const byPhone = await openOrdersByPhone();
       const extra = await inviteOrders();
+      const byIg = await openOrdersByInstagram();
       const seen = new Set(byPhone.map((o: any) => o.id));
-      return [...byPhone, ...extra.filter((o: any) => !seen.has(o.id))];
+      const out = [...byPhone];
+      for (const o of [...extra, ...byIg]) if (!seen.has(o.id)) { seen.add(o.id); out.push(o); }
+      return out;
+    }
+
+    // Pedido criado por comentário "quero" ainda não tem WhatsApp no cliente:
+    // casa pelo @ normalizado (só clientes sem WhatsApp ou com o mesmo número).
+    async function openOrdersByInstagram(): Promise<any[]> {
+      const ig = String(body.instagram || "").trim().slice(0, 60);
+      if (!ig) return [];
+      const { data: ids, error } = await sb.rpc("selfservice_orders_by_instagram", { p_event_id: ev.id, p_instagram: ig, p_phone: phone });
+      if (error) { console.error("[live-selfservice] ig match", error.message); return []; }
+      if (!Array.isArray(ids) || !ids.length) return [];
+      const { data } = await sb.from("orders")
+        .select("id, customer_id, products, stage, is_paid, paid_externally, created_at, payment_window_expires_at, registered_at, discount_type, discount_value, free_shipping, shipping_cost, checkout_installment_config, cashback_id, cashback_amount, merged_into_order_id, customer:customers(instagram_handle)")
+        .eq("event_id", ev.id).in("id", ids.slice(0, 10));
+      return (data || []).filter((o: any) => Array.isArray(o.products) && o.products.length > 0).map((o: any) => ({ ...o, _ig_customer_id: o.customer_id }));
     }
 
     async function openOrdersByPhone(): Promise<any[]> {
@@ -741,7 +758,7 @@ Deno.serve(withAccessLog("live-selfservice", async (req) => {
       const now = new Date().toISOString();
       const orders = await openOrders();
       const reqIds: string[] = Array.isArray(body.order_ids) ? body.order_ids.map(String) : [];
-      const target = orders.filter((o: any) => reqIds.includes(o.id));
+      const target = orders.filter((o: any) => reqIds.includes(o.id) || (!reqIds.length && o._ig_customer_id));
       if (reqIds.length && target.length !== reqIds.length) return json({ ok: false, error: "Seu pedido mudou. Volte e identifique novamente." }, 409);
       const igReg = orderInstagram(target as any[], String(body.instagram || ""));
       const { data: access } = await sb.from("live_selfservice_accesses").select("id, metadata, entered_phone")
@@ -770,6 +787,10 @@ Deno.serve(withAccessLog("live-selfservice", async (req) => {
       const orderAddr = altAddr && altAddr.cep.length === 8 && altAddr.address && altAddr.address_number && altAddr.city && altAddr.state ? altAddr : addr;
 
       if (target.length) {
+        // Cliente achada pelo @: grava o WhatsApp confirmado no cliente que já tem o pedido.
+        for (const cid of new Set(target.map((o: any) => o._ig_customer_id).filter(Boolean))) {
+          await sb.from("customers").update({ whatsapp: phone }).eq("id", cid).or("whatsapp.is.null,whatsapp.eq.");
+        }
         for (const o of target) {
           const payload = { order_id: o.id, whatsapp: phone, full_name: fullName, cpf, email, ...orderAddr, ...signals, selfservice_advertising_consent_id: adv?.consentId || null, selfservice_advertising_snapshot: adv?.snapshot || null };
           const { data: reg } = await sb.from("customer_registrations").select("id").eq("order_id", o.id).maybeSingle();
