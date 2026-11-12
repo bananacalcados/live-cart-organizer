@@ -1,0 +1,1 @@
+REVOKE INSERT, UPDATE, DELETE ON public.support_outbox FROM authenticated;

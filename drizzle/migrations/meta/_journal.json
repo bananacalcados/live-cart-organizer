@@ -1513,6 +1513,13 @@
       "when": 1794485458885,
       "tag": "0215_central_reverse_exact_fiscal_link",
       "breakpoints": true
+    },
+    {
+      "idx": 216,
+      "version": "7",
+      "when": 1794485509955,
+      "tag": "0216_support_outbox_write_lockdown",
+      "breakpoints": true
     }
   ]
 }

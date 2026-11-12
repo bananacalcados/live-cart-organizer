@@ -1,8 +1,9 @@
 # Central automática e caixa de saída do assistente
-- [ ] Central: registro/troca, simulação fiscal, reversa idempotente, código na página e mensagem; falhas escaladas, sem nota/reversa real nos testes
-- [ ] Assistente: outbox restrito às 4 instâncias, 30/hora, 1.000 caracteres, janela Meta e histórico; reutilizar rotina existente por minuto
-- [ ] Painel: aba Enviadas pelo assistente; testes de sucesso/falhas/duplicidade/instância/janela/limite e envio real somente se houver telefone admin
-- [ ] Manter Central pública fechada, não publicar e informar o que falta para abertura
+- [x] Central: registro/troca, simulação fiscal, reversa idempotente, código na página e mensagem; falhas escaladas, sem nota/reversa real nos testes
+- [x] Assistente: outbox restrito às 4 instâncias, 30/hora, 1.000 caracteres, janela Meta e histórico; rotina existente por minuto reutilizada, sem cron novo
+- [x] Painel: aba conferida logada; 41 testes; envio real não feito porque nenhum admin tem telefone cadastrado
+- [x] Central pública permanece fechada, front não publicado e nenhuma NF-e/reversa real gerada
+- [ ] Abertura pública: aguarda piloto real autorizado com NF-e/reversa, telefone admin para teste de WhatsApp e autorização para publicar/ligar a Central
 
 # AustPay — duplicidade de NF-e
 - [x] Suporte ao vivo: sombra e 4 instâncias preservadas, filtro 60 dias/palavras/humano, reservas diárias de 2 milhões, quadro conferido e 43 testes; sem envio/movimento/publicação
