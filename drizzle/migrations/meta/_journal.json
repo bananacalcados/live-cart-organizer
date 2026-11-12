@@ -1653,6 +1653,13 @@
       "when": 1794522891172,
       "tag": "0235_refund_receipt_auto_guards",
       "breakpoints": true
+    },
+    {
+      "idx": 236,
+      "version": "7",
+      "when": 1794525029120,
+      "tag": "0236_selfservice_confirmation_preserve_orders",
+      "breakpoints": true
     }
   ]
 }

@@ -33552,6 +33552,10 @@ export type Database = {
         }
         Returns: Json
       }
+      selfservice_confirmation_order_ids: {
+        Args: { p_access_id: string; p_phone: string }
+        Returns: string[]
+      }
       selfservice_grant_cashback: {
         Args: {
           p_amount_paid: number

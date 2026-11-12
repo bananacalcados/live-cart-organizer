@@ -1,3 +1,9 @@
+# Vínculo do cadastro da live ao pedido (12/11 — urgente)
+- [ ] Confirmar e corrigir a busca por Instagram e a reutilização da ficha com pedido
+- [ ] Impedir que a confirmação zere vínculos válidos; resolver divergência por Instagram sem afrouxar conflitos
+- [ ] Recuperar os cadastros de hoje no evento informado e realinhar duplicatas sem apagar pedidos nem enviar mensagens
+- [ ] Testar as duas causas, conferir os casos recuperados e listar os cadastros sem pedido
+
 # Ajustes aprovados — suporte, trocas e comprovantes (12/11)
 - [x] Resposta vazia sem pendência vira "nada"; retirar Jaqueline da fila sem apagar histórico
 - [x] Sugerir numeração +1/−1 nas trocas abertas e mostrar no cartão e na separação
