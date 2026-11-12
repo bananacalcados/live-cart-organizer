@@ -13,6 +13,7 @@ import { AutoReplySettings } from "./AutoReplySettings";
 import { AiAgentSettings } from "./AiAgentSettings";
 
 interface Suggestion {
+  mode_at_creation: string;
   id: string; created_at: string; phone: string; channel: string; whatsapp_number_id: string | null; customer_name: string | null;
   incoming_text: string | null; intent: string; decision: string; reason: string; link_type: string | null;
   suggested_text: string | null; status: string; sent_text: string | null; discard_reason: string | null;
@@ -37,6 +38,8 @@ function SuggestionCard({ s, instances, onDone }: { s: Suggestion; instances: Re
   const inst = s.whatsapp_number_id ? instances[s.whatsapp_number_id] : undefined;
 
   const send = async () => {
+    const cfg = await deskCall<{ mode: string }>("support_auto_reply_settings_get");
+    if (cfg.mode === "shadow" || s.mode_at_creation === "shadow") { toast.error("Modo sombra: envio bloqueado"); return; }
     if (!text.trim()) { toast.error("Escreva a mensagem"); return; }
     setBusy(true);
     try {
@@ -61,6 +64,8 @@ function SuggestionCard({ s, instances, onDone }: { s: Suggestion; instances: Re
   };
   const [routed, setRouted] = useState(!!s.routed_at);
   const route = async () => {
+    const cfg = await deskCall<{ mode: string }>("support_auto_reply_settings_get");
+    if (cfg.mode === "shadow" || s.mode_at_creation === "shadow") { toast.error("Modo sombra: movimento bloqueado"); return; }
     setBusy(true);
     try { await deskCall("support_suggestion_route", { p_id: s.id }); setRouted(true); toast.success("Conversa movida para Suporte"); }
     catch (e) { toast.error(e instanceof Error ? e.message : "Erro"); }
@@ -104,7 +109,7 @@ function SuggestionCard({ s, instances, onDone }: { s: Suggestion; instances: Re
         <div className="flex items-center gap-2 text-xs">
           {routed ? <span>Movida para a linha Suporte{s.routed_auto ? " (automático)" : ""}.</span> : <>
             <span>Moveria para a linha SUPORTE do WhatsApp do PDV.</span>
-            <Button size="sm" variant="outline" disabled={busy} onClick={route}>Mover para Suporte</Button>
+            <Button size="sm" variant="outline" disabled={busy || s.mode_at_creation === "shadow"} onClick={route}>Mover para Suporte</Button>
           </>}
         </div>
       )}
@@ -121,7 +126,7 @@ function SuggestionCard({ s, instances, onDone }: { s: Suggestion; instances: Re
             </div>
           ) : (
             <div className="flex gap-2">
-              <Button disabled={busy} onClick={send}>Enviar pela conversa</Button>
+              <Button disabled={busy || s.mode_at_creation === "shadow"} onClick={send}>Enviar pela conversa</Button>
               <Button variant="outline" disabled={busy} onClick={() => setDiscarding(true)}>Sugestão errada</Button>
             </div>
           )}

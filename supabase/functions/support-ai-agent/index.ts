@@ -26,7 +26,11 @@ Deno.serve(withAccessLog("support-ai-agent", async (req) => {
   const { data: s } = await sb.from("support_auto_suggestions").select("id,phone,whatsapp_number_id,channel,status,created_at,cost_due_at,cost_claimed_at,cost_prefilter_passed").eq("id", suggestion_id).maybeSingle();
   if (!s || s.status !== "processando") return json({ skipped: "not_pending" });
   const { data: st } = await sb.from("support_settings").select("*").limit(1).maybeSingle();
-  if (st?.auto_reply_mode !== "shadow" || !(st.auto_reply_instance_ids ?? []).includes(s.whatsapp_number_id) || !s.cost_claimed_at || !s.cost_prefilter_passed || Date.parse(s.cost_due_at ?? "") > Date.now()) return json({ skipped: "shadow_queue_guard" });
+  if (st?.auto_reply_mode !== "shadow" || !(st.auto_reply_instance_ids ?? []).includes(s.whatsapp_number_id) || Date.parse(s.cost_due_at ?? "") > Date.now()) return json({ skipped: "shadow_queue_guard" });
+  if (!s.cost_claimed_at) {
+    const { data: claimed, error } = await sb.rpc("support_cost_claim_direct", { p_id: s.id });
+    if (error || !claimed) return json({ skipped: "already_claimed_or_filtered" });
+  } else if (!s.cost_prefilter_passed || !st.ai_silence_queue_enabled) return json({ skipped: "already_claimed" });
   const fallback = async (err: string) => { await sb.rpc("support_ai_fallback", { p_id: s.id, p_error: err }); return json({ fallback: err }); };
   const apiKey = Deno.env.get("LOVABLE_API_KEY");
   if (!st?.ai_enabled || !apiKey) return fallback(!apiKey ? "sem_chave_ia" : "ia_desligada");

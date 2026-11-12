@@ -87,7 +87,7 @@ function provider(cfg: GatewayConfig) {
     baseURL: `${cfg.baseURL.replace(/\/+$/, "").replace(/\/v1$/, "")}/v1`,
     apiKey: cfg.apiKey,
     headers: { "Lovable-API-Key": cfg.apiKey, "X-Lovable-AIG-SDK": "vercel-ai-sdk" },
-    fetch: cfg.guardedFetch ? ((input, init) => cfg.guardedFetch ? cfg.guardedFetch(input, init) : run.fetch(input, init)) : run.fetch,
+    fetch: cfg.guardedFetch ?? run.fetch,
   });
 }
 const reasoningOpts = { store: false, forceReasoning: true, reasoningEffort: "low", reasoningSummary: "auto", include: ["reasoning.encrypted_content"] };
@@ -167,7 +167,7 @@ export async function runAgent(cfg: GatewayConfig, model: string, script: string
   const out: AgentOutcome = { text: "", actions, link: null, handoff: null, exchangeOffered: false, tracking: null };
   const rec = (acao: string, pedido: Record<string, unknown>, resultado: unknown) => { actions.push({ acao, pedido, resultado }); return resultado; };
   const refOk = (ref: string) => deps.orders.find((o) => o.ref === ref);
-  const tipoSchema = { type: "string", enum: ["troca", "devolucao"] };
+  const tipoSchema = { type: "string" as const, enum: ["troca", "devolucao"] };
 
   const now = deps.now ?? Date.now();
   // Escalar em silêncio: vai para a linha SUPORTE com resumo; texto à cliente só se ela espera há >30 min e houver algo útil.

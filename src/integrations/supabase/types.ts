@@ -25609,6 +25609,7 @@ export type Database = {
           ai_max_calls_per_conversation_day: number
           ai_pause_reason: string | null
           ai_pause_until: string | null
+          ai_silence_queue_enabled: boolean
           ai_timeout_ms: number
           ai_triage_model: string
           ai_worker_lease: string | null
@@ -25639,6 +25640,7 @@ export type Database = {
           ai_max_calls_per_conversation_day?: number
           ai_pause_reason?: string | null
           ai_pause_until?: string | null
+          ai_silence_queue_enabled?: boolean
           ai_timeout_ms?: number
           ai_triage_model?: string
           ai_worker_lease?: string | null
@@ -25669,6 +25671,7 @@ export type Database = {
           ai_max_calls_per_conversation_day?: number
           ai_pause_reason?: string | null
           ai_pause_until?: string | null
+          ai_silence_queue_enabled?: boolean
           ai_timeout_ms?: number
           ai_triage_model?: string
           ai_worker_lease?: string | null
@@ -33578,6 +33581,7 @@ export type Database = {
       }
       support_auto_route: { Args: { p_id: string }; Returns: boolean }
       support_classify_intent: { Args: { p: string }; Returns: string }
+      support_cost_claim_direct: { Args: { p_id: string }; Returns: boolean }
       support_cost_dashboard: { Args: never; Returns: Json }
       support_cost_human: {
         Args: { p_channel: string; p_phone: string }
@@ -33684,6 +33688,10 @@ export type Database = {
       support_normalize_text: { Args: { p: string }; Returns: string }
       support_route_settings_update: {
         Args: { p_auto_route: boolean }
+        Returns: undefined
+      }
+      support_shadow_action_guard: {
+        Args: { p_id: string }
         Returns: undefined
       }
       support_suggestion_discard: {

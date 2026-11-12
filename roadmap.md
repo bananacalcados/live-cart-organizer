@@ -1,5 +1,6 @@
 # AustPay — duplicidade de NF-e
-- [ ] Suporte ao vivo: confirmar sombra, pré-filtro 60 dias/palavras, silêncio 2 min, teto diário, quadro de custo e testes sem envio/movimento/publicação
+- [x] Suporte ao vivo: sombra e 4 instâncias preservadas, filtro 60 dias/palavras/humano, reservas diárias de 2 milhões, quadro conferido e 43 testes; sem envio/movimento/publicação
+- [ ] Suporte: habilitar silêncio de 2 minutos após disponibilidade do agendamento HTTP gerenciado; fila preparada e desligada, gatilho imediato preservado
 - [x] Trava de estorno: registro/conferência/nota, exceção admin auditada, lista com 54 pendências (R$ 19.939,63), 46 testes e simulação autenticada somente leitura; sem estornar/emitir/cancelar/publicar
 - [x] Suporte: histórico multi-instância e sugestão única; roteiro v2, CPF protegido; 58 comparações preservadas, 29 testes e tela conferida sem envio/publicação
 - [x] Suporte rodada 3: resolvido=nada, prazo pelo envio, escalada silenciosa, CPF/comentário, consolidação restrita, sugestão única, tom; 58 reprocessadas, 37 testes, tela conferida

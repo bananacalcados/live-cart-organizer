@@ -1471,6 +1471,20 @@
       "when": 1794446798449,
       "tag": "0209_support_shadow_fallback_preserve",
       "breakpoints": true
+    },
+    {
+      "idx": 210,
+      "version": "7",
+      "when": 1794446962559,
+      "tag": "0210_support_preserve_live_pending_scheduler",
+      "breakpoints": true
+    },
+    {
+      "idx": 211,
+      "version": "7",
+      "when": 1794447156402,
+      "tag": "0211_support_daily_budget_stop",
+      "breakpoints": true
     }
   ]
 }
