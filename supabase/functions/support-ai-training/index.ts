@@ -6,6 +6,7 @@ import { isAuthorizedCron, unauthorizedResponse } from "../_shared/cron-guard.ts
 import { type CallLog, finalDecision, runAgent, runTriage, sanitizeText, shouldRouteSupport, triageIgnores } from "../_shared/support-ai.ts";
 import { buildSupportContext } from "../_shared/support-context.ts";
 import { humanRepliedRecently } from "../_shared/support-policy.ts";
+import { budgetGateway } from "../_shared/support-budget-gateway.ts";
 
 const cors = { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-cron-secret" };
 const json = (b: unknown, s = 200) => new Response(JSON.stringify(b), { status: s, headers: { ...cors, "Content-Type": "application/json" } });
@@ -13,7 +14,9 @@ const json = (b: unknown, s = 200) => new Response(JSON.stringify(b), { status: 
 Deno.serve(withAccessLog("support-ai-training", async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: cors });
   if (!(await isAuthorizedCron(req))) return unauthorizedResponse(cors);
-  const sb = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+  const url = Deno.env.get("SUPABASE_URL"); const key = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  if (!url || !key) return json({ error: "configuracao_indisponivel" }, 500);
+  const sb = createClient(url, key);
   const { run_id, batch, replay, round } = await req.json().catch(() => ({}));
   if (typeof run_id !== "string" || !/^[0-9a-f-]{36}$/i.test(run_id) || (replay !== undefined && typeof replay !== "boolean") || (round !== undefined && round !== 3) || (batch !== undefined && (!Number.isInteger(batch) || batch < 1 || batch > 2))) return json({ error: "parametros_invalidos" }, 400);
   const apiKey = Deno.env.get("LOVABLE_API_KEY");
@@ -49,7 +52,8 @@ Deno.serve(withAccessLog("support-ai-training", async (req) => {
           const sib = (sibs ?? []).find((x: any) => String(x.last_incoming_at) > String(it.last_incoming_at ?? "") || (String(x.last_incoming_at) === String(it.last_incoming_at ?? "") && x.id > it.id));
           if (sib) { await save({ status: "ok", conversation, customer_name: ctx.nome, decision: "outra_instancia", reason: "sugestao_unica_no_numero_mais_ativo", primary_item: sib.id, primary_label: sib.instance_name, human_recent_2h, other_instances: ctx.otherInstances, tokens_in: 0, tokens_out: 0, processed_at: new Date().toISOString() }); return; }
         }
-        const triage = await runTriage(cfg, st.ai_triage_model, ctx.conv, ctx.orders, log);
+        const meta = { id: it.id, phone: it.phone, number: it.whatsapp_number_id };
+        const triage = await runTriage({ ...cfg, guardedFetch: budgetGateway(sb, meta, "triagem") }, st.ai_triage_model, ctx.conv, ctx.orders, log);
         ctx.configure(triage.facts ?? {}, triage.categoria);
         const base = { conversation, orders_ctx: ctx.orders, customer_name: ctx.nome, triage, triage_category: triage.categoria,
           triage_confidence: triage.confianca, is_support: !triageIgnores(triage.categoria), human_recent_2h };
@@ -57,7 +61,7 @@ Deno.serve(withAccessLog("support-ai-training", async (req) => {
           await save({ ...base, ...tok(), status: "ok", would_route_support: false, processed_at: new Date().toISOString() });
           return;
         }
-        const outcome = await runAgent(cfg, st.ai_agent_model, script?.body ?? "", ctx.nome, triage, ctx.conv,
+        const outcome = await runAgent({ ...cfg, guardedFetch: budgetGateway(sb, meta, "agente") }, st.ai_agent_model, script?.body ?? "", ctx.nome, triage, ctx.conv,
           { ...ctx.deps, offersAlreadyMade: 0, maxOffers: st.max_offer_attempts ?? 1, now: at, supportPhone: st.support_whatsapp_phone ?? null }, log);
         const dec = finalDecision(outcome, ctx.orders);
         await save({

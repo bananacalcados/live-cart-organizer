@@ -8,6 +8,8 @@ import {
 } from "../_shared/support-ai.ts";
 import { buildSupportContext } from "../_shared/support-context.ts";
 import { primaryInstance } from "../_shared/support-policy.ts";
+import { budgetGateway } from "../_shared/support-budget-gateway.ts";
+import { humanRepliedRecently } from "../_shared/support-policy.ts";
 
 const cors = { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-cron-secret" };
 const json = (b: unknown, s = 200) => new Response(JSON.stringify(b), { status: s, headers: { ...cors, "Content-Type": "application/json" } });
@@ -15,13 +17,16 @@ const json = (b: unknown, s = 200) => new Response(JSON.stringify(b), { status: 
 Deno.serve(withAccessLog("support-ai-agent", async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: cors });
   if (!(await isAuthorizedCron(req))) return unauthorizedResponse(cors);
-  const sb = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+  const url = Deno.env.get("SUPABASE_URL"); const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  if (!url || !serviceKey) return json({ error: "configuracao_indisponivel" }, 500);
+  const sb = createClient(url, serviceKey);
   const { suggestion_id } = await req.json().catch(() => ({}));
-  if (!suggestion_id) return json({ error: "suggestion_id" }, 400);
+  if (typeof suggestion_id !== "string" || !/^[0-9a-f-]{36}$/i.test(suggestion_id)) return json({ error: "suggestion_id" }, 400);
 
-  const { data: s } = await sb.from("support_auto_suggestions").select("id,phone,whatsapp_number_id,channel,status,created_at").eq("id", suggestion_id).maybeSingle();
+  const { data: s } = await sb.from("support_auto_suggestions").select("id,phone,whatsapp_number_id,channel,status,created_at,cost_due_at,cost_claimed_at,cost_prefilter_passed").eq("id", suggestion_id).maybeSingle();
   if (!s || s.status !== "processando") return json({ skipped: "not_pending" });
   const { data: st } = await sb.from("support_settings").select("*").limit(1).maybeSingle();
+  if (st?.auto_reply_mode !== "shadow" || !(st.auto_reply_instance_ids ?? []).includes(s.whatsapp_number_id) || !s.cost_claimed_at || !s.cost_prefilter_passed || Date.parse(s.cost_due_at ?? "") > Date.now()) return json({ skipped: "shadow_queue_guard" });
   const fallback = async (err: string) => { await sb.rpc("support_ai_fallback", { p_id: s.id, p_error: err }); return json({ fallback: err }); };
   const apiKey = Deno.env.get("LOVABLE_API_KEY");
   if (!st?.ai_enabled || !apiKey) return fallback(!apiKey ? "sem_chave_ia" : "ia_desligada");
@@ -34,13 +39,15 @@ Deno.serve(withAccessLog("support-ai-agent", async (req) => {
 
   const logs: CallLog[] = [];
   const log = (c: CallLog) => logs.push(c);
-  const flushLogs = () => logs.length ? sb.from("support_ai_calls").insert(logs.map((c) => ({
-    suggestion_id: s.id, phone: s.phone, whatsapp_number_id: s.whatsapp_number_id, kind: c.kind, model: c.model, ok: c.ok,
-    error: c.error ?? null, duration_ms: c.ms, input_tokens: c.inTok ?? null, output_tokens: c.outTok ?? null,
-  }))) : Promise.resolve();
+  // Gateway middleware records every real HTTP call, including tool continuations, once.
+  const flushLogs = () => Promise.resolve();
 
   const ctx = await buildSupportContext(sb, s, { shareLastEvent: !!st.tracking_share_last_event });
   const { conv, orders, nome, saleIds } = ctx;
+  if (humanRepliedRecently(conv, Date.now())) {
+    await sb.from("support_auto_suggestions").update({ status: "ignorada", reason: "humano_2h" }).eq("id", s.id).eq("status", "processando");
+    return json({ ignored: "humano_2h" });
+  }
 
   // Uma sugestão por cliente: só no número onde a conversa de suporte dela está mais ativa (se esse número também é atendido).
   const primary = s.channel === "whatsapp" ? primaryInstance(conv) : null;
@@ -50,7 +57,8 @@ Deno.serve(withAccessLog("support-ai-agent", async (req) => {
   }
   const cfg = { apiKey, baseURL: "https://ai.gateway.lovable.dev/v1", timeoutMs: st.ai_timeout_ms ?? 30000 };
   try {
-    const triage = await runTriage(cfg, st.ai_triage_model, conv, orders, log);
+    const meta = { id: s.id, phone: s.phone, number: s.whatsapp_number_id };
+    const triage = await runTriage({ ...cfg, guardedFetch: budgetGateway(sb, meta, "triagem") }, st.ai_triage_model, conv, orders, log);
     ctx.configure(triage.facts ?? {}, triage.categoria);
     const base = { triage, triage_category: triage.categoria, triage_confidence: triage.confianca, intent: triageToIntent(triage.categoria) };
     if (triageIgnores(triage.categoria)) {
@@ -65,7 +73,7 @@ Deno.serve(withAccessLog("support-ai-agent", async (req) => {
       .eq("phone", s.phone).eq("whatsapp_number_id", s.whatsapp_number_id).eq("exchange_offered", true)
       .in("status", ["enviada"]).gte("created_at", new Date(Date.now() - 30 * 864e5).toISOString());
 
-    const outcome = await runAgent(cfg, st.ai_agent_model, script?.body ?? "", nome, triage, conv, {
+    const outcome = await runAgent({ ...cfg, guardedFetch: budgetGateway(sb, meta, "agente") }, st.ai_agent_model, script?.body ?? "", nome, triage, conv, {
       ...ctx.deps, offersAlreadyMade: offers ?? 0, maxOffers: st.max_offer_attempts ?? 1, supportPhone: st.support_whatsapp_phone ?? null,
     }, log);
 

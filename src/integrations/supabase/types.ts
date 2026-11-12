@@ -25264,9 +25264,11 @@ export type Database = {
       }
       support_ai_calls: {
         Row: {
+          budget_day: string | null
           created_at: string
           duration_ms: number | null
           error: string | null
+          gateway_run_id: string | null
           id: string
           input_tokens: number | null
           kind: string
@@ -25274,13 +25276,17 @@ export type Database = {
           ok: boolean
           output_tokens: number | null
           phone: string
+          reservation_tokens: number
+          settled: boolean
           suggestion_id: string | null
           whatsapp_number_id: string | null
         }
         Insert: {
+          budget_day?: string | null
           created_at?: string
           duration_ms?: number | null
           error?: string | null
+          gateway_run_id?: string | null
           id?: string
           input_tokens?: number | null
           kind: string
@@ -25288,13 +25294,17 @@ export type Database = {
           ok: boolean
           output_tokens?: number | null
           phone: string
+          reservation_tokens?: number
+          settled?: boolean
           suggestion_id?: string | null
           whatsapp_number_id?: string | null
         }
         Update: {
+          budget_day?: string | null
           created_at?: string
           duration_ms?: number | null
           error?: string | null
+          gateway_run_id?: string | null
           id?: string
           input_tokens?: number | null
           kind?: string
@@ -25302,8 +25312,43 @@ export type Database = {
           ok?: boolean
           output_tokens?: number | null
           phone?: string
+          reservation_tokens?: number
+          settled?: boolean
           suggestion_id?: string | null
           whatsapp_number_id?: string | null
+        }
+        Relationships: []
+      }
+      support_ai_daily: {
+        Row: {
+          budget_stops: number
+          calls: number
+          day: string
+          decisions: Json
+          prefiltered: number
+          reserved: number
+          suggestions: number
+          tokens: number
+        }
+        Insert: {
+          budget_stops?: number
+          calls?: number
+          day: string
+          decisions?: Json
+          prefiltered?: number
+          reserved?: number
+          suggestions?: number
+          tokens?: number
+        }
+        Update: {
+          budget_stops?: number
+          calls?: number
+          day?: string
+          decisions?: Json
+          prefiltered?: number
+          reserved?: number
+          suggestions?: number
+          tokens?: number
         }
         Relationships: []
       }
@@ -25315,6 +25360,10 @@ export type Database = {
           auto_send_after: string | null
           channel: string
           consolidation_target: Json | null
+          cost_claimed_at: string | null
+          cost_due_at: string | null
+          cost_key: string | null
+          cost_prefilter_passed: boolean
           cpf_different_phone: boolean | null
           created_at: string
           customer_name: string | null
@@ -25362,6 +25411,10 @@ export type Database = {
           auto_send_after?: string | null
           channel?: string
           consolidation_target?: Json | null
+          cost_claimed_at?: string | null
+          cost_due_at?: string | null
+          cost_key?: string | null
+          cost_prefilter_passed?: boolean
           cpf_different_phone?: boolean | null
           created_at?: string
           customer_name?: string | null
@@ -25409,6 +25462,10 @@ export type Database = {
           auto_send_after?: string | null
           channel?: string
           consolidation_target?: Json | null
+          cost_claimed_at?: string | null
+          cost_due_at?: string | null
+          cost_key?: string | null
+          cost_prefilter_passed?: boolean
           cpf_different_phone?: boolean | null
           created_at?: string
           customer_name?: string | null
@@ -25547,10 +25604,15 @@ export type Database = {
       support_settings: {
         Row: {
           ai_agent_model: string
+          ai_daily_token_budget: number
           ai_enabled: boolean
           ai_max_calls_per_conversation_day: number
+          ai_pause_reason: string | null
+          ai_pause_until: string | null
           ai_timeout_ms: number
           ai_triage_model: string
+          ai_worker_lease: string | null
+          ai_worker_until: string | null
           auto_reply_cooldown_hours: number
           auto_reply_instance_ids: string[]
           auto_reply_max_delay_s: number
@@ -25572,10 +25634,15 @@ export type Database = {
         }
         Insert: {
           ai_agent_model?: string
+          ai_daily_token_budget?: number
           ai_enabled?: boolean
           ai_max_calls_per_conversation_day?: number
+          ai_pause_reason?: string | null
+          ai_pause_until?: string | null
           ai_timeout_ms?: number
           ai_triage_model?: string
+          ai_worker_lease?: string | null
+          ai_worker_until?: string | null
           auto_reply_cooldown_hours?: number
           auto_reply_instance_ids?: string[]
           auto_reply_max_delay_s?: number
@@ -25597,10 +25664,15 @@ export type Database = {
         }
         Update: {
           ai_agent_model?: string
+          ai_daily_token_budget?: number
           ai_enabled?: boolean
           ai_max_calls_per_conversation_day?: number
+          ai_pause_reason?: string | null
+          ai_pause_until?: string | null
           ai_timeout_ms?: number
           ai_triage_model?: string
+          ai_worker_lease?: string | null
+          ai_worker_until?: string | null
           auto_reply_cooldown_hours?: number
           auto_reply_instance_ids?: string[]
           auto_reply_max_delay_s?: number
@@ -33506,6 +33578,103 @@ export type Database = {
       }
       support_auto_route: { Args: { p_id: string }; Returns: boolean }
       support_classify_intent: { Args: { p: string }; Returns: string }
+      support_cost_dashboard: { Args: never; Returns: Json }
+      support_cost_human: {
+        Args: { p_channel: string; p_phone: string }
+        Returns: boolean
+      }
+      support_cost_keywords: { Args: { p: string }; Returns: boolean }
+      support_cost_pause: {
+        Args: { p_reason: string; p_until?: string }
+        Returns: undefined
+      }
+      support_cost_recent_order: { Args: { p_phone: string }; Returns: boolean }
+      support_cost_reserve: {
+        Args: {
+          p_kind: string
+          p_model: string
+          p_number: string
+          p_phone: string
+          p_suggestion: string
+          p_tokens: number
+        }
+        Returns: Json
+      }
+      support_cost_settle: {
+        Args: {
+          p_error: string
+          p_id: string
+          p_input: number
+          p_ok: boolean
+          p_output: number
+          p_run: string
+        }
+        Returns: undefined
+      }
+      support_cost_worker_claim: {
+        Args: { p_lease: string }
+        Returns: {
+          agent_actions: Json
+          ai_error: string | null
+          ai_status: string | null
+          auto_send_after: string | null
+          channel: string
+          consolidation_target: Json | null
+          cost_claimed_at: string | null
+          cost_due_at: string | null
+          cost_key: string | null
+          cost_prefilter_passed: boolean
+          cpf_different_phone: boolean | null
+          created_at: string
+          customer_name: string | null
+          decision: string
+          discard_reason: string | null
+          discarded_at: string | null
+          discarded_by: string | null
+          exchange_offered: boolean
+          handoff_summary: string | null
+          id: string
+          incoming_text: string | null
+          intent: string
+          link_type: string | null
+          message_row_id: string | null
+          mode_at_creation: string
+          other_instances: Json | null
+          phone: string
+          prazo_por_envio: boolean
+          reason: string
+          routed_at: string | null
+          routed_auto: boolean
+          routed_by: string | null
+          sale_channel: string | null
+          sale_id: string | null
+          script_version: number | null
+          sent_at: string | null
+          sent_by: string | null
+          sent_link_id: string | null
+          sent_text: string | null
+          status: string
+          suggested_text: string | null
+          tracking_info: Json | null
+          triage: Json | null
+          triage_category: string | null
+          triage_confidence: number | null
+          wa_me_url: string | null
+          whatsapp_number_id: string | null
+          would_route_support: boolean
+          wrong_suggestion: boolean
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "support_auto_suggestions"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      support_cost_worker_finish: {
+        Args: { p_lease: string }
+        Returns: undefined
+      }
       support_cpf_candidate: {
         Args: { p_cpf: string; p_phone: string; p_source_key: string }
         Returns: Json
@@ -33536,6 +33705,10 @@ export type Database = {
           auto_send_after: string | null
           channel: string
           consolidation_target: Json | null
+          cost_claimed_at: string | null
+          cost_due_at: string | null
+          cost_key: string | null
+          cost_prefilter_passed: boolean
           cpf_different_phone: boolean | null
           created_at: string
           customer_name: string | null

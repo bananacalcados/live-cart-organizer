@@ -78,7 +78,7 @@ Leia as últimas mensagens (a mais recente é a última) e o contexto de pedidos
 Considere o histórico unificado e marque fatos do assunto ATUAL, não reclamações antigas já resolvidas. Indique outra instância só se uma pessoa respondeu sobre esse mesmo assunto nas últimas 72h; mensagens automáticas não contam.
 Seja conservador: na dúvida entre troca e devolução use troca_ou_devolucao_ambiguo.`;
 
-export type GatewayConfig = { apiKey: string; baseURL: string; timeoutMs: number };
+export type GatewayConfig = { apiKey: string; baseURL: string; timeoutMs: number; guardedFetch?: typeof fetch };
 export type CallLog = { kind: "triagem" | "agente"; model: string; ok: boolean; error?: string; ms: number; inTok?: number; outTok?: number };
 
 function provider(cfg: GatewayConfig) {
@@ -87,7 +87,7 @@ function provider(cfg: GatewayConfig) {
     baseURL: `${cfg.baseURL.replace(/\/+$/, "").replace(/\/v1$/, "")}/v1`,
     apiKey: cfg.apiKey,
     headers: { "Lovable-API-Key": cfg.apiKey, "X-Lovable-AIG-SDK": "vercel-ai-sdk" },
-    fetch: run.fetch,
+    fetch: cfg.guardedFetch ? ((input, init) => cfg.guardedFetch ? cfg.guardedFetch(input, init) : run.fetch(input, init)) : run.fetch,
   });
 }
 const reasoningOpts = { store: false, forceReasoning: true, reasoningEffort: "low", reasoningSummary: "auto", include: ["reasoning.encrypted_content"] };
@@ -104,6 +104,7 @@ export async function runTriage(cfg: GatewayConfig, model: string, conv: ConvMes
       instructions: TRIAGE_INSTRUCTIONS,
       messages: [{ role: "user", content: `PEDIDOS (60 dias):\n${JSON.stringify(orders)}\n\nCONVERSA:\n${transcript(conv)}` }],
       output: Output.object({ schema: TRIAGE_SCHEMA }),
+      ...(cfg.guardedFetch ? { maxRetries: 0 } : {}),
       abortSignal: AbortSignal.timeout(cfg.timeoutMs),
       providerOptions: { openai: reasoningOpts as any },
     });
@@ -294,6 +295,7 @@ CONTEXTO DO SISTEMA (não invente nada além disso):
       instructions,
       messages: [{ role: "user", content: `CONVERSA (a última linha é a mais recente):\n${transcript(conv)}` }],
       tools,
+      ...(cfg.guardedFetch ? { maxRetries: 0 } : {}),
       stopWhen: stepCountIs(6),
       abortSignal: AbortSignal.timeout(cfg.timeoutMs),
       providerOptions: { openai: reasoningOpts as any },

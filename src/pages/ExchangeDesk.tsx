@@ -13,6 +13,7 @@ import { TemplatesEditor } from "@/components/exchange-desk/TemplatesEditor";
 import { CentralProductChoiceToggle } from "@/components/exchange-desk/CentralProductChoiceToggle";
 import { AutoSuggestionsPanel } from "@/components/exchange-desk/AutoSuggestionsPanel";
 import { TrainingPanel } from "@/components/exchange-desk/TrainingPanel";
+import { SupportCostPanel } from "@/components/exchange-desk/SupportCostPanel";
 import { ageLabel, ageLevel, REASON_LABEL, STATUS_LABEL, type DeskTab } from "@/lib/exchangeDesk/rules";
 
 interface Row {
@@ -70,6 +71,7 @@ export default function ExchangeDesk() {
       </header>
       <main className="p-4 max-w-6xl mx-auto space-y-3">
         <CentralProductChoiceToggle />
+        <SupportCostPanel />
         <Tabs value={rawTab} onValueChange={(v) => setParams({ aba: v })}>
           <TabsList>
             <TabsTrigger value="precisa">Precisa de você</TabsTrigger>

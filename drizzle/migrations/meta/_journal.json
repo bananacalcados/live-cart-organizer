@@ -1457,6 +1457,20 @@
       "when": 1794444694470,
       "tag": "0207_support_training_list_round3",
       "breakpoints": true
+    },
+    {
+      "idx": 208,
+      "version": "7",
+      "when": 1794446731657,
+      "tag": "0208_support_live_cost_guards",
+      "breakpoints": true
+    },
+    {
+      "idx": 209,
+      "version": "7",
+      "when": 1794446798449,
+      "tag": "0209_support_shadow_fallback_preserve",
+      "breakpoints": true
     }
   ]
 }
