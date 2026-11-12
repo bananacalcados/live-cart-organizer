@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { DEFAULT_FOLLOWUP_CONFIG as cfg, crossellWindow, scheduleStep, stopReason, quotaAllows, type StopState } from '../../supabase/functions/_shared/live-followup-rules';
+import { DEFAULT_FOLLOWUP_CONFIG as cfg, renderFollowup, crossellWindow, scheduleStep, stopReason, quotaAllows, type StopState } from '../../supabase/functions/_shared/live-followup-rules';
 const base=new Date('2026-11-08T15:00:00Z');
 const state:StopState={global:true,event:true,type:true,paid:false,cancelled:false,replied:false,registered:false,manualRecent:false,optedOut:false,lateMinutes:0};
 describe('Follow-up das lives',()=>{
@@ -17,7 +17,12 @@ describe('Follow-up das lives',()=>{
  it('pedido cancelado para',()=>expect(stopReason('D',{...state,cancelled:true})).toBe('order_cancelled'));
  it.each(['D','E','F'] as const)('%s para quando cliente respondeu',type=>expect(stopReason(type,{...state,replied:true})).toBe('customer_replied'));
  it('A para ao concluir cadastro',()=>expect(stopReason('A',{...state,registered:true})).toBe('registration_completed'));
- it('manual recente para',()=>expect(stopReason('E',{...state,manualRecent:true})).toBe('human_attendance'));
+ it('nome vazio: "Oi! Seu cadastro…"',()=>expect(renderFollowup('{primeiro_nome}, seu cadastro da live ficou pela metade 👀','','','')).toBe('Oi! Seu cadastro da live ficou pela metade 👀'));
+ it('nome vazio: "Oi, !" vira "Oi!"',()=>expect(renderFollowup('Oi, {primeiro_nome}! Deu tudo certo?','','','')).toBe('Oi! Deu tudo certo?'));
+ it('nome vazio: "E aí, , deu" vira "E aí, deu"',()=>expect(renderFollowup('E aí, {primeiro_nome}, deu certo o pagamento?','','','')).toBe('E aí, deu certo o pagamento?'));
+ it('nome vazio: "E então?"',()=>expect(renderFollowup('E então, {primeiro_nome}? Está com dúvida?','','','')).toBe('E então? Está com dúvida?'));
+ it('com nome mantém texto',()=>expect(renderFollowup('{primeiro_nome}, seu cadastro','Ana Paula','','')).toBe('Ana, seu cadastro'));
+ it('nenhuma variação A–F sobra "Oi, !", ", ,", espaço duplo ou começo minúsculo',()=>{for(const t of Object.values(cfg.types))for(const st of t.steps)for(const v of st.variants){const o=renderFollowup(v,'','https://x/c','https://x/k');expect(o).not.toMatch(/Oi, !|, ,|  |\{primeiro_nome\}|^[a-zà-ÿ]|[!?.] [a-zà-ÿ]/);}});
  it('opt-out para',()=>expect(stopReason('A',{...state,optedOut:true})).toBe('opt_out'));
  it('global desligado cancela',()=>expect(stopReason('D',{...state,global:false})).toBe('global_disabled'));
  it('evento desligado cancela',()=>expect(stopReason('D',{...state,event:false})).toBe('event_disabled'));

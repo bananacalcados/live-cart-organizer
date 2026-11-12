@@ -105,6 +105,7 @@ export async function processGlobalFollowups(sb: Client) {
       let context = await getContext();
       let reason = check(context);
       if (reason) { await stop(reason); continue; }
+      if (!(await humanGate())) continue;
       if(job.type==='E') {
         const next=crossellWindow(new Date());
         if(next.getTime()>Date.now()+1000) {
@@ -141,6 +142,7 @@ export async function processGlobalFollowups(sb: Client) {
       // Revalidate the global switch, payment and actual incoming/manual messages just before the external send.
       context=await getContext();reason=check(context);
       if(reason) {await stop(reason);continue;}
+      if (!(await humanGate())) continue;
       const stored=await sb.from('live_followup_jobs').update({message:text}).eq('id',job.id).eq('status','processing').select('id').maybeSingle();
       if(stored.error || !stored.data) throw new Error('claim_lost');
       if (job.type==='B' || job.type==='C') {
@@ -172,12 +174,14 @@ export async function processGlobalFollowups(sb: Client) {
       const reason=String(e instanceof Error ? e.message : 'internal_failure').slice(0,200);
       await sb.rpc('live_followup_failure',{p_job_id:job.id,p_reason:reason,p_uncertain:sendStarted});
     }
+    // Manual staff messages postpone (never cancel) the step; the RPC shifts later steps and cancels after 3h.
+    async function humanGate() { const r=await sb.rpc('live_followup_postpone',{p_job_id:job.id});if(r.error) throw r.error;return (r.data as any)?.action==='send'; }
     async function getContext() { const r=await sb.rpc('live_followup_job_context',{p_job_id:job.id});if(r.error) throw r.error;return r.data; }
     function check(c: any) {
       if(!c) return 'context_missing';
       const o=c.order;
       if (c.linked_closed) return 'order_closed';
-      const basic=stopReason(job.type,{global:c.global_enabled,event:c.event?.live_followup_enabled===true,type:c.type_enabled,paid:!!(o?.is_paid || o?.paid_externally),cancelled:!!(job.order_id && (!o || ['cancelled','paid','completed','shipped','refunded'].includes(o.stage) || o.merged_into_order_id || !(o.products || []).length)),replied:c.customer_replied,registered:!!(c.access?.registered_at || c.access?.whatsapp_confirmed_at),manualRecent:c.manual_recent,optedOut:c.opted_out,lateMinutes:(Date.now()-Date.parse(job.scheduled_at))/60000});
+      const basic=stopReason(job.type,{global:c.global_enabled,event:c.event?.live_followup_enabled===true,type:c.type_enabled,paid:!!(o?.is_paid || o?.paid_externally),cancelled:!!(job.order_id && (!o || ['cancelled','paid','completed','shipped','refunded'].includes(o.stage) || o.merged_into_order_id || !(o.products || []).length)),replied:c.customer_replied,registered:!!(c.access?.registered_at || c.access?.whatsapp_confirmed_at),manualRecent:false,optedOut:c.opted_out,lateMinutes:(Date.now()-Date.parse(job.scheduled_at))/60000});
       if(basic)return basic;
       if(job.channel==='whatsapp' && c.event?.whatsapp_number_id!==job.whatsapp_number_id)return 'instance_changed';
       if(!job.whatsapp_number_id)return 'live_without_number';

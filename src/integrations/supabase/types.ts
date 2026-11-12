@@ -12975,7 +12975,11 @@ export type Database = {
           message: string | null
           message_id: string | null
           order_id: string | null
+          original_scheduled_at: string | null
           phone: string | null
+          postponed_count: number
+          postponed_minutes: number
+          postponed_reason: string | null
           reason: string | null
           scheduled_at: string
           sent_at: string | null
@@ -13001,7 +13005,11 @@ export type Database = {
           message?: string | null
           message_id?: string | null
           order_id?: string | null
+          original_scheduled_at?: string | null
           phone?: string | null
+          postponed_count?: number
+          postponed_minutes?: number
+          postponed_reason?: string | null
           reason?: string | null
           scheduled_at: string
           sent_at?: string | null
@@ -13027,7 +13035,11 @@ export type Database = {
           message?: string | null
           message_id?: string | null
           order_id?: string | null
+          original_scheduled_at?: string | null
           phone?: string | null
+          postponed_count?: number
+          postponed_minutes?: number
+          postponed_reason?: string | null
           reason?: string | null
           scheduled_at?: string
           sent_at?: string | null
@@ -32387,7 +32399,11 @@ export type Database = {
           message: string | null
           message_id: string | null
           order_id: string | null
+          original_scheduled_at: string | null
           phone: string | null
+          postponed_count: number
+          postponed_minutes: number
+          postponed_reason: string | null
           reason: string | null
           scheduled_at: string
           sent_at: string | null
@@ -32431,7 +32447,11 @@ export type Database = {
           message: string | null
           message_id: string | null
           order_id: string | null
+          original_scheduled_at: string | null
           phone: string | null
+          postponed_count: number
+          postponed_minutes: number
+          postponed_reason: string | null
           reason: string | null
           scheduled_at: string
           sent_at: string | null
@@ -32455,6 +32475,7 @@ export type Database = {
         Returns: undefined
       }
       live_followup_policy_simulate: { Args: never; Returns: Json }
+      live_followup_postpone: { Args: { p_job_id: string }; Returns: Json }
       live_followup_priority: {
         Args: { p_step: number; p_type: string }
         Returns: number

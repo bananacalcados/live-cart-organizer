@@ -51,8 +51,21 @@ export function scheduleStep(base: Date, type: FollowupType, minutes: number, ra
 }
 export function renderFollowup(text: string, name: string, registration: string, cart: string): string {
   const first = name.trim().split(/\s+/)[0] || "";
-  let out = text.split("{primeiro_nome}").join(first).split("{link_cadastro}").join(registration).split("{link_carrinho}").join(cart);
-  if (!first) out = out.replace(/^(?:Oi|Oii|E aí|E então),\s*([!?,])/i, (_m, punctuation) => `Oi${punctuation}`).replace(/^,\s*/, "Oi! ").replace(/,\s*([!?])/g, "$1");
+  let out = text.split("{link_cadastro}").join(registration).split("{link_carrinho}").join(cart);
+  if (first) return out.split("{primeiro_nome}").join(first);
+  const N = "{primeiro_nome}";
+  out = out
+    .replace(/^\s*\{primeiro_nome\}\s*,\s*/, "Oi! ")
+    .replace(/,\s*\{primeiro_nome\}\s*([!?.])/g, "$1")
+    .replace(/,\s*\{primeiro_nome\}\s*,/g, ",")
+    .replace(/,?\s*\{primeiro_nome\}/g, "")
+    .split(N).join("")
+    .replace(/,\s*,/g, ",")
+    .replace(/,\s*([!?.])/g, "$1")
+    .replace(/[ \t]{2,}/g, " ")
+    .replace(/^\s+/, "")
+    .replace(/([!?.]\s+)([a-zà-ÿ])/g, (_m, p, c) => p + c.toUpperCase())
+    .replace(/^([a-zà-ÿ])/, (c) => c.toUpperCase());
   return out;
 }
 export interface StopState { global: boolean; event: boolean; type: boolean; paid: boolean; cancelled: boolean; replied: boolean; registered: boolean; manualRecent: boolean; optedOut: boolean; lateMinutes: number }
