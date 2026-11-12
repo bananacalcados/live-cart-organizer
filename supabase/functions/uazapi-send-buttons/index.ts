@@ -45,6 +45,28 @@ serve(withAccessLog("uazapi-send-buttons", async (req) => {
     const { token } = await resolveUazapiCredentials(whatsapp_number_id);
     const number = formatUazapiNumber(phone);
 
+    // PIX/copiar: desde 12/11/2026 o WhatsApp descarta o /send/menu com botão de copiar
+    // vindo da uazapi (fica "sent" e nunca entrega). Envia duas mensagens de texto comum:
+    // instrução + o código sozinho. Vale para todos os chamadores sem mudar o front.
+    const copyBtn = (buttons as Array<{ copyCode?: string }>).find((b) => b?.copyCode);
+    if (copyBtn?.copyCode) {
+      const texts = buildCopyCodeTexts(String(message || ""), String(copyBtn.copyCode));
+      const ids: (string | null)[] = [];
+      for (const text of texts) {
+        const r = await uazapiInstance("/send/text", token, { method: "POST", body: { number, text, linkPreview: false } });
+        if (!r.ok) {
+          console.error("uazapi copy-code text error:", r.data);
+          return new Response(JSON.stringify({ error: "Failed to send copy-code text", details: r.data, sent: ids.length }), {
+            status: r.status, headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+        ids.push(r.data?.messageid || r.data?.id || r.data?.message?.messageid || r.data?.message?.id || null);
+      }
+      return new Response(JSON.stringify({ success: true, messageId: ids[0], codeMessageId: ids[1], mode: "text_fallback" }), {
+        status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     // Quick reply → só o título. Botão de copiar → "título|copy:código".
     // Botão de link → "título|url:https://...".
     const choices = (
@@ -87,3 +109,10 @@ serve(withAccessLog("uazapi-send-buttons", async (req) => {
     );
   }
 }));
+
+/** Mensagem 1 (cabeçalho original "💰 *PIX de R$ X*" + descrição) e mensagem 2 (código puro). */
+export function buildCopyCodeTexts(message: string, code: string): [string, string] {
+  const head = (message.split(/\n\nToque em /)[0] || "").trim() || "💰 *PIX*";
+  const intro = `${head}\n\nCopie o código da próxima mensagem (toque e segure → Copiar), abra o app do seu banco em *Pix → Pix Copia e Cola* e cole. 👇`;
+  return [intro, code.trim()];
+}
