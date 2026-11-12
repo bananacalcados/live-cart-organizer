@@ -27,7 +27,7 @@ import { useIsAdmin } from "@/hooks/useIsAdmin";
 interface Row {
   id: string; request_type: string; first_name: string; customer_name: string | null; phone: string; whatsapp_number_id: string | null;
   order_ref: string | null; order_number: string | null; product_name: string | null; product_size: string | null;
-  desired_size: string | null; requested_quantity: number | null; reason: string | null; status: string;
+  desired_size: string | null; suggested_size: string | null; requested_quantity: number | null; reason: string | null; status: string;
   escalated_reason: string | null; created_at: string; assigned_to: string | null; is_test?: boolean;
 }
 const PAGE = 50;
