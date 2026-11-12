@@ -1,12 +1,13 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { corsHeaders } from 'npm:@supabase/supabase-js@2/cors';
 import { z } from 'npm:zod@3';
-import { withAccessLog } from '../_shared/withAccessLog.ts';
+import { withAccessLog, backgroundLog } from '../_shared/withAccessLog.ts';
+import { internalCallHeaders } from '../_shared/requireAuth.ts';
 import { isAuthorizedCron, unauthorizedResponse } from '../_shared/cron-guard.ts';
 import { fetchCorreiosEvents } from '../_shared/correios-tracking.ts';
 import { fetchFrenetEvents, guessServiceCode, isDeliveredEvent, mergeRealEvents } from '../_shared/frenet-tracking.ts';
 
-const Body = z.object({ limit: z.number().int().min(1).max(25).default(25), sale_id: z.string().uuid().optional() });
+const Body = z.object({ limit: z.number().int().min(1).max(25).default(25), sale_id: z.string().uuid().optional(), batches_left: z.number().int().min(1).max(25).default(1), refresh: z.boolean().default(false) });
 const json = (value: unknown, status = 200) => new Response(JSON.stringify(value), { status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
 
 /** Reprocessamento manual em pequenos lotes; não cria cron nem consulta em loop pelo navegador. */
@@ -16,12 +17,14 @@ Deno.serve(withAccessLog('shipment-tracking-backfill', async (req) => {
   const parsed = Body.safeParse(await req.json().catch(() => ({})));
   if (!parsed.success) return json({ error: 'Lote inválido' }, 400);
   const sb = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
+  const staleBefore = new Date(Date.now() - 14 * 60e3).toISOString();
   let query = sb.from('shipment_simulations')
     .select('id,sale_id,real_tracking_code,real_carrier,real_service_code,real_events,delivered_at,last_real_sync')
-    .eq('kind', 'order').is('merged_into_id', null).is('delivered_at', null).is('last_real_sync', null)
+    .eq('kind', 'order').is('merged_into_id', null).is('delivered_at', null)
     .not('real_tracking_code', 'is', null)
     .gte('created_at', new Date(Date.now() - 30 * 864e5).toISOString())
     .order('created_at', { ascending: true }).limit(parsed.data.limit);
+  query = parsed.data.refresh ? query.or(`last_real_sync.is.null,last_real_sync.lt.${staleBefore}`) : query.is('last_real_sync', null);
   if (parsed.data.sale_id) query = query.eq('sale_id', parsed.data.sale_id);
   const { data: rows, error } = await query;
   if (error) return json({ error: error.message }, 500);
@@ -30,7 +33,10 @@ Deno.serve(withAccessLog('shipment-tracking-backfill', async (req) => {
   const failures: { id: string; error: string }[] = [];
   for (const sim of rows ?? []) {
     // Marca a tentativa antes do provedor: outra chamada não repete o mesmo lote.
-    await sb.from('shipment_simulations').update({ last_real_sync: new Date().toISOString() }).eq('id', sim.id).is('last_real_sync', null);
+    let claim = sb.from('shipment_simulations').update({ last_real_sync: new Date().toISOString() }).eq('id', sim.id).is('delivered_at', null);
+    claim = parsed.data.refresh ? claim.or(`last_real_sync.is.null,last_real_sync.lt.${staleBefore}`) : claim.is('last_real_sync', null);
+    const { data: claimed } = await claim.select('id');
+    if (!claimed?.length) continue;
     try {
       const trackingCode = String(sim.real_tracking_code).trim().toUpperCase();
       let nativeShipment: { servico_codigo: string } | null = null;
@@ -59,5 +65,17 @@ Deno.serve(withAccessLog('shipment-tracking-backfill', async (req) => {
       failures.push({ id: sim.id, error: String((e as Error)?.message || e).slice(0, 300) });
     }
   }
-  return json({ ok: true, claimed: rows?.length ?? 0, synced, delivered, events_saved: eventsSaved, failures });
+  const result = { ok: true, claimed: rows?.length ?? 0, synced, delivered, events_saved: eventsSaved, failures };
+  // Continua somente após terminar este lote: no máximo 25 chamadas sequenciais, sem cron e sem concorrência.
+  if (!parsed.data.sale_id && parsed.data.batches_left > 1 && (rows?.length ?? 0) === parsed.data.limit) {
+    backgroundLog((async () => {
+      const headers = await internalCallHeaders();
+      const next = await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/shipment-tracking-backfill`, {
+        method: 'POST', headers: { ...headers, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ limit: parsed.data.limit, batches_left: parsed.data.batches_left - 1, refresh: parsed.data.refresh }),
+      });
+      if (!next.ok) console.error('shipment-tracking-backfill continuation', next.status, await next.text());
+    })());
+  }
+  return json(result);
 }));

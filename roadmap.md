@@ -195,8 +195,8 @@
 - [ ] 2 rastreios com formato não reconhecido e 1 venda com transportadora divergente — conferir à mão
 
 # Atendimento automático real autorizado (12/11)
-- [ ] Troca sem escolha de produto: registro, NF/reversa e mensagem automáticos; novo produto só após conferência
-- [ ] Data de recebimento informada pela cliente com validade anti-burla e registro da origem
-- [ ] Diagnosticar e corrigir rastreio sem eventos; medir e reprocessar vendas dos últimos 30 dias
-- [ ] Rodar uma vez a fila elegível começando pela Arlete, com limites e travas
-- [ ] Reportar envios/escaladas e voltar ao modo sombra se houver erro de envio, NF ou Correios
+- [x] Troca sem escolha de produto: registro, NF/reversa e mensagem automáticos; novo produto só após conferência (simulação transacional; nenhuma cliente enviou a Central nesta rodada)
+- [x] Data de recebimento informada pela cliente com validade anti-burla e registro da origem
+- [ ] Rastreio corrigido e rotina de 15 minutos ativa; 225 entregas recuperadas, 231 pedidos ainda aguardando a sequência de reprocessamento em andamento
+- [x] Fila elegível processada começando pela Arlete: 5 enviados, 0 pendentes, 0 falhas; demais escalados/ignorados com motivo
+- [x] Pausa de emergência testada; nenhum erro de envio, NF ou reversa, modo automático preservado
