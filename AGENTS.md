@@ -82,6 +82,6 @@
 - Frontend edge calls always use the session token.
 - Finish with zero no-RLS tables; anon EXECUTE only for the documented public list.
 - Code search: RPC search_product_code_keys (fuzzy, cap 200).
-- Ship date: pos_sales.shipped_at is set by DB triggers only (expedition concluído → source expedicao; first real carrier event in shipment_simulations.real_events → source transportadora); Central/agent "envio + 7 dias" reads shipped_at only (none → human), so every path agrees on one date.
-- Tracking pasted as a link is normalized by the pos_sales trigger parse_tracking_input (code + carrier, link kept in tracking_url; existing carrier never overwritten); src/lib/logistics/trackingInput.ts mirrors it for the field.
-- Cancel-before-shipping refunds follow refund-fiscal cancelBeforeShipStep (direct / cancel sale note first / admin-only nota de entrada / shipped = devolução), enforced again by guard_refund_return_fiscal; integral refunds with cancel_order cancel the unshipped sale so it leaves Expedição.
+- Ship date: shipped_at set only by DB triggers (expedition concluído / first carrier event); envio+7 reads it, none → human.
+- Pasted tracking links: normalized by parse_tracking_input trigger, mirrored in src/lib/logistics/trackingInput.ts.
+- Cancel-before-ship refunds: refund-fiscal cancelBeforeShipStep + guard_refund_return_fiscal.
