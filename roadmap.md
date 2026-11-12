@@ -1,3 +1,8 @@
+# Comprovante autorizado da Fabiane (12/11)
+- [x] Enviado uma única vez pelo Whats Pérola, última instância de atendimento, às 23:16:07 UTC; documento entregue e campos de envio preenchidos
+- [x] Vera Lúcia Pinheiro, Vera Lúcia Santos e Josiane Azevedo marcadas como antigas que não devem ser enviadas, por decisão do dono
+- [x] Conferidos horário, documento, idempotência e ausência de envios não autorizados
+
 # Vínculo do cadastro da live ao pedido (12/11 — urgente)
 - [x] Confirmar e corrigir a busca por Instagram e a reutilização da ficha com pedido
 - [x] Impedir que a confirmação zere vínculos válidos; resolver divergência por Instagram sem afrouxar conflitos
