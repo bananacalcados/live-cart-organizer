@@ -136,6 +136,13 @@ Deno.serve(withAccessLog("correios-reverse", async (req) => {
       const markErr = async (msg: string) => { await db.from('correios_reverse_shipments').update({ status: 'erro', error_message: msg, updated_at: new Date().toISOString() }).eq('id', row.id); throw Object.assign(fail(msg, 502), { marked: true }); };
       let nf: any = null;
       try {
+        // Pré-checagem completa (XML/original, endereço, CFOP/CST e devolucao-guard) antes de qualquer emissão real.
+        const preReq = await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/nfe-devolucao-emitir`, { method: 'POST', headers: { ...(await internalCallHeaders()), 'Content-Type': 'application/json' }, body: JSON.stringify({ reverse_shipment_id: row.id, dry_run: true }) });
+        const pre = await preReq.json().catch(() => null);
+        if (pre?.skip) await markErr('A venda não tem NF-e autorizada; sem ela não dá para emitir a nota de devolução');
+        if (pre?.precheck_ok !== true || pre?.decision?.action === 'block') {
+          await markErr(String(pre?.precheck_error || pre?.warning || pre?.error || 'Pré-checagem da nota de devolução não passou').slice(0, 500));
+        }
         const r = await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/nfe-devolucao-emitir`, { method: 'POST', headers: { ...(await internalCallHeaders()), 'Content-Type': 'application/json' }, body: JSON.stringify({ reverse_shipment_id: row.id }) });
         nf = await r.json().catch(() => null);
       } catch (e) { nf = { error: e instanceof Error ? e.message : String(e) }; }
@@ -197,7 +204,7 @@ Deno.serve(withAccessLog("correios-reverse", async (req) => {
       if (!sale) throw fail('Venda original não encontrada');
       // Solicitações de TESTE da Central nunca geram reversa.
       const { data: onlyTest } = await db.rpc('sale_has_only_test_requests', { p_sale: sale.id });
-      if (onlyTest === true) throw fail('Esta venda só tem solicitação de TESTE: reversa bloqueada');
+       if (onlyTest === true && !b.dry_run) throw fail('Esta venda só tem solicitação de TESTE: reversa bloqueada');
       if (sale.phone_suffix8 && sale.phone_suffix8 !== key) throw fail('Esta venda não é deste telefone');
       const { data: saleItems } = await db.from('pos_sale_items').select('id,product_name,quantity,unit_price,sku,barcode').eq('sale_id', sale.id).limit(200);
       const ret = reverseReturnItems(saleItems || [], b.return_items, Number(sale.discount || 0));

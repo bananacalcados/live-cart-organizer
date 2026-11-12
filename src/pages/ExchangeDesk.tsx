@@ -14,6 +14,7 @@ import { CentralProductChoiceToggle } from "@/components/exchange-desk/CentralPr
 import { AutoSuggestionsPanel } from "@/components/exchange-desk/AutoSuggestionsPanel";
 import { TrainingPanel } from "@/components/exchange-desk/TrainingPanel";
 import { SupportCostPanel } from "@/components/exchange-desk/SupportCostPanel";
+import { SupportOutboxPanel } from "@/components/exchange-desk/SupportOutboxPanel";
 import { ageLabel, ageLevel, REASON_LABEL, STATUS_LABEL, type DeskTab } from "@/lib/exchangeDesk/rules";
 
 interface Row {
@@ -28,8 +29,10 @@ export default function ExchangeDesk() {
   const [params, setParams] = useSearchParams();
   const rawTab = params.get("aba") || "precisa";
   const isTraining = rawTab === "treino";
+  const isOutbox = rawTab === "assistente";
   const isSuggestions = rawTab === "sugestoes" || isTraining;
-  const tab = (isSuggestions ? "precisa" : rawTab) as DeskTab;
+  const isSpecial = isSuggestions || isOutbox;
+  const tab = (isSpecial ? "precisa" : rawTab) as DeskTab;
   const [type, setType] = useState("all");
   const [reason, setReason] = useState("all");
   const [assignee, setAssignee] = useState("all");
@@ -58,7 +61,7 @@ export default function ExchangeDesk() {
     } catch (e) { setErr(e instanceof Error ? e.message : "Erro ao carregar"); }
     finally { setLoading(false); }
   }, [tab, type, reason, assignee, debounced]);
-  useEffect(() => { if (!isSuggestions) load(0); }, [load, isSuggestions]);
+  useEffect(() => { if (!isSpecial) load(0); }, [load, isSpecial]);
 
   const staffName = useMemo(() => Object.fromEntries(staff.map((s) => [s.id, s.name])), [staff]);
 
@@ -79,9 +82,10 @@ export default function ExchangeDesk() {
             <TabsTrigger value="concluidas">Concluídas</TabsTrigger>
             <TabsTrigger value="sugestoes">Sugestões automáticas</TabsTrigger>
             <TabsTrigger value="treino">Treino do agente</TabsTrigger>
+            <TabsTrigger value="assistente">Enviadas pelo assistente</TabsTrigger>
           </TabsList>
         </Tabs>
-        {isTraining ? <TrainingPanel /> : isSuggestions ? <AutoSuggestionsPanel /> : <>
+        {isOutbox ? <SupportOutboxPanel /> : isTraining ? <TrainingPanel /> : isSuggestions ? <AutoSuggestionsPanel /> : <>
         <div className="flex flex-wrap gap-2">
           <div className="relative flex-1 min-w-[220px]">
             <Search className="h-4 w-4 absolute left-2 top-3 text-muted-foreground" />

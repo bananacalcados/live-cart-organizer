@@ -4,6 +4,7 @@ import { runInNewContext } from 'node:vm';
 import ts from 'typescript';
 import { returnDiscountRatio, returnLineValues, isUndiscountedReverse } from '../../supabase/functions/_shared/devolucao-values';
 import { decideDevolucao } from '../../supabase/functions/_shared/devolucao-guard';
+import { parseXmlDest, parseXmlItems, matchXmlItem, mergeDest, cfopEntrada, precheckDevolucao, missingAddressMessage, cstEntradaPisCofins } from '../../supabase/functions/_shared/devolucao-dest';
 
 const cases = [
   ['181', 359.99, 0, 359.99], ['182', 359.99, 0, 359.99],
@@ -29,7 +30,7 @@ async function dryRun(price: number, discount: number, expected: number, existin
         ? { id: 'rv', sale_id: 'sale', devolucao_doc_id: existing ? 'doc' : null,
           return_items: [{ sale_item_id: 'item', sku: 'sku', quantidade: 1, valor_unitario: price }] }
         : existing ? [{ id: 'rv', devolucao_doc_id: 'doc' }] : [];
-      if (table === 'pos_sales') return { id: 'sale', discount, total: expected, pos_sale_items: [item] };
+      if (table === 'pos_sales') return { id: 'sale', discount, total: expected, customer_name: 'Cliente Teste', customer_cpf: '52998224725', pos_sale_items: [item] };
       if (table === 'companies') return { brasilnfe_token: 'fake-test-only', address_state: 'MG' };
       if (table === 'trocas_devolucoes') return cols.includes('trocas_devolucoes_itens') ? evt : [];
       if (table === 'fiscal_documents') {
@@ -54,6 +55,7 @@ async function dryRun(price: number, discount: number, expected: number, existin
   runInNewContext(js, { Deno: { env: { get: () => 'fake-test-only' }, serve: (fn: typeof handler) => { handler = fn; } },
     createClient: () => db, withAccessLog: (_: string, fn: unknown) => fn, requireStaffOrInternal: async () => null,
     returnDiscountRatio, returnLineValues, isUndiscountedReverse, decideDevolucao,
+    parseXmlDest, parseXmlItems, matchXmlItem, mergeDest, cfopEntrada, precheckDevolucao, missingAddressMessage, cstEntradaPisCofins, cstEntradaRule: cstEntradaPisCofins,
     Request, Response, URL, fetch, console });
   if (!handler) throw new Error('Handler not registered');
   const response = await handler(new Request('https://test.invalid', { method: 'POST', body: JSON.stringify({

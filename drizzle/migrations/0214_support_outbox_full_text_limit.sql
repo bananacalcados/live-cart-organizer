@@ -1,0 +1,1 @@
+ALTER TABLE public.support_outbox ADD CONSTRAINT support_outbox_full_text_limit CHECK (char_length(text)+char_length(coalesce(link,''))+CASE WHEN link IS NULL THEN 0 ELSE 1 END<=1000);

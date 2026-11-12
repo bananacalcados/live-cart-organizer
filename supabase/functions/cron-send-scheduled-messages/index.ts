@@ -3,6 +3,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { isAuthorizedCron, unauthorizedResponse } from "../_shared/cron-guard.ts";
 import { loadBlockedSuffixes, isBlocked } from "../_shared/blocked-guard.ts";
+import { processSupportOutbox } from "../_shared/support-outbox.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -20,6 +21,11 @@ serve(withAccessLog("cron-send-scheduled-messages", async (req) => {
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, serviceKey);
 
+    // Reutiliza esta rotina já existente a cada minuto: nenhum cron novo foi criado.
+    let assistantOutbox = { sent: 0, failed: 0, total: 0 };
+    try { assistantOutbox = await processSupportOutbox(supabase); }
+    catch (outboxError) { console.error('[support-outbox] falha controlada:', outboxError); }
+
     // Fetch pending messages that are due
     const { data: pending, error: fetchError } = await supabase
       .from("scheduled_messages")
@@ -31,7 +37,7 @@ serve(withAccessLog("cron-send-scheduled-messages", async (req) => {
 
     if (fetchError) throw fetchError;
     if (!pending || pending.length === 0) {
-      return new Response(JSON.stringify({ sent: 0 }), {
+      return new Response(JSON.stringify({ sent: 0, assistant_outbox: assistantOutbox }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
@@ -128,7 +134,7 @@ serve(withAccessLog("cron-send-scheduled-messages", async (req) => {
     }
 
     console.log(`Sent ${sentCount}/${pending.length} scheduled messages`);
-    return new Response(JSON.stringify({ sent: sentCount, total: pending.length }), {
+    return new Response(JSON.stringify({ sent: sentCount, total: pending.length, assistant_outbox: assistantOutbox }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (error) {

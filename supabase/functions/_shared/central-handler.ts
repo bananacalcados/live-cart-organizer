@@ -1,5 +1,6 @@
 import { z } from 'npm:zod@3';
 import { corsHeaders } from 'npm:@supabase/supabase-js@2/cors';
+import { CENTRAL_PENDING_TEXT } from './central-auto-reverse.ts';
 
 const base = z.object({ token: z.string().min(32).max(128).regex(/^[A-Za-z0-9_-]+$/), type: z.enum(['troca','devolucao']) });
 const resolveSchema = base.extend({ item_id: z.string().uuid().optional(), search: z.string().trim().max(100).default(''), offset: z.number().int().min(0).max(10000).default(0) });
@@ -31,7 +32,7 @@ export function settingsFlag(db: { from: (t: string) => any }) {
     return !error && data?.central_public_enabled === true;
   };
 }
-export function centralHandler(kind: 'resolve' | 'submit', db: Db, enabled: () => Promise<boolean>, limiter: CentralLimiter = dbLimiter(db)) {
+export function centralHandler(kind: 'resolve' | 'submit', db: Db, enabled: () => Promise<boolean>, limiter: CentralLimiter = dbLimiter(db), autoReverse: (requestId: string, type: 'troca' | 'devolucao') => Promise<Record<string, unknown> | null> = async () => null) {
   return async (req: Request) => {
     if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
     if (req.method !== 'POST') return response({ error: 'Solicitação inválida.' },405);
@@ -73,6 +74,14 @@ export function centralHandler(kind: 'resolve' | 'submit', db: Db, enabled: () =
         // Same answer for missing, expired, revoked or wrong-type links; counts as an invalid attempt.
         const ok = await limiter(keys, true);
         return ok ? response({ error: GENERIC },404) : response({ error: BUSY },429);
+      }
+      if (kind === 'submit' && data.id && !data.error) {
+        try {
+          const automatic = await autoReverse(String(data.id), body.type);
+          if (automatic) Object.assign(data, automatic);
+        } catch {
+          Object.assign(data, { status: 'escalado', reason: CENTRAL_PENDING_TEXT });
+        }
       }
       return response(data,data.error ? 400 : 200);
     } catch { return response({ error:'Solicitação inválida.' },400); }

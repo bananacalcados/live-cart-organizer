@@ -1485,6 +1485,34 @@
       "when": 1794447156402,
       "tag": "0211_support_daily_budget_stop",
       "breakpoints": true
+    },
+    {
+      "idx": 212,
+      "version": "7",
+      "when": 1794485113947,
+      "tag": "0212_support_outbox",
+      "breakpoints": true
+    },
+    {
+      "idx": 213,
+      "version": "7",
+      "when": 1794485159692,
+      "tag": "0213_central_auto_reverse",
+      "breakpoints": true
+    },
+    {
+      "idx": 214,
+      "version": "7",
+      "when": 1794485285705,
+      "tag": "0214_support_outbox_full_text_limit",
+      "breakpoints": true
+    },
+    {
+      "idx": 215,
+      "version": "7",
+      "when": 1794485458885,
+      "tag": "0215_central_reverse_exact_fiscal_link",
+      "breakpoints": true
     }
   ]
 }

@@ -25601,6 +25601,69 @@ export type Database = {
         }
         Relationships: []
       }
+      support_outbox: {
+        Row: {
+          claimed_at: string | null
+          created_at: string
+          error: string | null
+          id: string
+          idempotency_key: string | null
+          link: string | null
+          phone: string
+          provider_message_id: string | null
+          requested_by: string
+          sent_at: string | null
+          status: string
+          text: string
+          whatsapp_number_id: string
+        }
+        Insert: {
+          claimed_at?: string | null
+          created_at?: string
+          error?: string | null
+          id?: string
+          idempotency_key?: string | null
+          link?: string | null
+          phone: string
+          provider_message_id?: string | null
+          requested_by?: string
+          sent_at?: string | null
+          status?: string
+          text: string
+          whatsapp_number_id: string
+        }
+        Update: {
+          claimed_at?: string | null
+          created_at?: string
+          error?: string | null
+          id?: string
+          idempotency_key?: string | null
+          link?: string | null
+          phone?: string
+          provider_message_id?: string | null
+          requested_by?: string
+          sent_at?: string | null
+          status?: string
+          text?: string
+          whatsapp_number_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "support_outbox_whatsapp_number_id_fkey"
+            columns: ["whatsapp_number_id"]
+            isOneToOne: false
+            referencedRelation: "whatsapp_numbers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "support_outbox_whatsapp_number_id_fkey"
+            columns: ["whatsapp_number_id"]
+            isOneToOne: false
+            referencedRelation: "whatsapp_numbers_safe"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       support_settings: {
         Row: {
           ai_agent_model: string
@@ -30397,6 +30460,18 @@ export type Database = {
         Args: { p_enabled: boolean; p_skus: string[] }
         Returns: undefined
       }
+      central_reverse_finish: {
+        Args: {
+          p_code: string
+          p_error: string
+          p_message?: string
+          p_request_id: string
+          p_reverse_id: string
+          p_valid_until: string
+        }
+        Returns: Json
+      }
+      central_reverse_prepare: { Args: { p_request_id: string }; Returns: Json }
       central_revoke_link: { Args: { p_id: string }; Returns: boolean }
       central_submit_atomic:
         | {
@@ -33686,6 +33761,41 @@ export type Database = {
       support_cpf_valid: { Args: { p_value: string }; Returns: boolean }
       support_mask_cpf_text: { Args: { p_value: string }; Returns: string }
       support_normalize_text: { Args: { p: string }; Returns: string }
+      support_outbox_claim: {
+        Args: { p_limit?: number }
+        Returns: {
+          claimed_at: string | null
+          created_at: string
+          error: string | null
+          id: string
+          idempotency_key: string | null
+          link: string | null
+          phone: string
+          provider_message_id: string | null
+          requested_by: string
+          sent_at: string | null
+          status: string
+          text: string
+          whatsapp_number_id: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "support_outbox"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      support_outbox_enqueue: {
+        Args: {
+          p_idempotency_key?: string
+          p_instance: string
+          p_link?: string
+          p_phone: string
+          p_requested_by?: string
+          p_text: string
+        }
+        Returns: string
+      }
       support_route_settings_update: {
         Args: { p_auto_route: boolean }
         Returns: undefined
