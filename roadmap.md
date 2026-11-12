@@ -1,3 +1,9 @@
+# Trocas e Devoluções dentro da Expedição (12/11)
+- [ ] Mover o módulo completo para uma nova aba da Expedição, manter sub-abas/permissões e redirecionar a rota antiga
+- [ ] Criar "Em suporte" com conversas reais da linha SUPORTE, vínculos, busca, espera e atualização automática
+- [ ] Reutilizar o chat do PDV nas conversas e cartões, atualizando ao fechar
+- [ ] Testar regras e navegador em computador/celular, sem envios, notas, estornos ou publicação
+
 # Teste completo da Central
 - [x] Quatro links em 360px: troca/devolução da Dayse, Ana fora do prazo e Leila sem entrega confirmada
 - [x] Dry-runs fiscal/Correios com código fictício, destinatário do XML e WhatsApp somente montado; clique duplo idempotente

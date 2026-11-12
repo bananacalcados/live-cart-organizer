@@ -13,7 +13,6 @@ import {
   Banana,
   Shield,
   Bot,
-  RefreshCcw,
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -67,14 +66,6 @@ const modules = [
     module: "pos",
   },
   {
-    title: "Trocas e Devoluções",
-    description: "Fila de atendimento das Centrais",
-    icon: RefreshCcw,
-    path: "/atendimento/trocas",
-    module: "pos",
-    anyOf: ["pos", "expedition", "management", "admin"],
-  },
-  {
     title: "Estoque",
     description: "Balanço e correção de estoque",
     icon: Package,
@@ -109,11 +100,6 @@ export default function Home() {
   const { toast } = useToast();
   const { session, isReady } = useAuthReady();
   const [allowedModules, setAllowedModules] = useState<string[] | null>(null);
-  const [deskCount, setDeskCount] = useState(0);
-  useEffect(() => {
-    if (!allowedModules || !["pos", "expedition", "management", "admin"].some((m) => allowedModules.includes(m))) return;
-    (supabase.rpc as any)("exchange_desk_count").then(({ data }: { data: number | null }) => setDeskCount(Number(data || 0)));
-  }, [allowedModules]);
   const [loadError, setLoadError] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
 
@@ -257,7 +243,7 @@ export default function Home() {
                   <mod.icon className="h-6 w-6" />
                 </div>
                 <div>
-                  <h3 className="font-semibold flex items-center gap-2" style={{ color: "hsl(0 0% 95%)" }}>{mod.title}{mod.path === "/atendimento/trocas" && deskCount > 0 && <span className="rounded-full px-2 text-xs" style={{ background: "hsl(0 72% 50%)", color: "hsl(0 0% 100%)" }}>{deskCount}</span>}</h3>
+                  <h3 className="font-semibold flex items-center gap-2" style={{ color: "hsl(0 0% 95%)" }}>{mod.title}</h3>
                   <p className="text-sm" style={{ color: "hsl(0 0% 55%)" }}>{mod.description}</p>
                 </div>
               </CardContent>

@@ -31131,6 +31131,10 @@ export type Database = {
       }
       exchange_desk_sizes: { Args: { p_id: string }; Returns: Json }
       exchange_desk_staff_list: { Args: never; Returns: Json }
+      exchange_support_conversations: {
+        Args: { p_limit?: number; p_offset?: number; p_search?: string }
+        Returns: Json
+      }
       execute_merge_unified_duplicates: {
         Args: { p_dry_run?: boolean; p_rule?: string }
         Returns: Json

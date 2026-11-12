@@ -2,7 +2,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { Suspense, lazy } from "react";
@@ -79,7 +79,6 @@ const FiscalDocuments = lazy(() => import("./pages/admin/FiscalDocuments"));
 const NfeReceived = lazy(() => import("./pages/admin/NfeReceived"));
 const ProductsReview = lazy(() => import("./pages/admin/ProductsReview"));
 const CentralRestock = lazy(() => import("./pages/admin/CentralRestock"));
-const ExchangeDesk = lazy(() => import("./pages/ExchangeDesk"));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -101,6 +100,14 @@ const LazyFallback = () => (
     <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
   </div>
 );
+
+function ExchangeDeskRedirect() {
+  const location = useLocation();
+  const params = new URLSearchParams(location.search);
+  params.set("section", "expedition");
+  params.set("tab", "trocas");
+  return <Navigate to={`/pos?${params.toString()}`} replace />;
+}
 
 const App = () => (
   <ErrorBoundary>
@@ -174,7 +181,7 @@ const App = () => (
               <Route path="/marketing/publicos-meta" element={<ProtectedRoute requiredModule="marketing"><MetaAudiences /></ProtectedRoute>} />
               <Route path="/expedition" element={<ProtectedRoute requiredModule="expedition"><Expedition /></ProtectedRoute>} />
               <Route path="/expedition-beta" element={<ProtectedRoute requiredModule="expedition"><ExpeditionBeta /></ProtectedRoute>} />
-              <Route path="/pos" element={<ProtectedRoute requiredModule="pos"><POS /></ProtectedRoute>} />
+              <Route path="/pos" element={<ProtectedRoute requiredModule={["pos", "expedition"]}><POS /></ProtectedRoute>} />
               <Route path="/inventory" element={<ProtectedRoute requiredModule="inventory"><Inventory /></ProtectedRoute>} />
               <Route path="/inventory/categorias" element={<ProtectedRoute requiredModule="inventory"><InventoryCategories /></ProtectedRoute>} />
               <Route path="/inventory/codigos" element={<ProtectedRoute requiredModule="inventory"><InventoryProductCodes /></ProtectedRoute>} />
@@ -191,7 +198,7 @@ const App = () => (
               <Route path="/admin/fiscal-documents" element={<ProtectedRoute requiredModule="admin"><FiscalDocuments /></ProtectedRoute>} />
               <Route path="/admin/nfe-received" element={<ProtectedRoute requiredModule="admin"><NfeReceived /></ProtectedRoute>} />
               <Route path="/admin/produtos-revisar" element={<ProtectedRoute requiredModule="admin"><ProductsReview /></ProtectedRoute>} />
-              <Route path="/atendimento/trocas" element={<ProtectedRoute requiredModule={["pos", "expedition", "management", "admin"]}><ExchangeDesk /></ProtectedRoute>} />
+              <Route path="/atendimento/trocas" element={<ProtectedRoute requiredModule={["pos", "expedition", "management", "admin"]}><ExchangeDeskRedirect /></ProtectedRoute>} />
               <Route path="/admin/produtos-troca" element={<ProtectedRoute requiredModule="admin"><CentralRestock /></ProtectedRoute>} />
 
               {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}

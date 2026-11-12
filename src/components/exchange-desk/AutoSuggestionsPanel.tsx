@@ -9,8 +9,6 @@ import { supabase } from "@/integrations/supabase/client";
 import { useChatSender, type SendProvider } from "@/hooks/chat/useChatSender";
 import { deskCall } from "./api";
 import { REASON_TEXT } from "@/lib/supportAuto/intent";
-import { AutoReplySettings } from "./AutoReplySettings";
-import { AiAgentSettings } from "./AiAgentSettings";
 
 interface Suggestion {
   mode_at_creation: string;
@@ -163,8 +161,6 @@ export function AutoSuggestionsPanel() {
 
   return (
     <div className="space-y-3">
-      <AutoReplySettings />
-      <AiAgentSettings />
       <div className="flex gap-2">
         {[["nova", "Novas"], ["enviada", "Enviadas"], ["descartada", "Descartadas"]].map(([k, l]) => (
           <Button key={k} size="sm" variant={status === k ? "default" : "outline"} onClick={() => setStatus(k)}>{l}</Button>

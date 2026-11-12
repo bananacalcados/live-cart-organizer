@@ -16,9 +16,10 @@ interface POSStore {
 
 interface Props {
   onSelect: (storeId: string) => void;
+  expeditionOnly?: boolean;
 }
 
-export function POSStoreSelector({ onSelect }: Props) {
+export function POSStoreSelector({ onSelect, expeditionOnly = false }: Props) {
   const navigate = useNavigate();
   const [stores, setStores] = useState<POSStore[]>([]);
   const [loading, setLoading] = useState(true);
@@ -107,7 +108,7 @@ export function POSStoreSelector({ onSelect }: Props) {
           ) : (
             <>
               {/* Dashboard Geral tile */}
-              <div
+              {!expeditionOnly && <div
                 className="cursor-pointer rounded-xl border-2 border-emerald-500/40 bg-pos-black hover:border-emerald-500 hover:shadow-[0_0_20px_hsl(150_70%_45%/0.18)] transition-all group p-6 flex items-center justify-between"
                 onClick={() => onSelect("__general__")}
               >
@@ -121,7 +122,7 @@ export function POSStoreSelector({ onSelect }: Props) {
                   </div>
                 </div>
                 <ChevronRight className="h-5 w-5 text-pos-white/40 group-hover:text-emerald-500 transition-colors" />
-              </div>
+              </div>}
 
               {stores.map(store => (
                 <div
@@ -141,11 +142,11 @@ export function POSStoreSelector({ onSelect }: Props) {
                   <ChevronRight className="h-5 w-5 text-pos-white/40 group-hover:text-pos-orange transition-colors" />
                 </div>
               ))}
-              <div className="text-center pt-4">
+              {!expeditionOnly && <div className="text-center pt-4">
                 <Button variant="outline" className="gap-2 border-pos-orange/30 text-pos-orange hover:bg-pos-orange/10" onClick={() => setShowAddStore(true)}>
                   <Plus className="h-4 w-4" /> Adicionar outra loja
                 </Button>
-              </div>
+              </div>}
             </>
           )}
         </div>

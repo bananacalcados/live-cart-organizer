@@ -93,6 +93,8 @@ interface Props {
   initialFilter?: "unanswered" | "new";
   /** Abre já na conversa deste telefone (usado na Expedição / tarefas). */
   initialPhone?: string;
+  /** Instância exata da conversa aberta pela fila de suporte/tarefas. */
+  initialWhatsappNumberId?: string | null;
   onExitFullScreen?: () => void;
 }
 
@@ -142,7 +144,7 @@ interface CrmCustomerData {
   }[];
 }
 
-export function POSWhatsApp({ storeId, initialFilter, initialPhone, onExitFullScreen }: Props) {
+export function POSWhatsApp({ storeId, initialFilter, initialPhone, initialWhatsappNumberId, onExitFullScreen }: Props) {
   const currentUserId = useCurrentUserId();
   const sender = useChatSender();
 
@@ -162,7 +164,7 @@ export function POSWhatsApp({ storeId, initialFilter, initialPhone, onExitFullSc
   const [teamChatActive, setTeamChatActive] = useState(false);
   const initialPhoneDigits = (initialPhone || "").replace(/\D/g, "");
   const [selectedPhone, setSelectedPhone] = useState<string | null>(initialPhoneDigits || null);
-  const [selectedConvNumberId, setSelectedConvNumberId] = useState<string | null>(null);
+  const [selectedConvNumberId, setSelectedConvNumberId] = useState<string | null>(initialWhatsappNumberId || null);
   // Aberto já numa conversa (Expedição/Estornos): descobre a instância da última mensagem
   // dessa pessoa; sem isso a busca procurava só mensagens "sem instância" e vinha vazia.
   useEffect(() => {
@@ -182,7 +184,7 @@ export function POSWhatsApp({ storeId, initialFilter, initialPhone, onExitFullSc
     })();
     return () => { cancelled = true; };
   }, [initialPhoneDigits]);
-  const [selectedConvKey, setSelectedConvKey] = useState<string | null>(null);
+  const [selectedConvKey, setSelectedConvKey] = useState<string | null>(initialPhoneDigits ? `${initialPhoneDigits}__${initialWhatsappNumberId || "none"}` : null);
   const [selectedConvChannel, setSelectedConvChannel] = useState<string | null>(null);
   // Grupos: o mesmo grupo é entregue por várias instâncias (cada número nosso que
   // participa recebe uma parte das mensagens). Filtrar por instância esconderia
@@ -288,7 +290,7 @@ export function POSWhatsApp({ storeId, initialFilter, initialPhone, onExitFullSc
   const [showBulkFinishDialog, setShowBulkFinishDialog] = useState(false);
   const [bulkMessageRecipients, setBulkMessageRecipients] = useState<BulkRecipient[]>([]);
   const [showBulkMessageDialog, setShowBulkMessageDialog] = useState(false);
-  const [showDashboard, setShowDashboard] = useState(() => !!sessionStorage.getItem(sellerKey));
+  const [showDashboard, setShowDashboard] = useState(() => !!sessionStorage.getItem(sellerKey) && !initialPhoneDigits);
 
   const [showTransferDialog, setShowTransferDialog] = useState(false);
   const [showSendTemplate, setShowSendTemplate] = useState(false);

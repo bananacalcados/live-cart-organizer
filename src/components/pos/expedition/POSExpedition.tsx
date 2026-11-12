@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Loader2, RefreshCw, Search, Package, Truck, ScanBarcode, CheckCircle2, PlayCircle, Layers, ChevronRight, ChevronLeft, MapPin, Store, Pencil, FlaskConical, Trash2, Filter, X, CheckSquare, Square, ShoppingCart, User, MessageCircle, Send, Clock, PauseCircle } from "lucide-react";
+import { Loader2, RefreshCw, Search, Package, Truck, ScanBarcode, CheckCircle2, PlayCircle, Layers, ChevronRight, ChevronLeft, MapPin, Store, Pencil, FlaskConical, Trash2, Filter, X, CheckSquare, Square, ShoppingCart, User, MessageCircle, Send, Clock, PauseCircle, ArrowRightLeft } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
@@ -50,6 +50,7 @@ import { Printer, ClipboardList } from "lucide-react";
 import { getCorreiosLabelFormat, saveCorreiosLabelFormat, normalizeCorreiosLabelFormat, CORREIOS_LABEL_FORMATS, type CorreiosLabelFormat } from '@/lib/correiosLabelFormat';
 import { reserveCorreiosPrintTab, printCorreiosLabel } from '@/lib/openCorreiosLabel';
 const ExpRefundsPanel = lazyNamed(() => import("./ExpRefundsPanel"), "ExpRefundsPanel");
+const ExchangeDesk = lazyNamed(() => import("@/pages/ExchangeDesk"), "default");
 
 
 
@@ -92,9 +93,28 @@ export function POSExpedition({ storeId, storeName, focusSaleId }: Props) {
   const [showSimu, setShowSimu] = useState(false);
   const [showBuyList, setShowBuyList] = useState(false);
   const [showRefunds, setShowRefunds] = useState(() => new URLSearchParams(window.location.search).get("tab") === "estornos");
+  const [showExchanges, setShowExchanges] = useState(() => new URLSearchParams(window.location.search).get("tab") === "trocas");
+  const [exchangePending, setExchangePending] = useState(0);
   const canRefund = useCanRefund();
   const [refundPending, setRefundPending] = useState(0);
   const [refundTick, setRefundTick] = useState(0);
+  useEffect(() => {
+    let alive = true;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const loadExchangeCount = async () => {
+      const { data } = await supabase.rpc("exchange_desk_count");
+      const next = Number(data || 0);
+      if (alive) setExchangePending((current) => current === next ? current : next);
+    };
+    void loadExchangeCount();
+    const channel = supabase.channel("exp-exchange-desk-count")
+      .on("postgres_changes", { event: "*", schema: "public", table: "exchange_requests" }, () => {
+        if (timer) clearTimeout(timer);
+        timer = setTimeout(() => void loadExchangeCount(), 1500);
+      })
+      .subscribe();
+    return () => { alive = false; if (timer) clearTimeout(timer); supabase.removeChannel(channel); };
+  }, []);
   // Contador de estornos aguardando aprovação: carrega ao abrir e atualiza por realtime (sem polling).
   useEffect(() => {
     if (!canRefund) return;
@@ -261,7 +281,7 @@ export function POSExpedition({ storeId, storeName, focusSaleId }: Props) {
   };
 
   const load = async () => {
-    if (!storeId) return;
+    if (!storeId || showExchanges) return;
     setLoading(true);
     try {
       const rows = await fetchExpeditionOrders(effectiveStore, stage, finishedRange, filterGateway);
@@ -307,7 +327,7 @@ export function POSExpedition({ storeId, storeName, focusSaleId }: Props) {
   useEffect(() => {
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [storeId, allStores, stage, finishedRange, filterGateway]);
+  }, [storeId, allStores, stage, finishedRange, filterGateway, showExchanges]);
 
   // Mantém o pedido aberto na conferência sincronizado com a lista recarregada
   // (edições de cliente/itens/endereço refletem imediatamente na NF-e e na conferência).
@@ -321,7 +341,7 @@ export function POSExpedition({ storeId, storeName, focusSaleId }: Props) {
   }, [orders]);
 
   useEffect(() => {
-    if (!storeId) return;
+    if (!storeId || showExchanges) return;
     const ch = supabase
       .channel(`pos-expedition-${allStores ? "all" : storeId}`)
       .on(
@@ -336,7 +356,7 @@ export function POSExpedition({ storeId, storeName, focusSaleId }: Props) {
       supabase.removeChannel(ch);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [storeId, allStores, stage, finishedRange, filterGateway]);
+  }, [storeId, allStores, stage, finishedRange, filterGateway, showExchanges]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -749,7 +769,7 @@ export function POSExpedition({ storeId, storeName, focusSaleId }: Props) {
               {allStores ? "— TODAS AS LOJAS" : storeName ? `— ${storeName}` : ""}
             </p>
           </div>
-          <div className="flex items-center gap-2 flex-wrap">
+          <div className={`flex items-center gap-2 flex-wrap ${showExchanges ? "hidden" : ""}`}>
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-pos-muted-text" />
               <Input
@@ -820,10 +840,10 @@ export function POSExpedition({ storeId, storeName, focusSaleId }: Props) {
         </div>
 
         {/* Stage bar */}
-        <div className="mt-4 grid grid-cols-2 md:grid-cols-4 xl:grid-cols-8 gap-2">
+        <div className="mt-4 grid grid-cols-2 md:grid-cols-4 xl:grid-cols-5 gap-2">
           {EXP_STAGES.map((s) => {
             const Icon = stageIcon[s.id];
-            const active = stage === s.id;
+            const active = stage === s.id && !showExchanges;
             const doneDates = s.id === "concluido"
               ? (() => {
                   const fins = orders
@@ -841,7 +861,7 @@ export function POSExpedition({ storeId, storeName, focusSaleId }: Props) {
             return (
               <button
                 key={s.id}
-                onClick={() => { setStage(s.id); setShowRefunds(false); setShowBuyList(false); }}
+                onClick={() => { setStage(s.id); setShowRefunds(false); setShowBuyList(false); setShowExchanges(false); }}
                 className={`rounded-xl px-3 py-4 text-left transition-all border-2 ${
                   active
                     ? `${stageStyles[s.id].chip} text-white border-transparent shadow-lg scale-[1.02]`
@@ -872,7 +892,7 @@ export function POSExpedition({ storeId, storeName, focusSaleId }: Props) {
           })}
 
           <button
-            onClick={() => { setShowPurchases((v) => !v); setShowSimu(false); setShowRefunds(false); setShowBuyList(false); }}
+            onClick={() => { setShowPurchases((v) => !v); setShowSimu(false); setShowRefunds(false); setShowBuyList(false); setShowExchanges(false); }}
             className={`rounded-xl px-3 py-4 text-left transition-all border-2 ${
               showPurchases
                 ? "bg-exp-prep text-white border-transparent shadow-lg scale-[1.02]"
@@ -887,7 +907,7 @@ export function POSExpedition({ storeId, storeName, focusSaleId }: Props) {
             </div>
           </button>
           <button
-            onClick={() => { setShowBuyList((v) => !v); setShowPurchases(false); setShowSimu(false); setShowRefunds(false); }}
+            onClick={() => { setShowBuyList((v) => !v); setShowPurchases(false); setShowSimu(false); setShowRefunds(false); setShowExchanges(false); }}
             className={`rounded-xl px-3 py-4 text-left transition-all border-2 ${
               showBuyList
                 ? "bg-exp-prep text-white border-transparent shadow-lg scale-[1.02]"
@@ -902,7 +922,7 @@ export function POSExpedition({ storeId, storeName, focusSaleId }: Props) {
             </div>
           </button>
           <button
-            onClick={() => { setShowSimu((v) => !v); setShowPurchases(false); setShowRefunds(false); setShowBuyList(false); }}
+            onClick={() => { setShowSimu((v) => !v); setShowPurchases(false); setShowRefunds(false); setShowBuyList(false); setShowExchanges(false); }}
             className={`rounded-xl px-3 py-4 text-left transition-all border-2 ${
               showSimu
                 ? "bg-exp-prep text-white border-transparent shadow-lg scale-[1.02]"
@@ -918,7 +938,7 @@ export function POSExpedition({ storeId, storeName, focusSaleId }: Props) {
           </button>
           {canRefund && (
             <button
-              onClick={() => { setShowRefunds((v) => !v); setShowPurchases(false); setShowSimu(false); setShowBuyList(false); }}
+              onClick={() => { setShowRefunds((v) => !v); setShowPurchases(false); setShowSimu(false); setShowBuyList(false); setShowExchanges(false); }}
               className={`relative rounded-xl px-3 py-4 text-left transition-all border-2 ${
                 showRefunds
                   ? "bg-violet-600 text-white border-transparent shadow-lg scale-[1.02]"
@@ -938,9 +958,29 @@ export function POSExpedition({ storeId, storeName, focusSaleId }: Props) {
               )}
             </button>
           )}
+          <button
+            onClick={() => { setShowExchanges((v) => !v); setShowPurchases(false); setShowSimu(false); setShowRefunds(false); setShowBuyList(false); }}
+            className={`relative rounded-xl px-3 py-4 text-left transition-all border-2 ${
+              showExchanges
+                ? "bg-exp-check text-white border-transparent shadow-lg scale-[1.02]"
+                : "bg-pos-elevated border-exp-check/40 hover:scale-[1.01]"
+            }`}
+          >
+            <div className="flex items-center gap-2">
+              <ArrowRightLeft className={`h-6 w-6 ${showExchanges ? "text-white" : "text-exp-check"}`} />
+              <span className={`text-lg font-black uppercase leading-tight ${showExchanges ? "text-white" : "text-pos-text"}`}>
+                Trocas e Devoluções
+              </span>
+            </div>
+            {exchangePending > 0 && (
+              <span className="absolute -top-2 -right-2 min-w-6 h-6 px-1.5 rounded-full bg-destructive text-destructive-foreground text-xs font-black flex items-center justify-center">
+                {exchangePending}
+              </span>
+            )}
+          </button>
         </div>
 
-        {!showRefunds && <div className="mt-4 flex items-center gap-3 flex-wrap">
+        {!showRefunds && !showExchanges && <div className="mt-4 flex items-center gap-3 flex-wrap">
           <label htmlFor="expedition-gateway" className="text-sm font-black text-pos-text uppercase">Gateway de pagamento</label>
           <Select value={filterGateway} onValueChange={setFilterGateway}>
             <SelectTrigger id="expedition-gateway" className="h-12 w-full sm:w-80 text-base font-bold border-2">
@@ -956,7 +996,7 @@ export function POSExpedition({ storeId, storeName, focusSaleId }: Props) {
           <GatewayPriceRulesDialog />
         </div>}
 
-        {showFilters && !showRefunds && (
+        {showFilters && !showRefunds && !showExchanges && (
           <div className="mt-4 p-3 rounded-xl bg-pos-elevated border-2 border-pos-border">
             <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
               <div>
@@ -1107,7 +1147,7 @@ export function POSExpedition({ storeId, storeName, focusSaleId }: Props) {
         )}
       </div>
 
-      {!showPurchases && !showSimu && !showRefunds && !showBuyList && stage !== "conferencia" && stage !== "concluido" && filtered.length > 0 && (
+      {!showPurchases && !showSimu && !showRefunds && !showBuyList && !showExchanges && stage !== "conferencia" && stage !== "concluido" && filtered.length > 0 && (
         <div className="px-4 py-2 bg-pos-elevated border-b border-pos-border flex items-center gap-3 flex-wrap">
           <Button size="sm" variant="ghost" onClick={selectAllVisible}>
             {selected.size > 0 ? <CheckSquare className="h-4 w-4 mr-1" /> : <Square className="h-4 w-4 mr-1" />}
@@ -1199,7 +1239,7 @@ export function POSExpedition({ storeId, storeName, focusSaleId }: Props) {
         </div>
       )}
 
-      {showBuyList && !showPurchases && !showSimu && !showRefunds && (
+      {showBuyList && !showPurchases && !showSimu && !showRefunds && !showExchanges && (
         <div className="flex-1 overflow-y-auto p-4">
           <ExpBuyListPanel />
         </div>
@@ -1217,8 +1257,14 @@ export function POSExpedition({ storeId, storeName, focusSaleId }: Props) {
         </div>
       )}
 
+      {showExchanges && (
+        <div className="flex-1 overflow-y-auto bg-background p-3 md:p-4">
+          <ExchangeDesk storeId={storeId} />
+        </div>
+      )}
+
       {/* List */}
-      <div className={`flex-1 overflow-y-auto p-4 space-y-4 ${showPurchases || showSimu || showRefunds || showBuyList ? "hidden" : ""}`}>
+      <div className={`flex-1 overflow-y-auto p-4 space-y-4 ${showPurchases || showSimu || showRefunds || showBuyList || showExchanges ? "hidden" : ""}`}>
         {stage === "separacao" && !loading && filtered.length > 0 && (
           <>
             <ExpPickingList

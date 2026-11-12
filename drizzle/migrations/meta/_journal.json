@@ -1548,6 +1548,13 @@
       "when": 1794491058832,
       "tag": "0220_exchange_desk_detail_shipped_at",
       "breakpoints": true
+    },
+    {
+      "idx": 221,
+      "version": "7",
+      "when": 1794495032745,
+      "tag": "0221_exchange_support_conversations",
+      "breakpoints": true
     }
   ]
 }

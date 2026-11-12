@@ -23,7 +23,7 @@ const ACTION_LABEL: Record<string, string> = {
   note: "Observação", choose_product: "Escolheu e separou o produto", link_troca: "Abriu registro de troca", set_reverse: "Gerou reversa", open_whatsapp: "Abriu WhatsApp",
 };
 
-export function ExchangeDeskCard({ id, staff, onClose, onChanged }: { id: string; staff: { id: string; name: string }[]; onClose: () => void; onChanged: () => void }) {
+export function ExchangeDeskCard({ id, staff, onClose, onChanged, onOpenChat }: { id: string; staff: { id: string; name: string }[]; onClose: () => void; onChanged: () => void; onOpenChat: (phone: string, whatsappNumberId: string | null) => void }) {
   const { toast } = useToast();
   const navigate = useNavigate();
   const [d, setD] = useState<any>(null);
@@ -165,7 +165,7 @@ export function ExchangeDeskCard({ id, staff, onClose, onChanged }: { id: string
           <div className="text-xs text-muted-foreground">Itens do pedido: {(d.items || []).map((i: any) => `${i.quantity}× ${i.product_name}${i.size ? ` nº ${i.size}` : ""}`).join(" · ") || "—"}</div>
 
           <div className="flex flex-wrap gap-2 border-t pt-3">
-            <Button size="sm" variant="outline" onClick={() => openWa(`Oi ${firstName}! Aqui é da Banana Calçados, sobre sua solicitação do pedido ${vars.pedido}.`)}>Abrir WhatsApp</Button>
+            <Button size="sm" variant="outline" onClick={() => onOpenChat(r.phone, r.whatsapp_number_id || null)}>Abrir conversa</Button>
             <Button size="sm" variant="outline" disabled={busy} onClick={() => run("assign", {}, "Agora está com você")}>Atribuir a mim</Button>
             <Select onValueChange={(v) => run("assign", { p_assignee: v }, "Reatribuída")}>
               <SelectTrigger className="h-9 w-40"><SelectValue placeholder="Reatribuir…" /></SelectTrigger>

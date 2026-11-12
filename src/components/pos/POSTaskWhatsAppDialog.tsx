@@ -1,4 +1,6 @@
 import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { X } from "lucide-react";
 import { POSWhatsApp } from "./POSWhatsApp";
 
 interface Props {
@@ -6,19 +8,20 @@ interface Props {
   onOpenChange: (open: boolean) => void;
   storeId: string;
   customerPhone?: string;
+  /** Instância exata da conversa; sem isso o chat escolhe a última usada pela cliente. */
+  customerWhatsappNumberId?: string | null;
 }
 
-/**
- * A dialog wrapper around POSWhatsApp for use in task cards / expedition.
- * Opens the full WhatsApp interface pre-loaded for the given store
- * (and already on the customer's conversation when a phone is given).
- */
-export function POSTaskWhatsAppDialog({ open, onOpenChange, storeId, customerPhone }: Props) {
+/** O mesmo WhatsApp completo do PDV, aberto diretamente na cliente e instância escolhidas. */
+export function POSTaskWhatsAppDialog({ open, onOpenChange, storeId, customerPhone, customerWhatsappNumberId }: Props) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-6xl h-[90vh] p-0 overflow-hidden gap-0 border-0 bg-pos-black shadow-2xl">
+        <Button variant="secondary" size="icon" className="absolute right-2 top-2 z-[100] h-8 w-8 shadow-md" onClick={() => onOpenChange(false)} aria-label="Fechar conversa">
+          <X className="h-4 w-4" />
+        </Button>
         <div className="h-full">
-          <POSWhatsApp storeId={storeId} initialPhone={customerPhone} />
+          <POSWhatsApp storeId={storeId} initialPhone={customerPhone} initialWhatsappNumberId={customerWhatsappNumberId} />
         </div>
       </DialogContent>
     </Dialog>

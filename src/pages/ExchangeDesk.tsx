@@ -1,7 +1,7 @@
-// Fase 3 — Painel do Atendente: fila de exceções das Centrais de Troca/Devolução.
+// Painel de Trocas e Devoluções dentro da Expedição do PDV.
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
-import { ArrowLeft, Search, FileText } from "lucide-react";
+import { useSearchParams } from "react-router-dom";
+import { FileText, MessageCircle, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -15,24 +15,39 @@ import { AutoSuggestionsPanel } from "@/components/exchange-desk/AutoSuggestions
 import { TrainingPanel } from "@/components/exchange-desk/TrainingPanel";
 import { SupportCostPanel } from "@/components/exchange-desk/SupportCostPanel";
 import { SupportOutboxPanel } from "@/components/exchange-desk/SupportOutboxPanel";
+import { SupportConversationsPanel } from "@/components/exchange-desk/SupportConversationsPanel";
+import { AutoReplySettings } from "@/components/exchange-desk/AutoReplySettings";
+import { AiAgentSettings } from "@/components/exchange-desk/AiAgentSettings";
+import { POSTaskWhatsAppDialog } from "@/components/pos/POSTaskWhatsAppDialog";
 import { ageLabel, ageLevel, REASON_LABEL, STATUS_LABEL, type DeskTab } from "@/lib/exchangeDesk/rules";
+import { exchangeDeskTabs, resolveExchangeDeskTab, type ExchangeDeskTab } from "@/lib/exchangeDesk/supportQueue";
+import { useIsAdmin } from "@/hooks/useIsAdmin";
 
 interface Row {
-  id: string; request_type: string; first_name: string; phone: string; order_ref: string | null; order_number: string | null;
-  product_name: string | null; product_size: string | null; desired_size: string | null; requested_quantity: number | null;
-  reason: string | null; status: string; escalated_reason: string | null; created_at: string; assigned_to: string | null; is_test?: boolean;
+  id: string; request_type: string; first_name: string; customer_name: string | null; phone: string; whatsapp_number_id: string | null;
+  order_ref: string | null; order_number: string | null; product_name: string | null; product_size: string | null;
+  desired_size: string | null; requested_quantity: number | null; reason: string | null; status: string;
+  escalated_reason: string | null; created_at: string; assigned_to: string | null; is_test?: boolean;
 }
 const PAGE = 50;
+const TAB_LABEL: Record<ExchangeDeskTab, string> = {
+  suporte: "Em suporte", precisa: "Precisa de você", andamento: "Em andamento", concluidas: "Concluídas",
+  sugestoes: "Sugestões automáticas", treino: "Treino do agente", assistente: "Enviadas pelo assistente",
+  roteiro: "Roteiro e IA", custo: "Custo",
+};
 
-export default function ExchangeDesk() {
-  const navigate = useNavigate();
+export default function ExchangeDesk({ storeId }: { storeId: string }) {
   const [params, setParams] = useSearchParams();
-  const rawTab = params.get("aba") || "precisa";
+  const { isAdmin } = useIsAdmin();
+  const rawTab = resolveExchangeDeskTab(params.get("aba"), isAdmin);
+  const isSupport = rawTab === "suporte";
   const isTraining = rawTab === "treino";
   const isOutbox = rawTab === "assistente";
-  const isSuggestions = rawTab === "sugestoes" || isTraining;
-  const isSpecial = isSuggestions || isOutbox;
-  const tab = (isSpecial ? "precisa" : rawTab) as DeskTab;
+  const isSuggestions = rawTab === "sugestoes";
+  const isScript = rawTab === "roteiro";
+  const isCost = rawTab === "custo";
+  const isRequestList = !isSupport && !isTraining && !isOutbox && !isSuggestions && !isScript && !isCost;
+  const tab = (isRequestList ? rawTab : "precisa") as DeskTab;
   const [type, setType] = useState("all");
   const [reason, setReason] = useState("all");
   const [assignee, setAssignee] = useState("all");
@@ -45,8 +60,10 @@ export default function ExchangeDesk() {
   const [staff, setStaff] = useState<{ id: string; name: string }[]>([]);
   const [openId, setOpenId] = useState<string | null>(params.get("id"));
   const [tplOpen, setTplOpen] = useState(false);
+  const [refreshKey, setRefreshKey] = useState(0);
+  const [chat, setChat] = useState<{ phone: string; whatsappNumberId: string | null } | null>(null);
 
-  useEffect(() => { const t = setTimeout(() => setDebounced(search.trim()), 400); return () => clearTimeout(t); }, [search]);
+  useEffect(() => { const timer = setTimeout(() => setDebounced(search.trim()), 400); return () => clearTimeout(timer); }, [search]);
   useEffect(() => { deskCall<{ id: string; name: string }[]>("exchange_desk_staff_list").then(setStaff).catch(() => setStaff([])); }, []);
 
   const load = useCallback(async (offset: number) => {
@@ -61,34 +78,46 @@ export default function ExchangeDesk() {
     } catch (e) { setErr(e instanceof Error ? e.message : "Erro ao carregar"); }
     finally { setLoading(false); }
   }, [tab, type, reason, assignee, debounced]);
-  useEffect(() => { if (!isSpecial) load(0); }, [load, isSpecial]);
+  useEffect(() => { if (isRequestList) void load(0); }, [load, isRequestList]);
 
   const staffName = useMemo(() => Object.fromEntries(staff.map((s) => [s.id, s.name])), [staff]);
+  const openChat = (phone: string, whatsappNumberId: string | null) => setChat({ phone, whatsappNumberId });
+  const closeChat = () => { setChat(null); setRefreshKey((key) => key + 1); if (isRequestList) void load(0); };
+  const changeTab = (value: string) => {
+    setParams((current) => {
+      const next = new URLSearchParams(current);
+      next.set("aba", value);
+      next.delete("id");
+      return next;
+    }, { replace: true });
+  };
 
   return (
-    <div className="min-h-screen bg-background">
-      <header className="border-b bg-card px-4 py-3 flex items-center gap-3">
-        <Button variant="ghost" size="icon" onClick={() => navigate("/")} aria-label="Voltar"><ArrowLeft className="h-5 w-5" /></Button>
-        <h1 className="text-lg font-semibold flex-1">Atendimento de trocas e devoluções</h1>
-        <Button variant="outline" size="sm" onClick={() => setTplOpen(true)}><FileText className="h-4 w-4 mr-1" />Mensagens prontas</Button>
+    <div className="mx-auto w-full max-w-7xl space-y-3">
+      <header className="flex flex-wrap items-center gap-3">
+        <div className="flex-1">
+          <h1 className="text-lg font-semibold">Trocas e Devoluções</h1>
+          <p className="text-sm text-muted-foreground">Atendimento, solicitações e suporte da cliente.</p>
+        </div>
+        <Button variant="outline" size="sm" onClick={() => setTplOpen(true)}><FileText className="mr-1 h-4 w-4" />Mensagens prontas</Button>
       </header>
-      <main className="p-4 max-w-6xl mx-auto space-y-3">
-        <CentralProductChoiceToggle />
-        <SupportCostPanel />
-        <Tabs value={rawTab} onValueChange={(v) => setParams({ aba: v })}>
-          <TabsList>
-            <TabsTrigger value="precisa">Precisa de você</TabsTrigger>
-            <TabsTrigger value="andamento">Em andamento</TabsTrigger>
-            <TabsTrigger value="concluidas">Concluídas</TabsTrigger>
-            <TabsTrigger value="sugestoes">Sugestões automáticas</TabsTrigger>
-            <TabsTrigger value="treino">Treino do agente</TabsTrigger>
-            <TabsTrigger value="assistente">Enviadas pelo assistente</TabsTrigger>
-          </TabsList>
-        </Tabs>
-        {isOutbox ? <SupportOutboxPanel /> : isTraining ? <TrainingPanel /> : isSuggestions ? <AutoSuggestionsPanel /> : <>
+      <Tabs value={rawTab} onValueChange={changeTab}>
+        <TabsList className="h-auto max-w-full justify-start overflow-x-auto">
+          {exchangeDeskTabs(isAdmin).map((value) => <TabsTrigger key={value} value={value}>{TAB_LABEL[value]}</TabsTrigger>)}
+        </TabsList>
+      </Tabs>
+
+      {isSupport && <SupportConversationsPanel refreshKey={refreshKey} onOpenChat={openChat} />}
+      {isTraining && isAdmin && <TrainingPanel />}
+      {isOutbox && <SupportOutboxPanel />}
+      {isSuggestions && <AutoSuggestionsPanel />}
+      {isScript && isAdmin && <div className="space-y-3"><CentralProductChoiceToggle /><AutoReplySettings /><AiAgentSettings /></div>}
+      {isCost && isAdmin && <SupportCostPanel />}
+
+      {isRequestList && <>
         <div className="flex flex-wrap gap-2">
-          <div className="relative flex-1 min-w-[220px]">
-            <Search className="h-4 w-4 absolute left-2 top-3 text-muted-foreground" />
+          <div className="relative min-w-[220px] flex-1">
+            <Search className="absolute left-2 top-3 h-4 w-4 text-muted-foreground" />
             <Input className="pl-8" placeholder="Nome, telefone ou pedido" value={search} onChange={(e) => setSearch(e.target.value)} autoComplete="off" />
           </div>
           <Select value={type} onValueChange={setType}><SelectTrigger className="w-36"><SelectValue /></SelectTrigger>
@@ -103,37 +132,44 @@ export default function ExchangeDesk() {
           {rows.map((r) => {
             const lvl = ageLevel(r.created_at);
             return (
-              <button key={r.id} onClick={() => setOpenId(r.id)}
-                className={`w-full text-left rounded-lg border bg-card p-3 hover:bg-muted/50 transition ${lvl === "48h" ? "border-destructive" : lvl === "24h" ? "border-primary" : ""}`}>
-                <div className="flex flex-wrap items-center gap-2">
-                  <Badge variant={r.request_type === "troca" ? "default" : "secondary"}>{r.request_type === "troca" ? "Troca" : "Devolução"}</Badge>
-                  {r.is_test && <Badge variant="destructive">TESTE</Badge>}
-                  <span className="font-medium">{r.first_name || "Cliente"}</span>
-                  <span className="text-sm text-muted-foreground">Pedido {r.order_number || r.order_ref || "—"}</span>
-                  <span className="ml-auto text-xs flex items-center gap-2">
-                    {lvl !== "normal" && <Badge variant={lvl === "48h" ? "destructive" : "outline"}>+{lvl}</Badge>}
-                    {ageLabel(r.created_at)}
-                  </span>
+              <article key={r.id} className={`w-full rounded-lg border bg-card p-3 ${lvl === "48h" ? "border-destructive" : lvl === "24h" ? "border-primary" : ""}`}>
+                <button type="button" onClick={() => setOpenId(r.id)} className="w-full text-left">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Badge variant={r.request_type === "troca" ? "default" : "secondary"}>{r.request_type === "troca" ? "Troca" : "Devolução"}</Badge>
+                    {r.is_test && <Badge variant="destructive">TESTE</Badge>}
+                    <span className="font-medium">{r.first_name || "Cliente"}</span>
+                    <span className="text-sm text-muted-foreground">Pedido {r.order_number || r.order_ref || "—"}</span>
+                    <span className="ml-auto flex items-center gap-2 text-xs">
+                      {lvl !== "normal" && <Badge variant={lvl === "48h" ? "destructive" : "outline"}>+{lvl}</Badge>}
+                      {ageLabel(r.created_at)}
+                    </span>
+                  </div>
+                  <div className="mt-1 text-sm">
+                    {r.requested_quantity || 1}× {r.product_name || "Produto"}{r.product_size ? ` (nº ${r.product_size})` : ""}
+                    {r.desired_size ? ` → nº ${r.desired_size}` : ""} · {REASON_LABEL[r.reason || ""] || "Motivo não informado"}
+                    {tab !== "precisa" && <> · {STATUS_LABEL[r.status] || r.status}</>}
+                  </div>
+                  {r.escalated_reason && r.status === "escalado" && <div className="mt-1 text-sm text-muted-foreground">Por que veio pra você: {r.escalated_reason}</div>}
+                  {r.status === "aprovado" && <div className="mt-1 text-sm text-muted-foreground">Aprovada — falta gerar a reversa.</div>}
+                  {r.assigned_to && <div className="mt-1 text-xs text-muted-foreground">Com: {staffName[r.assigned_to] || "atendente"}</div>}
+                </button>
+                <div className="mt-3 flex justify-end border-t pt-2">
+                  <Button size="sm" variant="outline" onClick={() => openChat(r.phone, r.whatsapp_number_id)} aria-label={`Abrir conversa de ${r.first_name || "cliente"}`}>
+                    <MessageCircle className="mr-1 h-4 w-4" />Abrir conversa
+                  </Button>
                 </div>
-                <div className="text-sm mt-1">
-                  {r.requested_quantity || 1}× {r.product_name || "Produto"}{r.product_size ? ` (nº ${r.product_size})` : ""}
-                  {r.desired_size ? ` → nº ${r.desired_size}` : ""} · {REASON_LABEL[r.reason || ""] || "Motivo não informado"}
-                  {tab !== "precisa" && <> · {STATUS_LABEL[r.status] || r.status}</>}
-                </div>
-                {r.escalated_reason && r.status === "escalado" && <div className="text-sm text-muted-foreground mt-1">Por que veio pra você: {r.escalated_reason}</div>}
-                {r.status === "aprovado" && <div className="text-sm text-muted-foreground mt-1">Aprovada — falta gerar a reversa.</div>}
-                {r.assigned_to && <div className="text-xs text-muted-foreground mt-1">Com: {staffName[r.assigned_to] || "atendente"}</div>}
-              </button>
+              </article>
             );
           })}
-          {!loading && rows.length === 0 && !err && <p className="text-sm text-muted-foreground py-8 text-center">Nada por aqui.</p>}
-          {loading && <p className="text-sm text-muted-foreground py-4 text-center">Carregando…</p>}
+          {!loading && rows.length === 0 && !err && <p className="py-8 text-center text-sm text-muted-foreground">Nada por aqui.</p>}
+          {loading && <p className="py-4 text-center text-sm text-muted-foreground">Carregando…</p>}
           {hasMore && !loading && <Button variant="outline" className="w-full" onClick={() => load(rows.length)}>Carregar mais</Button>}
         </div>
-        </>}
-      </main>
-      {openId && <ExchangeDeskCard id={openId} staff={staff} onClose={() => setOpenId(null)} onChanged={() => load(0)} />}
+      </>}
+
+      {openId && <ExchangeDeskCard id={openId} staff={staff} onClose={() => setOpenId(null)} onChanged={() => load(0)} onOpenChat={openChat} />}
       <TemplatesEditor open={tplOpen} onOpenChange={setTplOpen} />
+      {chat && <POSTaskWhatsAppDialog open onOpenChange={(open) => { if (!open) closeChat(); }} storeId={storeId} customerPhone={chat.phone} customerWhatsappNumberId={chat.whatsappNumberId} />}
     </div>
   );
 }

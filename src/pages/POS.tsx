@@ -39,6 +39,7 @@ const POSCustomersHub = lazyNamed(() => import("@/components/pos/POSCustomersHub
 const POSMetaPixelDashboard = lazyNamed(() => import("@/components/pos/POSMetaPixelDashboard"), "POSMetaPixelDashboard");
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { allowedPOSSections, isExpeditionOnly } from "@/lib/pos/sectionAccess";
 
 type POSSection = "dashboard" | "sales" | "online" | "cash" | "returns" | "chat" | "requests" | "config" | "whatsapp" | "daily" | "searches" | "pickups" | "checkout" | "slowmoving" | "shipments" | "expedition" | "seller-dashboard" | "customers" | "meta-pixel" | "transfer";
 
@@ -77,11 +78,26 @@ export default function POS() {
     return q === "expedition" || q === "transfer" ? q : "dashboard";
   });
   const [whatsappFilter, setWhatsappFilter] = useState<WhatsAppFilter>(undefined);
+  const [allowedModules, setAllowedModules] = useState<string[] | null>(null);
   const [pendingRequests, setPendingRequests] = useState(0);
   const [pendingStockChecks, setPendingStockChecks] = useState(0);
   const [showMoreMenu, setShowMoreMenu] = useState(false);
   const [customer360Query, setCustomer360Query] = useState<string | undefined>(undefined);
   const [focusSaleId, setFocusSaleId] = useState<string | null>(null);
+
+  useEffect(() => {
+    let alive = true;
+    void supabase.auth.getUser().then(async ({ data }) => {
+      if (!data.user) { if (alive) setAllowedModules([]); return; }
+      const { data: modules, error } = await supabase.rpc("get_user_allowed_modules", { p_user_id: data.user.id });
+      if (alive) setAllowedModules(error ? ["expedition"] : (modules || []));
+    });
+    return () => { alive = false; };
+  }, []);
+  const expeditionOnly = allowedModules ? isExpeditionOnly(allowedModules) : false;
+  useEffect(() => {
+    if (expeditionOnly) setSection("expedition");
+  }, [expeditionOnly]);
 
   // Listener for "Ver Perfil 360°" event from customer form
   useEffect(() => {
@@ -193,8 +209,12 @@ export default function POS() {
     return () => window.removeEventListener("keydown", onKey);
   }, [section]);
 
+  if (allowedModules === null) {
+    return <div className="flex h-screen items-center justify-center bg-pos-black text-pos-white"><Loader2 className="mr-2 h-5 w-5 animate-spin" />Carregando acesso…</div>;
+  }
+
   if (!selectedStore) {
-    return <POSStoreSelector onSelect={setSelectedStore} />;
+    return <POSStoreSelector onSelect={setSelectedStore} expeditionOnly={expeditionOnly} />;
   }
 
   if (selectedStore === "__general__") {
@@ -202,8 +222,9 @@ export default function POS() {
   }
 
   // Mobile: show priority tabs in bottom bar, rest in "more" menu
-  const primarySections = SECTIONS.filter(s => s.priority);
-  const secondarySections = SECTIONS.filter(s => !s.priority);
+  const visibleSections = allowedPOSSections(allowedModules, SECTIONS.map((s) => s.id)).map((id) => SECTIONS.find((s) => s.id === id)!);
+  const primarySections = visibleSections.filter(s => s.priority);
+  const secondarySections = visibleSections.filter(s => !s.priority);
 
   // Full-screen mode for WhatsApp
   const isWhatsAppFull = section === "whatsapp";
@@ -232,10 +253,10 @@ export default function POS() {
 
           {/* Navigation */}
           <nav className="flex-1 p-2 space-y-0.5 overflow-y-auto">
-            {SECTIONS.map((s, idx) => {
+            {visibleSections.map((s, idx) => {
               const Icon = s.icon;
               const isActive = section === s.id;
-              const isFirstSecondary = !s.priority && SECTIONS[idx - 1]?.priority;
+              const isFirstSecondary = !s.priority && visibleSections[idx - 1]?.priority;
               return (
                 <div key={s.id}>
                   {isFirstSecondary && (
