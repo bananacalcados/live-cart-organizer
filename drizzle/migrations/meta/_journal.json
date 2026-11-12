@@ -1569,6 +1569,20 @@
       "when": 1794495687362,
       "tag": "0223_restore_exchange_support_queue_short_order_search",
       "breakpoints": true
+    },
+    {
+      "idx": 224,
+      "version": "7",
+      "when": 1794503133529,
+      "tag": "0224_live_comment_parser_punctuation_sizes",
+      "breakpoints": true
+    },
+    {
+      "idx": 225,
+      "version": "7",
+      "when": 1794503198497,
+      "tag": "0225_live_comment_parser_price_after_codes",
+      "breakpoints": true
     }
   ]
 }
