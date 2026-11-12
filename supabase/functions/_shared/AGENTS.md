@@ -11,3 +11,4 @@
 - Refund initiation and approval use refund-fiscal plus DB start guards: return registration, receipt and production return NF-e are required; admin exceptions record authenticated actor/reason, and pending reconciliation reads a service-only invoker view. Provider completion observations must never be blocked by initiation rules.
 
 - Cancel-before-ship refunds: refund-fiscal cancelBeforeShipStep, enforced again by guard_refund_return_fiscal.
+- pos_sales.shipped_at: set only by DB triggers (expedition concluído / first carrier event); Central and agent envio+7 read it, none → human.

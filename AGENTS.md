@@ -82,4 +82,3 @@
 - Frontend edge calls always use the session token.
 - Finish with zero no-RLS tables; anon EXECUTE only for the documented public list.
 - Code search: RPC search_product_code_keys (fuzzy, cap 200).
-- Ship date: shipped_at set only by DB triggers (expedition concluído / first carrier event); envio+7 reads it, none → human.
