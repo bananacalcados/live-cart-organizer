@@ -10,6 +10,7 @@ import { buildSupportContext } from "../_shared/support-context.ts";
 import { primaryInstance } from "../_shared/support-policy.ts";
 import { budgetGateway } from "../_shared/support-budget-gateway.ts";
 import { humanRepliedRecently } from "../_shared/support-policy.ts";
+import { runSupportAiWithRetry, type SupportAiAttempt } from "../_shared/support-ai-retry.ts";
 
 const cors = { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-cron-secret" };
 const json = (b: unknown, s = 200) => new Response(JSON.stringify(b), { status: s, headers: { ...cors, "Content-Type": "application/json" } });
@@ -60,9 +61,21 @@ Deno.serve(withAccessLog("support-ai-agent", async (req) => {
     return json({ ignored: "outra_instancia_mais_ativa" });
   }
   const cfg = { apiKey, baseURL: "https://ai.gateway.lovable.dev/v1", timeoutMs: st.ai_timeout_ms ?? 30000 };
+  const recordAttempt = async (kind: "triagem" | "agente", attempt: SupportAiAttempt) => {
+    const { error } = await sb.rpc("support_ai_attempt_log", {
+      p_suggestion: s.id, p_kind: kind, p_attempt: attempt.attempt, p_model: attempt.model,
+      p_ok: attempt.ok, p_error: attempt.error ?? null, p_duration: attempt.durationMs,
+    });
+    if (error) console.error("support-ai-attempt-log", error.message);
+  };
   try {
     const meta = { id: s.id, phone: s.phone, number: s.whatsapp_number_id };
-    const triage = await runTriage({ ...cfg, guardedFetch: budgetGateway(sb, meta, "triagem") }, st.ai_triage_model, conv, orders, log);
+    const triage = await runSupportAiWithRetry({
+      primaryModel: st.ai_triage_model,
+      alternateModel: st.ai_agent_model,
+      run: (model) => runTriage({ ...cfg, guardedFetch: budgetGateway(sb, meta, "triagem") }, model, conv, orders, log),
+      onAttempt: (attempt) => recordAttempt("triagem", attempt),
+    });
     ctx.configure(triage.facts ?? {}, triage.categoria);
     const base = { triage, triage_category: triage.categoria, triage_confidence: triage.confianca, intent: triageToIntent(triage.categoria) };
     if (triageIgnores(triage.categoria)) {
@@ -77,9 +90,15 @@ Deno.serve(withAccessLog("support-ai-agent", async (req) => {
       .eq("phone", s.phone).eq("whatsapp_number_id", s.whatsapp_number_id).eq("exchange_offered", true)
       .in("status", ["enviada"]).gte("created_at", new Date(Date.now() - 30 * 864e5).toISOString());
 
-    const outcome = await runAgent({ ...cfg, guardedFetch: budgetGateway(sb, meta, "agente") }, st.ai_agent_model, script?.body ?? "", nome, triage, conv, {
-      ...ctx.deps, offersAlreadyMade: offers ?? 0, maxOffers: st.max_offer_attempts ?? 1, supportPhone: st.support_whatsapp_phone ?? null,
-    }, log);
+    let agentModelCalled = false;
+    const outcome = await runSupportAiWithRetry({
+      primaryModel: st.ai_agent_model,
+      alternateModel: st.ai_triage_model,
+      run: (model) => runAgent({ ...cfg, guardedFetch: budgetGateway(sb, meta, "agente") }, model, script?.body ?? "", nome, triage, conv, {
+        ...ctx.deps, offersAlreadyMade: offers ?? 0, maxOffers: st.max_offer_attempts ?? 1, supportPhone: st.support_whatsapp_phone ?? null,
+      }, log, () => { agentModelCalled = true; }),
+      onAttempt: (attempt) => agentModelCalled ? recordAttempt("agente", attempt) : undefined,
+    });
 
     const dec = finalDecision(outcome, orders);
     if (outcome.resolved) {

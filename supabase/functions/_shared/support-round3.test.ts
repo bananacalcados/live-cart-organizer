@@ -39,8 +39,9 @@ Deno.test("3 escalar em silêncio, mensagem só após 30 min e útil", async () 
   assertEquals(silentHandoffText("varios_pedidos", 60, "Ana"), "");
   assert(silentHandoffText("estorno", 45, "Ana").includes("estorno"));
   assertEquals(waitingMinutes([m("loja", "x", "2026-11-11T10:00:00Z"), m("cliente", "y", "2026-11-11T10:10:00Z")], Date.parse("2026-11-11T10:50:00Z")), 40);
-  const o = await runAgent(cfg, "x", "", "Ana", tri("troca", { danger: true }), [m("cliente", "procon", new Date().toISOString())], deps(), () => {});
-  assertEquals(o.text, ""); assert(o.handoff);
+  let modelCalled = false;
+  const o = await runAgent(cfg, "x", "", "Ana", tri("troca", { danger: true }), [m("cliente", "procon", new Date().toISOString())], deps(), () => {}, () => { modelCalled = true; });
+  assertEquals(o.text, ""); assert(o.handoff); assertFalse(modelCalled);
 });
 Deno.test("4 CPF só com suporte ativo e nunca em comentário público", async () => {
   assert(cpfRequestAllowed("troca", [m("cliente", "quero trocar", "1")], false));

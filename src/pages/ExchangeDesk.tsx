@@ -16,6 +16,7 @@ import { TrainingPanel } from "@/components/exchange-desk/TrainingPanel";
 import { SupportCostPanel } from "@/components/exchange-desk/SupportCostPanel";
 import { SupportOutboxPanel } from "@/components/exchange-desk/SupportOutboxPanel";
 import { SupportConversationsPanel } from "@/components/exchange-desk/SupportConversationsPanel";
+import { SupportAiHealthAlert } from "@/components/exchange-desk/SupportAiHealthAlert";
 import { AutoReplySettings } from "@/components/exchange-desk/AutoReplySettings";
 import { AiAgentSettings } from "@/components/exchange-desk/AiAgentSettings";
 import { POSTaskWhatsAppDialog } from "@/components/pos/POSTaskWhatsAppDialog";
@@ -106,6 +107,8 @@ export default function ExchangeDesk({ storeId }: { storeId: string }) {
           {exchangeDeskTabs(isAdmin).map((value) => <TabsTrigger key={value} value={value}>{TAB_LABEL[value]}</TabsTrigger>)}
         </TabsList>
       </Tabs>
+
+      <SupportAiHealthAlert />
 
       {isSupport && <SupportConversationsPanel refreshKey={refreshKey} onOpenChat={openChat} />}
       {isTraining && isAdmin && <TrainingPanel />}

@@ -1,7 +1,7 @@
 // Fase 4b — triagem e agente de suporte por IA (modo sombra).
 // A IA só sugere texto e pede ações por ferramenta; quem decide e valida é o servidor.
 import { createOpenAI } from "npm:@ai-sdk/openai@4";
-import { jsonSchema, Output, stepCountIs, streamText, tool } from "npm:ai@7";
+import { jsonSchema, NoObjectGeneratedError, Output, stepCountIs, streamText, tool } from "npm:ai@7";
 import { createLovableAiGatewayRunIdFetch } from "./run-id.ts";
 import { alreadyResolved, CONSOLIDATION_TEXT, cpfRequestAllowed, linkText, preferredLink, publicCommentReply, silentHandoffText, type SupportFacts, waitingMinutes, withinWindowByShipping } from "./support-policy.ts";
 
@@ -32,8 +32,37 @@ export function firstName(name: string | null | undefined): string | null {
   return f.charAt(0).toUpperCase() + f.slice(1).toLowerCase();
 }
 
+export function describeMediaText(text: string, from: "cliente" | "loja" = "cliente"): string {
+  const owner = from === "cliente" ? "da cliente" : "da loja";
+  return (text || "")
+    .replace(/(?:📎\s*|\[)(áudio|audio)\b(?:\])?/gi, `[Mídia: áudio ${owner}; conteúdo não transcrito]`)
+    .replace(/(?:📎\s*|\[)(imagem|image)\b(?:\])?/gi, `[Mídia: imagem ${owner}; conteúdo visual não analisado]`)
+    .replace(/(?:📎\s*|\[)(documento|document)\b(?:\])?/gi, `[Mídia: documento ${owner}; conteúdo não lido]`)
+    .replace(/(?:📎\s*|\[)(vídeo|video)\b(?:\])?/gi, `[Mídia: vídeo ${owner}; conteúdo não analisado]`);
+}
+
 export function transcript(msgs: ConvMessage[]): string {
-  return msgs.map((m) => `${m.at} [${m.instance ?? "WhatsApp"}; id=${m.instance_id ?? "atual"}${m.human ? "; HUMANO" : ""}] ${m.from === "cliente" ? "CLIENTE" : "LOJA"}: ${sanitizeText(m.text)}`).join("\n");
+  return msgs.map((m) => `${m.at} [${m.instance ?? "WhatsApp"}; id=${m.instance_id ?? "atual"}${m.human ? "; HUMANO" : ""}] ${m.from === "cliente" ? "CLIENTE" : "LOJA"}: ${sanitizeText(describeMediaText(m.text, m.from))}`).join("\n");
+}
+
+export const SUPPORT_AI_HISTORY_LIMIT = 40;
+const OLD_SUPPORT_CONTEXT = /tro[ck]|devo|reembol|estorn|rastre|entreg|defeit|avaria|numera|tamanho|pequen|grand|apert|larg|procon|reclame|postagem|correio/i;
+
+/** Mantém o desfecho recente e um resumo determinístico do restante, sem apagar o contexto usado pelas travas. */
+export function conversationTranscript(msgs: ConvMessage[], limit = SUPPORT_AI_HISTORY_LIMIT): string {
+  if (msgs.length <= limit) return transcript(msgs);
+  const older = msgs.slice(0, -limit);
+  const recent = msgs.slice(-limit);
+  const relevant = older.filter((m) => OLD_SUPPORT_CONTEXT.test(m.text)).slice(-6);
+  const media = older.filter((m) => /📎|\[(?:imagem|image|áudio|audio|document|documento|vídeo|video)\]/i.test(m.text)).length;
+  const instances = [...new Set(older.map((m) => m.instance).filter(Boolean))].join(", ") || "WhatsApp";
+  const summary = [
+    "RESUMO DO HISTÓRICO ANTIGO (não responda a estas mensagens antigas):",
+    `${older.length} mensagens entre ${older[0].at} e ${older[older.length - 1].at}; ${older.filter((m) => m.from === "cliente").length} da cliente e ${older.filter((m) => m.from === "loja").length} da loja; ${media} mídias sem conteúdo analisado; instâncias: ${instances}.`,
+    relevant.length ? `Trechos antigos relacionados a suporte:\n${transcript(relevant)}` : "Sem trechos antigos adicionais de suporte.",
+    "MENSAGENS RECENTES (a última é a atual):",
+  ].join("\n");
+  return `${summary}\n${transcript(recent)}`;
 }
 
 /** Mapeia a triagem para a intenção antiga (contador por tipo e compatibilidade). */
@@ -96,22 +125,49 @@ async function usage(result: any) {
   try { const u = await result.totalUsage; return { inTok: u?.inputTokens, outTok: u?.outputTokens }; } catch { return {}; }
 }
 
+export function parseTriageOutput(value: unknown): Triage {
+  let parsed = value;
+  if (typeof value === "string") {
+    const text = value.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "");
+    parsed = JSON.parse(text);
+  }
+  const out = parsed as Triage;
+  if (!out || !TRIAGE_CATEGORIES.includes(out.categoria) || typeof out.justificativa !== "string" || typeof out.motivo_tamanho !== "boolean" || !out.facts || typeof out.facts !== "object") {
+    throw new Error("triagem_vazia_ou_invalida");
+  }
+  return {
+    ...out,
+    confianca: Math.max(0, Math.min(1, Number(out.confianca) || 0)),
+    justificativa: out.justificativa.slice(0, 300),
+  };
+}
+
 export async function runTriage(cfg: GatewayConfig, model: string, conv: ConvMessage[], orders: OrderCtx[], log: (c: CallLog) => void): Promise<Triage> {
   const t0 = Date.now();
   try {
     const result = streamText({
       model: provider(cfg).responses(model),
       instructions: TRIAGE_INSTRUCTIONS,
-      messages: [{ role: "user", content: `PEDIDOS (60 dias):\n${JSON.stringify(orders)}\n\nCONVERSA:\n${transcript(conv)}` }],
+      messages: [{ role: "user", content: `PEDIDOS (60 dias):\n${JSON.stringify(orders)}\n\nCONVERSA:\n${conversationTranscript(conv)}` }],
       output: Output.object({ schema: TRIAGE_SCHEMA }),
       ...(cfg.guardedFetch ? { maxRetries: 0 } : {}),
       abortSignal: AbortSignal.timeout(cfg.timeoutMs),
       providerOptions: { openai: reasoningOpts as any },
     });
-    const out = (await result.output) as Triage;
-    if (!out || !TRIAGE_CATEGORIES.includes(out.categoria)) throw new Error("triagem_vazia");
+    let raw: unknown;
+    try {
+      raw = await result.output;
+    } catch (error) {
+      if (!NoObjectGeneratedError.isInstance(error)) throw error;
+      // O gateway pode entregar o JSON completo mesmo quando o SDK não monta result.output.
+      const text = typeof error.text === "string" && error.text.trim()
+        ? error.text
+        : await result.text;
+      raw = parseTriageOutput(text);
+    }
+    const out = parseTriageOutput(raw);
     log({ kind: "triagem", model, ok: true, ms: Date.now() - t0, ...(await usage(result)) });
-    return { ...out, confianca: Math.max(0, Math.min(1, Number(out.confianca) || 0)), justificativa: String(out.justificativa || "").slice(0, 300) };
+    return out;
   } catch (e) {
     log({ kind: "triagem", model, ok: false, error: String((e as Error)?.message || e).slice(0, 400), ms: Date.now() - t0 });
     throw e;
@@ -149,6 +205,10 @@ export type AgentDeps = {
   cpfLookup?: () => Promise<{ found?: boolean; error?: string; first_name?: string; product?: string; month?: string; confirmed?: boolean; different_phone?: boolean }>;
 };
 export type AgentAction = { acao: string; pedido: Record<string, unknown>; resultado: unknown };
+export function agentOutcomeIsEmpty(out: Pick<AgentOutcome, "text" | "actions" | "link" | "handoff" | "tracking" | "consolidation">): boolean {
+  return !out.text.trim() && out.actions.length === 0 && !out.link && !out.handoff && !out.tracking && !out.consolidation;
+}
+
 export type AgentOutcome = {
   text: string; actions: AgentAction[];
   link: { ref: string; tipo: "troca" | "devolucao" } | null;
@@ -164,7 +224,7 @@ export type AgentOutcome = {
 };
 
 export async function runAgent(cfg: GatewayConfig, model: string, script: string, nome: string | null, triage: Triage,
-  conv: ConvMessage[], deps: AgentDeps, log: (c: CallLog) => void): Promise<AgentOutcome> {
+  conv: ConvMessage[], deps: AgentDeps, log: (c: CallLog) => void, onModelCall?: () => void): Promise<AgentOutcome> {
   const actions: AgentAction[] = [];
   const out: AgentOutcome = { text: "", actions, link: null, handoff: null, exchangeOffered: false, tracking: null };
   const rec = (acao: string, pedido: Record<string, unknown>, resultado: unknown) => { actions.push({ acao, pedido, resultado }); return resultado; };
@@ -312,20 +372,23 @@ CONTEXTO DO SISTEMA (não invente nada além disso):
 
   const t0 = Date.now();
   try {
+    onModelCall?.();
     const result = streamText({
       model: provider(cfg).responses(model),
       instructions,
-      messages: [{ role: "user", content: `CONVERSA (a última linha é a mais recente):\n${transcript(conv)}` }],
+      messages: [{ role: "user", content: `CONVERSA (a última linha é a mais recente):\n${conversationTranscript(conv)}` }],
       tools,
       ...(cfg.guardedFetch ? { maxRetries: 0 } : {}),
-      stopWhen: stepCountIs(6),
+      // O SDK executa as ferramentas e sempre faz a chamada final de texto antes de encerrar.
+      stopWhen: stepCountIs(50),
       abortSignal: AbortSignal.timeout(cfg.timeoutMs),
       providerOptions: { openai: reasoningOpts as any },
     });
     out.text = (await result.text).trim().slice(0, 1000);
     log({ kind: "agente", model, ok: true, ms: Date.now() - t0, ...(await usage(result)) });
     if (out.handoff) { out.text = silentHandoffText(out.handoff.motivo, waitingMinutes(conv, now), nome); return out; }
-    // Sem texto e sem ferramenta: trata como escalada silenciosa (nunca resposta vazia para a cliente).
+    // Vazio sem nenhuma ação é falha da tentativa: o chamador tenta o modelo alternativo.
+    if (!out.text && agentOutcomeIsEmpty(out)) throw new Error("No output generated. Check the stream for errors.");
     if (!out.text) { out.handoff = { motivo: "ia_sem_resposta", resumo: triage.justificativa }; return out; }
     if (out.link && !out.text.includes("{{link}}")) out.text += "\n{{link}}";
     if (!out.link) out.text = out.text.replaceAll("{{link}}", "").trim();

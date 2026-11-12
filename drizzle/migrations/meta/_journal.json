@@ -1618,6 +1618,20 @@
       "when": 1794517928610,
       "tag": "0230_live_followup_instagram_batch_isolation",
       "breakpoints": true
+    },
+    {
+      "idx": 231,
+      "version": "7",
+      "when": 1794520444982,
+      "tag": "0231_support_ai_attempts_health",
+      "breakpoints": true
+    },
+    {
+      "idx": 232,
+      "version": "7",
+      "when": 1794520497918,
+      "tag": "0232_support_ai_reprocess_guard",
+      "breakpoints": true
     }
   ]
 }

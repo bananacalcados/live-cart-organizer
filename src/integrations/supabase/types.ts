@@ -25283,6 +25283,50 @@ export type Database = {
         }
         Relationships: []
       }
+      support_ai_attempts: {
+        Row: {
+          attempt: number
+          created_at: string
+          duration_ms: number
+          error: string | null
+          id: string
+          kind: string
+          model: string
+          ok: boolean
+          suggestion_id: string
+        }
+        Insert: {
+          attempt: number
+          created_at?: string
+          duration_ms?: number
+          error?: string | null
+          id?: string
+          kind: string
+          model: string
+          ok: boolean
+          suggestion_id: string
+        }
+        Update: {
+          attempt?: number
+          created_at?: string
+          duration_ms?: number
+          error?: string | null
+          id?: string
+          kind?: string
+          model?: string
+          ok?: boolean
+          suggestion_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "support_ai_attempts_suggestion_id_fkey"
+            columns: ["suggestion_id"]
+            isOneToOne: false
+            referencedRelation: "support_auto_suggestions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       support_ai_calls: {
         Row: {
           budget_day: string | null
@@ -33696,6 +33740,18 @@ export type Database = {
         Returns: number
       }
       support_ai_accuracy: { Args: never; Returns: Json }
+      support_ai_attempt_log: {
+        Args: {
+          p_attempt: number
+          p_duration?: number
+          p_error?: string
+          p_kind: string
+          p_model: string
+          p_ok: boolean
+          p_suggestion: string
+        }
+        Returns: string
+      }
       support_ai_enqueue: {
         Args: {
           p_channel: string
@@ -33710,6 +33766,8 @@ export type Database = {
         Args: { p_error: string; p_id: string }
         Returns: string
       }
+      support_ai_health_1h: { Args: never; Returns: Json }
+      support_ai_reprocess: { Args: { p_id: string }; Returns: Json }
       support_ai_settings_get: { Args: never; Returns: Json }
       support_ai_settings_update: {
         Args: {

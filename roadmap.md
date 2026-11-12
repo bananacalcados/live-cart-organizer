@@ -1,3 +1,10 @@
+# Falhas da IA do suporte (12/11)
+- [x] Diagnosticar as cinco respostas vazias: falha local, sem chamada válida registrada para os cinco IDs; respostas completas do lote eram de outras conversas
+- [x] Corrigir histórico/mídia e conclusão da IA, com até duas tentativas registradas e modelo alternativo na última; vazio sem ferramenta também tenta de novo
+- [x] Reprocessar as cinco sem duplicar resposta humana/automática: Eloisa enviada; Lídia e Vânia para humano; Cida ignorada; Jaqueline na reserva após os dois modelos
+- [x] Alertar no painel acima de 10% em uma hora, contando apenas chamadas reais e não decisões locais
+- [x] Testar e verificar o painel logado; 28 testes Deno e 25 Vitest; front não publicado
+
 # Trocas e Devoluções dentro da Expedição (12/11)
 - [x] Mover o módulo completo para uma nova aba da Expedição, manter sub-abas/permissões e redirecionar a rota antiga
 - [x] Criar "Em suporte" com 29 conversas reais da linha SUPORTE, vínculos, busca inclusive por pedido curto, espera e atualização de 30 s
