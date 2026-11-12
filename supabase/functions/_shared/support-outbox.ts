@@ -57,7 +57,7 @@ export async function processSupportOutbox(supabase: any) {
   const providers = new Map<string, any>((numbers || []).map((n: any) => [n.id, n] as [string, any]));
   let sent = 0, failed = 0;
 
-  for (const job of rows) {
+  for (const [jobIndex, job] of rows.entries()) {
     const instance = providers.get(job.whatsapp_number_id);
     const fn = instance?.is_active ? supportOutboxFunction(instance.provider) : null;
     const message = job.text + (job.link ? `\n${job.link}` : '');
@@ -87,11 +87,25 @@ export async function processSupportOutbox(supabase: any) {
         status: 'sent', sent_at: new Date().toISOString(), provider_message_id: providerMessageId ? String(providerMessageId) : null,
         error: historyError ? `Enviada, mas o histórico precisa de revisão: ${historyError.message}`.slice(0, 1000) : null,
       }).eq('id', job.id).eq('status', 'pending').eq('claimed_at', job.claimed_at);
+      if (job.suggestion_id) await supabase.from('support_auto_suggestions').update({
+        status: 'enviada', sent_at: new Date().toISOString(), sent_text: message, sent_link_id: job.link_id ?? null,
+      }).eq('id', job.suggestion_id).eq('status', 'nova');
       sent++;
+      if (historyError) {
+        await supabase.rpc('support_emergency_pause', { p_reason: `Envio concluído, mas o histórico falhou: ${historyError.message}` });
+        const remaining = rows.slice(jobIndex + 1).map((r: any) => r.id);
+        if (remaining.length) await supabase.from('support_outbox').update({ claimed_at: null }).in('id', remaining).eq('status', 'pending');
+        break;
+      }
     } else {
       await supabase.from('support_outbox').update({ status: 'failed', error: String(sendError).slice(0, 1000) })
         .eq('id', job.id).eq('status', 'pending').eq('claimed_at', job.claimed_at);
+      if (job.suggestion_id) await supabase.from('support_auto_suggestions').update({ status: 'nova', decision: 'fila', reason: 'erro_envio_automatico', auto_send_after: null }).eq('id', job.suggestion_id);
+      await supabase.rpc('support_emergency_pause', { p_reason: `Falha de envio do assistente: ${String(sendError).slice(0, 700)}` });
+      const remaining = rows.slice(jobIndex + 1).map((r: any) => r.id);
+      if (remaining.length) await supabase.from('support_outbox').update({ claimed_at: null }).in('id', remaining).eq('status', 'pending');
       failed++;
+      break;
     }
   }
   return { sent, failed, total: rows.length };

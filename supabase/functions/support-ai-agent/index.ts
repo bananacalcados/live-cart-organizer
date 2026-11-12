@@ -1,4 +1,4 @@
-// Fase 4b: triagem + agente de suporte por IA, SÓ EM MODO SOMBRA (nunca envia nada).
+// Triagem + agente de suporte. Em modo automático, a decisão validada entra na fila protegida.
 // Chamado pelo banco (x-cron-secret) quando chega mensagem de suporte numa instância marcada.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { withAccessLog } from "../_shared/withAccessLog.ts";
@@ -23,10 +23,10 @@ Deno.serve(withAccessLog("support-ai-agent", async (req) => {
   const { suggestion_id } = await req.json().catch(() => ({}));
   if (typeof suggestion_id !== "string" || !/^[0-9a-f-]{36}$/i.test(suggestion_id)) return json({ error: "suggestion_id" }, 400);
 
-  const { data: s } = await sb.from("support_auto_suggestions").select("id,phone,whatsapp_number_id,channel,status,created_at,cost_due_at,cost_claimed_at,cost_prefilter_passed").eq("id", suggestion_id).maybeSingle();
+  const { data: s } = await sb.from("support_auto_suggestions").select("id,phone,whatsapp_number_id,channel,status,mode_at_creation,created_at,cost_due_at,cost_claimed_at,cost_prefilter_passed").eq("id", suggestion_id).maybeSingle();
   if (!s || s.status !== "processando") return json({ skipped: "not_pending" });
   const { data: st } = await sb.from("support_settings").select("*").limit(1).maybeSingle();
-  if (st?.auto_reply_mode !== "shadow" || !(st.auto_reply_instance_ids ?? []).includes(s.whatsapp_number_id) || Date.parse(s.cost_due_at ?? "") > Date.now()) return json({ skipped: "shadow_queue_guard" });
+  if (!['shadow','auto'].includes(st?.auto_reply_mode) || s.mode_at_creation !== st.auto_reply_mode || !(st.auto_reply_instance_ids ?? []).includes(s.whatsapp_number_id) || Date.parse(s.cost_due_at ?? "") > Date.now()) return json({ skipped: "queue_mode_guard" });
   if (!s.cost_claimed_at) {
     const { data: claimed, error } = await sb.rpc("support_cost_claim_direct", { p_id: s.id });
     if (error || !claimed) return json({ skipped: "already_claimed_or_filtered" });
@@ -105,8 +105,13 @@ Deno.serve(withAccessLog("support-ai-agent", async (req) => {
       other_instances: ctx.otherInstances, consolidation_target: outcome.consolidation ?? null,
       cpf_different_phone: outcome.cpfDifferentPhone ?? false,
     }).eq("id", s.id).eq("status", "processando");
-    // Linha SUPORTE: só move sozinho com o interruptor ligado e modo automático (checado no banco).
-    // Shadow evaluation never moves a conversation, regardless of configuration.
+    // Linha SUPORTE e envio real só passam pelas travas do banco no modo automático.
+    if (st.auto_reply_mode === 'auto') {
+      await sb.rpc('support_auto_route', { p_id: s.id });
+      const { data: queued, error: queueError } = await sb.rpc('support_suggestion_auto_enqueue', { p_id: s.id });
+      if (queueError) return json({ ok: true, decision: dec.decision, queue_error: queueError.message });
+      return json({ ok: true, decision: dec.decision, queued });
+    }
     return json({ ok: true, decision: dec.decision });
   } catch (e) {
     await flushLogs();

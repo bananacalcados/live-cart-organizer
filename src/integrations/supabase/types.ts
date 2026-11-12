@@ -25624,51 +25624,74 @@ export type Database = {
       }
       support_outbox: {
         Row: {
+          available_at: string
           claimed_at: string | null
           created_at: string
           error: string | null
           id: string
           idempotency_key: string | null
           link: string | null
+          link_id: string | null
           phone: string
           provider_message_id: string | null
           requested_by: string
           sent_at: string | null
           status: string
+          suggestion_id: string | null
           text: string
           whatsapp_number_id: string
         }
         Insert: {
+          available_at?: string
           claimed_at?: string | null
           created_at?: string
           error?: string | null
           id?: string
           idempotency_key?: string | null
           link?: string | null
+          link_id?: string | null
           phone: string
           provider_message_id?: string | null
           requested_by?: string
           sent_at?: string | null
           status?: string
+          suggestion_id?: string | null
           text: string
           whatsapp_number_id: string
         }
         Update: {
+          available_at?: string
           claimed_at?: string | null
           created_at?: string
           error?: string | null
           id?: string
           idempotency_key?: string | null
           link?: string | null
+          link_id?: string | null
           phone?: string
           provider_message_id?: string | null
           requested_by?: string
           sent_at?: string | null
           status?: string
+          suggestion_id?: string | null
           text?: string
           whatsapp_number_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "support_outbox_link_id_fkey"
+            columns: ["link_id"]
+            isOneToOne: false
+            referencedRelation: "support_links"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "support_outbox_suggestion_id_fkey"
+            columns: ["suggestion_id"]
+            isOneToOne: false
+            referencedRelation: "support_auto_suggestions"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "support_outbox_whatsapp_number_id_fkey"
             columns: ["whatsapp_number_id"]
@@ -30527,6 +30550,21 @@ export type Database = {
             }
             Returns: Json
           }
+        | {
+            Args: {
+              p_desired: string
+              p_detail: string
+              p_hash: string
+              p_item: string
+              p_quantity: number
+              p_reason: string
+              p_received_date?: string
+              p_replacement: string
+              p_type: string
+              p_unused: boolean
+            }
+            Returns: Json
+          }
       central_test_link_ok: { Args: { p_hash: string }; Returns: boolean }
       central_test_simulation_finish: {
         Args: { p_request_id: string; p_simulation: Json }
@@ -33807,22 +33845,29 @@ export type Database = {
         Returns: Json
       }
       support_cpf_valid: { Args: { p_value: string }; Returns: boolean }
+      support_emergency_pause: {
+        Args: { p_reason: string }
+        Returns: undefined
+      }
       support_mask_cpf_text: { Args: { p_value: string }; Returns: string }
       support_normalize_text: { Args: { p: string }; Returns: string }
       support_outbox_claim: {
         Args: { p_limit?: number }
         Returns: {
+          available_at: string
           claimed_at: string | null
           created_at: string
           error: string | null
           id: string
           idempotency_key: string | null
           link: string | null
+          link_id: string | null
           phone: string
           provider_message_id: string | null
           requested_by: string
           sent_at: string | null
           status: string
+          suggestion_id: string | null
           text: string
           whatsapp_number_id: string
         }[]
@@ -33852,6 +33897,7 @@ export type Database = {
         Args: { p_id: string }
         Returns: undefined
       }
+      support_suggestion_auto_enqueue: { Args: { p_id: string }; Returns: Json }
       support_suggestion_discard: {
         Args: { p_id: string; p_reason: string; p_wrong?: boolean }
         Returns: undefined

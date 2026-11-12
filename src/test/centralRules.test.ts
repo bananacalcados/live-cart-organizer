@@ -13,8 +13,8 @@ describe('central rules',()=>{
 });
 describe('interruptor exigir escolha do produto',()=>{
  it('ligado mantém o produto escolhido e reserva',()=>{const r=productChoiceRule({type:'troca',required:true,replacementId:'p1'});expect(r.replacementId).toBe('p1');expect(r.reserve).toBe(1);expect(r.forceEscalate).toBeNull();});
- it('desligado não reserva e escala com o motivo combinado',()=>{const r=productChoiceRule({type:'troca',required:false,replacementId:null,desired:'nº 37 preto'});expect(r.reserve).toBe(0);expect(r.forceEscalate).toBe('Cliente não escolheu o produto: escolha e separe o produto');expect(r.desired).toBe('nº 37 preto');});
- it('desligado ignora produto enviado por navegador adulterado',()=>{const r=productChoiceRule({type:'troca',required:false,replacementId:'p1'});expect(r.replacementId).toBeNull();expect(r.reserve).toBe(0);expect(r.forceEscalate).toBe(NO_CHOICE_REASON);});
+ it('desligado não reserva nem escala; expedição separa o produto novo',()=>{const r=productChoiceRule({type:'troca',required:false,replacementId:null,desired:'nº 37 preto'});expect(r.reserve).toBe(0);expect(r.forceEscalate).toBeNull();expect(NO_CHOICE_REASON).toBe('Produto novo a separar');expect(r.desired).toBe('nº 37 preto');});
+ it('desligado ignora produto enviado por navegador adulterado',()=>{const r=productChoiceRule({type:'troca',required:false,replacementId:'p1'});expect(r.replacementId).toBeNull();expect(r.reserve).toBe(0);expect(r.forceEscalate).toBeNull();});
  it('pedido de tamanho limitado a 200 caracteres',()=>{expect(productChoiceRule({type:'troca',required:false,replacementId:null,desired:'x'.repeat(300)}).desired?.length).toBe(200);});
  it('devolução não muda',()=>{const r=productChoiceRule({type:'devolucao',required:false,replacementId:null,desired:'37'});expect(r.forceEscalate).toBeNull();expect(r.desired).toBeNull();});
 });

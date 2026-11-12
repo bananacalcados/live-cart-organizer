@@ -1590,6 +1590,27 @@
       "when": 1794505249677,
       "tag": "0226_live_followup_postpone_human",
       "breakpoints": true
+    },
+    {
+      "idx": 227,
+      "version": "7",
+      "when": 1794516513042,
+      "tag": "0227_central_customer_received_auto_exchange",
+      "breakpoints": true
+    },
+    {
+      "idx": 228,
+      "version": "7",
+      "when": 1794516613192,
+      "tag": "0228_support_auto_sender_guards",
+      "breakpoints": true
+    },
+    {
+      "idx": 229,
+      "version": "7",
+      "when": 1794516726966,
+      "tag": "0229_support_auto_failure_pause_and_exchange_mark",
+      "breakpoints": true
     }
   ]
 }

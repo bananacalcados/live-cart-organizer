@@ -136,7 +136,7 @@ export function trackingNeedsHuman(t: TrackingInfo): string | null {
 export type AgentDeps = {
   orders: OrderCtx[];
   tracking?: (ref: string) => Promise<TrackingInfo | null>;
-  checkEligibility: (ref: string, tipo: "troca" | "devolucao") => Promise<{ elegivel: string; motivo: string; prazo_ate: string | null }>;
+  checkEligibility: (ref: string, tipo: "troca" | "devolucao", reportedDate?: string | null) => Promise<{ elegivel: string; motivo: string; prazo_ate: string | null }>;
   sizesInStock: (ref: string, item: string) => Promise<{ tamanhos: string[] } | { erro: string }>;
   offersAlreadyMade: number;
   maxOffers: number;
@@ -145,6 +145,7 @@ export type AgentDeps = {
   supportPhone?: string | null;
   now?: number;
   shippedAt?: (ref: string) => Promise<string | null>;
+  customerReceivedDate?: (ref: string, shippedAt: string | null) => Promise<{ date: string | null; claimed: boolean }>;
   cpfLookup?: () => Promise<{ found?: boolean; error?: string; first_name?: string; product?: string; month?: string; confirmed?: boolean; different_phone?: boolean }>;
 };
 export type AgentAction = { acao: string; pedido: Record<string, unknown>; resultado: unknown };
@@ -158,6 +159,7 @@ export type AgentOutcome = {
   cpfDifferentPhone?: boolean;
   resolved?: boolean;
   prazoPorEnvio?: boolean;
+  prazoPorRecebimentoInformado?: boolean;
   publicComment?: boolean;
 };
 
@@ -187,16 +189,35 @@ export async function runAgent(cfg: GatewayConfig, model: string, script: string
   const selected = deps.orders.length === 1 ? deps.orders[0] : deps.orders.find(o => o.ref === triage.facts?.selected_ref);
   if (deps.orders.length > 1 && !selected) return handoff("varios_pedidos_sem_identificacao", triage.justificativa);
   const wanted = preferredLink(triage.categoria, triage.facts ?? {}, deps.offersAlreadyMade);
-  if (selected?.canal === "online" && wanted) {
-    const eligibility = await deps.checkEligibility(selected.ref, wanted);
-    rec("checar_elegibilidade", { pedido: selected.ref, tipo: wanted }, eligibility);
-    if (eligibility.elegivel !== "eligible") {
-      // Sem data de entrega: a entrega é sempre depois do envio, então envio + 7 dias está garantidamente no prazo.
-      const shipped = eligibility.motivo === "sem_data_de_entrega" && deps.shippedAt ? await deps.shippedAt(selected.ref) : null;
-      if (!withinWindowByShipping(shipped, now)) return handoff(eligibility.motivo, triage.justificativa);
+  const eligibilityWithEvidence = async (ref: string, tipo: "troca" | "devolucao") => {
+    let eligibility = await deps.checkEligibility(ref, tipo);
+    rec("checar_elegibilidade", { pedido: ref, tipo }, eligibility);
+    if (eligibility.elegivel === "eligible" || eligibility.motivo !== "sem_data_de_entrega" || !deps.shippedAt) return { eligibility, askReceivedDate: false };
+    const shipped = await deps.shippedAt(ref);
+    if (withinWindowByShipping(shipped, now)) {
       out.prazoPorEnvio = true;
-      rec("prazo_pela_data_de_envio", { pedido: selected.ref }, { enviado_em: shipped, garantido: true });
+      rec("prazo_pela_data_de_envio", { pedido: ref }, { enviado_em: shipped, garantido: true });
+      return { eligibility: { ...eligibility, elegivel: "eligible" }, askReceivedDate: false };
     }
+    if (shipped && now > Date.parse(shipped) + 7 * 864e5 && deps.customerReceivedDate) {
+      const reported = await deps.customerReceivedDate(ref, shipped);
+      if (reported.date) {
+        eligibility = await deps.checkEligibility(ref, tipo, reported.date);
+        rec("data_recebimento_informada", { pedido: ref }, { data: reported.date, elegibilidade: eligibility });
+        if (eligibility.elegivel === "eligible") out.prazoPorRecebimentoInformado = true;
+        return { eligibility, askReceivedDate: false };
+      }
+      if (!reported.claimed) return { eligibility, askReceivedDate: true };
+    }
+    return { eligibility, askReceivedDate: false };
+  };
+  if (selected?.canal === "online" && wanted) {
+    const checked = await eligibilityWithEvidence(selected.ref, wanted);
+    if (checked.askReceivedDate) {
+      out.text = `${nome ? `${nome}, ` : ""}para eu confirmar o prazo, você lembra em qual dia recebeu o pedido? Pode me passar a data, por favor?`;
+      return out;
+    }
+    if (checked.eligibility.elegivel !== "eligible") return handoff(checked.eligibility.motivo, triage.justificativa);
     out.link = { ref: selected.ref, tipo: wanted };
     out.exchangeOffered = triage.categoria === "devolucao" && wanted === "troca";
     rec("preparar_link", { pedido: selected.ref, tipo: wanted }, { ok: true });
@@ -245,8 +266,9 @@ export async function runAgent(cfg: GatewayConfig, model: string, script: string
         if (!o) return rec("preparar_link", { pedido, tipo }, { ok: false, motivo: "pedido_inexistente" });
         if (o.canal !== "online") return rec("preparar_link", { pedido, tipo }, { ok: false, motivo: "compra_na_loja_troca_presencial" });
         if (out.link) return rec("preparar_link", { pedido, tipo }, { ok: false, motivo: "link_ja_preparado" });
-        const el = await deps.checkEligibility(pedido, tipo);
-        if (el.elegivel !== "eligible") return rec("preparar_link", { pedido, tipo }, { ok: false, motivo: el.motivo, instrucao: "escale para humano" });
+        const checked = await eligibilityWithEvidence(pedido, tipo);
+        if (checked.askReceivedDate) return rec("preparar_link", { pedido, tipo }, { ok: false, motivo: "informar_data_recebimento", instrucao: "pergunte em qual dia a cliente recebeu o pedido" });
+        if (checked.eligibility.elegivel !== "eligible") return rec("preparar_link", { pedido, tipo }, { ok: false, motivo: checked.eligibility.motivo, instrucao: "escale para humano" });
         out.link = { ref: pedido, tipo };
         return rec("preparar_link", { pedido, tipo }, { ok: true, escreva_no_texto: "{{link}}" });
       },
@@ -318,11 +340,11 @@ CONTEXTO DO SISTEMA (não invente nada além disso):
 }
 
 /** Decisão final é do sistema, a partir das ações validadas. */
-export function finalDecision(o: Pick<AgentOutcome, "link" | "handoff"> & { tracking?: AgentOutcome["tracking"]; consolidation?: AgentOutcome["consolidation"]; resolved?: boolean; prazoPorEnvio?: boolean }, orders: OrderCtx[]): { decision: string; reason: string } {
+export function finalDecision(o: Pick<AgentOutcome, "link" | "handoff"> & { tracking?: AgentOutcome["tracking"]; consolidation?: AgentOutcome["consolidation"]; resolved?: boolean; prazoPorEnvio?: boolean; prazoPorRecebimentoInformado?: boolean }, orders: OrderCtx[]): { decision: string; reason: string } {
   if (o.resolved) return { decision: "nada", reason: "caso_ja_resolvido" };
   if (o.consolidation) return { decision: "consolidar_em_outra_instancia", reason: "atendimento_humano_mesmo_assunto:" + o.consolidation.id };
   if (o.handoff) return { decision: "fila", reason: "ia_escalou:" + o.handoff.motivo };
-  if (o.link) return { decision: "enviar_link", reason: o.prazoPorEnvio ? "prazo_garantido_pela_data_de_envio" : "um_pedido_elegivel" };
+  if (o.link) return { decision: "enviar_link", reason: o.prazoPorRecebimentoInformado ? "prazo_pela_data_informada_pela_cliente" : o.prazoPorEnvio ? "prazo_garantido_pela_data_de_envio" : "um_pedido_elegivel" };
   if (o.tracking) {
     const h = trackingNeedsHuman(o.tracking.info);
     if (h) return { decision: "fila", reason: "rastreio:" + h };

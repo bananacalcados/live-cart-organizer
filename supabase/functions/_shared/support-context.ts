@@ -3,6 +3,7 @@
 import type { AgentDeps, ConvMessage, OrderCtx, TrackingInfo } from "./support-ai.ts";
 import { firstName } from "./support-ai.ts";
 import { consolidationAllowed, cpfIdentityConfirmed, humanOtherInstances, unifyMessages, validCpf, type SupportFacts } from "./support-policy.ts";
+import { customerReceiptFromConversation } from "./support-received-date.ts";
 
 export const ONLINE_CHANNELS = ["site", "live", "link_online", "whatsapp"];
 export const TRACK_BASE = "https://checkout.bananacalcados.com.br/rastreio/";
@@ -78,10 +79,10 @@ export async function buildSupportContext(sb: Sb, s: { phone: string; whatsapp_n
 
   const deps: SupportContext["deps"] = {
     orders,
-    checkEligibility: async (ref, tipo) => {
+    checkEligibility: async (ref, tipo, reportedDate) => {
       const id = saleIds.get(ref);
       if (!id) return { elegivel: "needs_human", motivo: "pedido_inexistente", prazo_ate: null };
-      const { data, error } = await sb.rpc("check_exchange_eligibility", { p_order_ref: id, p_request_type: tipo });
+      const { data, error } = await sb.rpc("check_exchange_eligibility", { p_order_ref: id, p_request_type: tipo, p_customer_reported_date: reportedDate ?? null });
       if (error) return { elegivel: "needs_human", motivo: "erro_consulta", prazo_ate: null };
       return { elegivel: data?.eligible ?? "needs_human", motivo: data?.reason ?? "", prazo_ate: data?.deadline_at ? String(data.deadline_at).slice(0, 10) : null };
     },
@@ -98,6 +99,7 @@ export async function buildSupportContext(sb: Sb, s: { phone: string; whatsapp_n
       const t = trackingFromSim(sims.get(id), false);
       return t?.enviado_em ?? saleShip.get(id) ?? null;
     },
+    customerReceivedDate: async (_ref, shippedAt) => customerReceiptFromConversation(conv, shippedAt, Date.parse(opts.until ?? new Date().toISOString())),
     tracking: async (ref) => trackingFromSim(sims.get(saleIds.get(ref) ?? ""), opts.shareLastEvent),
     cpfLookup: async () => {
       const cpfMessage = [...conv].reverse().find(m => m.from === "cliente" && /\b\d{3}\.?\d{3}\.?\d{3}-?\d{2}\b/.test(m.text));

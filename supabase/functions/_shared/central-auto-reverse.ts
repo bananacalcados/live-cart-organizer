@@ -110,6 +110,7 @@ export async function runCentralAutoReverse(db: Db, requestId: string, invoke: I
   // Um registro já existente sem código pode ser a outra chamada simultânea ainda processando.
   // Nunca emite outra nota nem outra pré-postagem: a equipe retoma a mesma reversa.
   const reason = String(providerError || 'Os Correios não retornaram o código de postagem').slice(0, 800);
+  await rpc(db, 'support_emergency_pause', { p_reason: `Falha na reversa/NF da Central: ${reason}` }).catch(() => null);
   await rpc(db, 'central_reverse_finish', {
     p_request_id: requestId, p_reverse_id: item?.id || null, p_code: null, p_valid_until: null, p_error: reason,
   }).catch(() => null);

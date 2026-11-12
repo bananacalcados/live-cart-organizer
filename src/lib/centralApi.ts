@@ -24,6 +24,7 @@ export interface CentralResult {
 }
 export interface CentralContext {
   first_name: string; type: CentralType; items: CentralItem[]; delivered_at: string | null; deadline_at: string | null;
+  shipped_at?: string | null; requires_received_date?: boolean; received_date_min?: string | null; received_date_max?: string | null;
   eligibility: string; used: boolean; require_product_choice?: boolean; is_test?: boolean; test_simulation?: CentralSimulation | null;
   progress: { id: string; item_id: string | null; item_name?: string | null; item_size?: string | null; status: string; type: string; reason: string | null; reverse_code?: string | null; reverse_valid_until?: string | null }[];
 }

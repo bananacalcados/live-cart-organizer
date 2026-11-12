@@ -4,7 +4,7 @@ import { CENTRAL_PENDING_TEXT } from './central-auto-reverse.ts';
 
 const base = z.object({ token: z.string().min(32).max(128).regex(/^[A-Za-z0-9_-]+$/), type: z.enum(['troca','devolucao']) });
 const resolveSchema = base.extend({ item_id: z.string().uuid().optional(), search: z.string().trim().max(100).default(''), offset: z.number().int().min(0).max(10000).default(0) });
-const submitSchema = base.extend({ item_id: z.string().uuid(), quantity: z.number().int().min(1).max(100), reason: z.enum(['tamanho','defeito','nao_gostou','produto_errado','outro']), detail: z.string().trim().min(3).max(1000), replacement_id: z.string().uuid().nullable().optional(), unused: z.boolean(), desired: z.string().trim().max(200).nullable().optional() });
+const submitSchema = base.extend({ item_id: z.string().uuid(), quantity: z.number().int().min(1).max(100), reason: z.enum(['tamanho','defeito','nao_gostou','produto_errado','outro']), detail: z.string().trim().min(3).max(1000), replacement_id: z.string().uuid().nullable().optional(), unused: z.boolean(), desired: z.string().trim().max(200).nullable().optional(), received_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional() });
 type Db = { rpc: (name: string, args: Record<string, unknown>) => PromiseLike<{ data: any; error: any }> };
 const response = (data: unknown, status = 200) => new Response(JSON.stringify(data), { status, headers: { ...corsHeaders, 'Content-Type': 'application/json', 'Cache-Control': 'no-store', 'Referrer-Policy': 'no-referrer' } });
 export async function hashCentralToken(token: string) {
@@ -63,8 +63,8 @@ export function centralHandler(kind: 'resolve' | 'submit', db: Db, enabled: () =
         const s = submitSchema.parse(body);
         if (s.type==='devolucao' && s.replacement_id) return response({ error: 'Devolução não tem escolha de produto novo.' },400);
         name='central_submit_atomic';
-        Object.assign(args,{ p_item:s.item_id,p_quantity:s.quantity,p_reason:s.reason,p_detail:s.detail,p_replacement:s.replacement_id ?? null,p_unused:s.unused,p_desired:s.type==='troca' ? (s.desired || null) : null });
-        // O banco decide pelo interruptor central_require_product_choice: desligado ignora replacement_id e escala.
+        Object.assign(args,{ p_item:s.item_id,p_quantity:s.quantity,p_reason:s.reason,p_detail:s.detail,p_replacement:s.replacement_id ?? null,p_unused:s.unused,p_desired:s.type==='troca' ? (s.desired || null) : null,p_received_date:s.received_date ?? null });
+        // Sem escolha obrigatória, o banco aprova e marca "produto novo a separar"; a conferência continua obrigatória.
       } else {
         const r=resolveSchema.parse(body);
         if (r.item_id) { name='central_options'; Object.assign(args,{ p_item:r.item_id,p_search:r.search,p_limit:50,p_offset:r.offset }); }

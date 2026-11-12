@@ -22,6 +22,18 @@ Deno.test("2 prazo garantido pela data de envio", async () => {
   const late = await runAgent(cfg, "x", "", "Joyce", tri("troca"), [m("cliente", "ficou pequeno", "2026-11-11T11:59:00Z")], { ...d, shippedAt: async () => "2026-10-20" }, () => {});
   assertEquals(late.handoff?.motivo, "sem_data_de_entrega");
 });
+Deno.test("2b após envio + 7, usa a data de recebimento informada pela cliente", async () => {
+  const now = Date.parse("2026-11-12T20:45:00Z");
+  const calls: (string | null | undefined)[] = [];
+  const d = deps({ now, shippedAt: async () => "2026-11-04T17:03:07Z", customerReceivedDate: async () => ({ date: "2026-11-11", claimed: true }), checkEligibility: async (_r: string, _t: string, date?: string | null) => { calls.push(date); return date ? { elegivel: "eligible", motivo: "data_informada_pelo_cliente", prazo_ate: "2026-11-18" } : { elegivel: "needs_human", motivo: "sem_data_de_entrega", prazo_ate: null }; } });
+  const o = await runAgent(cfg, "x", "", "Arlete", tri("devolucao"), [m("cliente", "Recebi ontem 11\\11\\26", "2026-11-12T19:03:17Z")], d, () => {});
+  assertEquals(calls, [undefined, "2026-11-11"]); assertEquals(o.link?.tipo, "troca"); assertEquals(finalDecision(o, [order]).reason, "prazo_pela_data_informada_pela_cliente");
+});
+Deno.test("2c após envio + 7 e sem data, pergunta antes de enviar link", async () => {
+  const d = deps({ now: Date.parse("2026-11-12T20:45:00Z"), shippedAt: async () => "2026-11-04T17:03:07Z", customerReceivedDate: async () => ({ date: null, claimed: false }), checkEligibility: async () => ({ elegivel: "needs_human", motivo: "sem_data_de_entrega", prazo_ate: null }) });
+  const o = await runAgent(cfg, "x", "", "Arlete", tri("devolucao"), [m("cliente", "qual o procedimento para devolução?", "2026-11-12T19:03:17Z")], d, () => {});
+  assert(o.text.includes("qual dia recebeu")); assertEquals(o.link, null); assertEquals(o.handoff, null);
+});
 Deno.test("3 escalar em silêncio, mensagem só após 30 min e útil", async () => {
   assertEquals(silentHandoffText("situacao_sensivel", 10, "Ana"), "");
   assertEquals(silentHandoffText("varios_pedidos", 60, "Ana"), "");

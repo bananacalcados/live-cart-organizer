@@ -34,6 +34,7 @@ export default function CentralPublicPage({ type }: { type: CentralType }) {
   const [optionQuery, setOptionQuery] = useState('');
   const [offset, setOffset] = useState(0);
   const [desired, setDesired] = useState('');
+  const [receivedDate, setReceivedDate] = useState('');
   const [result, setResult] = useState<CentralResult | null>(null);
   const [showExchangeOffer, setShowExchangeOffer] = useState(false);
 
@@ -56,7 +57,7 @@ export default function CentralPublicPage({ type }: { type: CentralType }) {
   const selected = freeItems.find(x => x.id === item);
   const overlap = context?.progress.find(x => x.item_id === item);
   const choice = type === 'troca' && context?.require_product_choice !== false;
-  const valid = Boolean(selected && reason && detail.trim().length >= 3 && quantity >= 1 && quantity <= (selected?.quantity || 0));
+  const valid = Boolean(selected && reason && detail.trim().length >= 3 && quantity >= 1 && quantity <= (selected?.quantity || 0) && (!context?.requires_received_date || receivedDate));
   const simulation = result?.simulation || context?.test_simulation || null;
 
   async function loadOptions(query = '', page = 0) {
@@ -77,11 +78,12 @@ export default function CentralPublicPage({ type }: { type: CentralType }) {
         token, type, item_id: item, quantity, reason, detail, unused,
         replacement_id: type === 'troca' && choice && replacement ? replacement : null,
         desired: type === 'troca' && !choice ? desired.trim().slice(0, 200) || null : null,
+        received_date: context?.requires_received_date ? receivedDate : null,
       });
       setResult(submitted);
       setShowExchangeOffer(type === 'devolucao' && (reason === 'tamanho' || reason === 'nao_gostou'));
       setContext(await centralCall<CentralContext>('central-resolve', { token, type }));
-      setItem(''); setReason(''); setDetail(''); setQuantity(1); setUnused(false); setStage(1); setChosen(''); setDesired('');
+      setItem(''); setReason(''); setDetail(''); setQuantity(1); setUnused(false); setStage(1); setChosen(''); setDesired(''); setReceivedDate('');
     } catch (e) { setError(e instanceof Error ? e.message : 'Não foi possível enviar.'); }
     finally { setBusy(false); }
   }
@@ -157,6 +159,7 @@ export default function CentralPublicPage({ type }: { type: CentralType }) {
               <div className="space-y-2"><label htmlFor="central-detail" className="font-semibold">Conte um pouco mais</label><Textarea id="central-detail" maxLength={1000} value={detail} onChange={e => setDetail(e.target.value)} /></div>
               <div className="space-y-2"><label htmlFor="central-quantity" className="font-semibold">Quantidade</label><Input id="central-quantity" type="number" min={1} max={selected?.quantity || 1} value={quantity} onChange={e => setQuantity(Number(e.target.value))} className="w-24" /></div>
               <label className="flex items-start gap-3 text-sm"><Checkbox checked={unused} onCheckedChange={v => setUnused(v === true)} />O produto está sem uso, com etiquetas e embalagem original.</label>
+              {context.requires_received_date && <div className="space-y-2"><label htmlFor="central-received-date" className="font-semibold">Em qual dia você recebeu o pedido?</label><Input id="central-received-date" type="date" required min={context.received_date_min || undefined} max={context.received_date_max || undefined} value={receivedDate} onChange={e => setReceivedDate(e.target.value)} /><p className="text-sm text-muted-foreground">Como a transportadora ainda não confirmou a entrega, vamos usar a data informada por você para conferir o prazo.</p></div>}
               {type === 'troca' && !choice && <div className="space-y-2"><label htmlFor="central-desired" className="font-semibold">Qual tamanho ou modelo você procura? (opcional)</label><Input id="central-desired" maxLength={200} value={desired} onChange={e => setDesired(e.target.value)} placeholder="Ex.: número 37, mesma cor" /><p className="text-sm text-muted-foreground">Nossa equipe vai escolher e separar o produto pra você.</p></div>}
               {choice && stage === 1 && <Button disabled={!valid || busy} onClick={() => loadOptions()} className="w-full">Ver outras numerações<ArrowRight className="ml-2 h-4 w-4" /></Button>}
               {type === 'troca' && stage === 2 && <div className="space-y-4">

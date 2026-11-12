@@ -193,3 +193,10 @@
 - [x] Cancelamento antes do envio guiado (direto / cancelar nota / nota de entrada só admin / despachado = devolução)
 - [x] Rastreio colado como link vira código + transportadora (retroativo)
 - [ ] 2 rastreios com formato não reconhecido e 1 venda com transportadora divergente — conferir à mão
+
+# Atendimento automático real autorizado (12/11)
+- [ ] Troca sem escolha de produto: registro, NF/reversa e mensagem automáticos; novo produto só após conferência
+- [ ] Data de recebimento informada pela cliente com validade anti-burla e registro da origem
+- [ ] Diagnosticar e corrigir rastreio sem eventos; medir e reprocessar vendas dos últimos 30 dias
+- [ ] Rodar uma vez a fila elegível começando pela Arlete, com limites e travas
+- [ ] Reportar envios/escaladas e voltar ao modo sombra se houver erro de envio, NF ou Correios
