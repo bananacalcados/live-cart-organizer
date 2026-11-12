@@ -1611,6 +1611,13 @@
       "when": 1794516726966,
       "tag": "0229_support_auto_failure_pause_and_exchange_mark",
       "breakpoints": true
+    },
+    {
+      "idx": 230,
+      "version": "7",
+      "when": 1794517928610,
+      "tag": "0230_live_followup_instagram_batch_isolation",
+      "breakpoints": true
     }
   ]
 }

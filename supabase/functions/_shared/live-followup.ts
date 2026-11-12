@@ -26,6 +26,7 @@ export async function scheduleGlobalFollowups(sb: Client, simulation?: {eventId:
   const { data: sources, error } = await sb.rpc(simulation?'live_followup_audit_contexts':'live_followup_source_contexts', simulation?{p_event_id:simulation.eventId,p_limit:100,p_offset:simulation.offset}:{ p_limit: 50 });
   if (error) throw error;
   let scheduled = 0;
+  let deferred = 0;
   const counts: Record<string,number>={A:0,B:0,C:0,D:0,E:0,F:0};
   const senders: Record<string,string[]>={A:[],B:[],C:[],D:[],E:[],F:[]};
   let privateReplies=0, endedPrivateReplies=0;
@@ -56,14 +57,32 @@ export async function scheduleGlobalFollowups(sb: Client, simulation?: {eventId:
     // Stale bases (e.g. a source that changed hours later or a recovered backlog) never create late reminders.
     if (!simulation && Date.now() - Date.parse(base) > MAX_SCHEDULE_BASE_AGE_MIN * 60000) { await ack(); continue; }
     // Context uses the same live_event_sender RPC as event-sender.ts, batched in SQL.
-    const numberId = type === 'F' ? c.ig_instance_id : ev.whatsapp_number_id;
+    // O fallback do Instagram fica fora da consulta em lote: uma falha afeta só
+    // este item, que permanece na fila para nova tentativa sem travar os demais.
+    let numberId = type === 'F' ? c.ig_instance_id : ev.whatsapp_number_id;
+    let instagramContext: any = null;
+    if (type === 'F' && !numberId) {
+      try {
+        const igctx = await sb.rpc('instagram_reply_context', { p_username: ig, p_event_id: ev.id, p_number_id: null });
+        if (igctx.error) throw igctx.error;
+        instagramContext = igctx.data;
+        numberId = instagramContext?.number_id || null;
+      } catch (error) {
+        deferred++;
+        console.warn('[followup] Instagram context failed; source kept for retry', {
+          sourceKey: source.source_key,
+          error: error instanceof Error ? error.message : String(error),
+        });
+        continue;
+      }
+    }
     if (!numberId) { await ack(); continue; }
     if(simulation){
       const jobCount=type==='F'?1:cfg.types[type].steps.length;
       counts[type]+=jobCount;
       if(!senders[type].includes(numberId))senders[type].push(numberId);
       if(type==='F') {
-        const igctx=await sb.rpc('instagram_reply_context',{p_username:ig,p_event_id:ev.id,p_number_id:numberId});
+        const igctx=instagramContext ? {data:instagramContext,error:null} : await sb.rpc('instagram_reply_context',{p_username:ig,p_event_id:ev.id,p_number_id:numberId});
         if(igctx.error)throw igctx.error;
         const mode=instagramFollowupMode(igctx.data);
         if(mode==='private_reply')privateReplies++;
@@ -90,7 +109,7 @@ export async function scheduleGlobalFollowups(sb: Client, simulation?: {eventId:
       if (r.error) throw r.error;
     }
   }
-  return {scheduled,enabled:true,...(simulation?{simulated:true,scanned:sources?.length || 0,counts,senders,privateReplies,endedPrivateReplies,provider_calls:0}:{})};
+  return {scheduled,enabled:true,deferred,...(simulation?{simulated:true,scanned:sources?.length || 0,counts,senders,privateReplies,endedPrivateReplies,provider_calls:0}:{})};
 }
 
 export async function processGlobalFollowups(sb: Client) {

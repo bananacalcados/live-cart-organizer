@@ -10,6 +10,7 @@ import { saveMetaAttribution, buildFbc, extractCtwaClid } from "../_shared/meta-
 import { looksLikeBrLocal } from "../_shared/br-local-phone.ts";
 import { isGroupChatOwner } from "../_shared/group-chat-owner.ts";
 import { extractCrossellButton } from "../_shared/crossell-blocks.ts";
+import { groupReceiptSkipReason } from "../_shared/uazapi-group-receipt-filter.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -320,6 +321,7 @@ serve(withAccessLog("uazapi-webhook", async (req) => {
     const payload = (await req.json().catch(() => ({}))) as AnyObj;
     const eventType = (asString(payload.EventType) || asString(payload.event) || "").toLowerCase();
     const instanceToken = asString(payload.token);
+    const groupReceiptSkip = groupReceiptSkipReason(payload, url.searchParams.get("number_id"));
 
     // LOG BRUTO COMO PRIMEIRA AÇÃO (caixa-preta). Nunca pode bloquear o fluxo.
     let rawEventId: string | null = null;
@@ -331,6 +333,7 @@ serve(withAccessLog("uazapi-webhook", async (req) => {
           event_type: eventType || null,
           owner: asString(payload.owner) || null,
           payload,
+          ...(groupReceiptSkip ? { skip_reason: groupReceiptSkip } : {}),
         })
         .select("id")
         .maybeSingle();
@@ -338,6 +341,10 @@ serve(withAccessLog("uazapi-webhook", async (req) => {
     } catch (e) {
       console.error("[uazapi-webhook] raw log falhou:", (e as Error).message);
     }
+
+    // Recibos agregados de grupos não são usados. Sai antes de resolver a
+    // instância, atualizar mensagens ou aguardar a corrida de 2 segundos.
+    if (groupReceiptSkip) return ok({ skipped: groupReceiptSkip });
 
     // Marca o motivo de descarte nas saídas silenciosas (deixa rastro).
     const markSkip = async (reason: string) => {
