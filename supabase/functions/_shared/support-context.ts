@@ -48,7 +48,7 @@ export async function buildSupportContext(sb: Sb, s: { phone: string; whatsapp_n
       .in("status", ["completed", "paid"]).order("created_at", { ascending: false }).limit(5);
     const valid = (sales ?? []).filter((x: any) => String(x.status_cancelamento ?? "") !== "cancelado");
     const ids = valid.map((x: any) => x.id);
-    for (const x of valid) saleShip.set(x.id, x.shipped_at ?? x.expedition_finished_at ?? null);
+    for (const x of valid) saleShip.set(x.id, x.shipped_at ?? null); // só data de envio real (sem ela → análise humana)
     const [{ data: items }, { data: simRows }] = await Promise.all([
       ids.length ? sb.from("pos_sale_items").select("sale_id,product_name,size,variant_name,quantity,sku").in("sale_id", ids) : Promise.resolve({ data: [] }),
       ids.length ? sb.from("shipment_simulations").select("id,sale_id,tracking_code,stage,stage_history,posted_at,delivered_at,incident_type,merged_into_id,real_events,created_at").in("sale_id", ids) : Promise.resolve({ data: [] }),

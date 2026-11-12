@@ -1,4 +1,5 @@
 import { SplitPartsSummary } from "@/components/checkout/SplitPartsSummary";
+import { normalizeTrackingField } from "@/lib/logistics/trackingInput";
 import { useState, useEffect } from "react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -256,7 +257,7 @@ export function POSSaleDetailDialog({ sale, onClose, customer, items, sellerName
     if (!sale) return;
     setSavingTracking(true);
     try {
-      const code = trackingCode.trim();
+      const code = normalizeTrackingField(trackingCode.trim());
       const { error } = await supabase
         .from('pos_sales')
         .update({ tracking_code: code || null } as any)
@@ -1622,11 +1623,17 @@ export function POSSaleDetailDialog({ sale, onClose, customer, items, sellerName
                 <h4 className="text-xs uppercase tracking-wider text-gray-500 font-bold flex items-center gap-1.5">
                   <Truck className="h-3.5 w-3.5 text-indigo-600" /> Rastreio
                 </h4>
+                {(sale as any).shipped_at && (
+                  <p className="text-xs text-muted-foreground">
+                    Enviado em <b>{new Date((sale as any).shipped_at).toLocaleString("pt-BR")}</b>
+                    {(sale as any).shipped_source === "transportadora" ? " (data da transportadora)" : " (conclusão da expedição)"}
+                  </p>
+                )}
                 <div className="p-3 rounded-lg bg-indigo-50 border border-indigo-200 space-y-2">
                   <div className="flex gap-2">
                     <Input
                       value={trackingCode}
-                      onChange={(e) => setTrackingCode(e.target.value.toUpperCase())}
+                      onChange={(e) => setTrackingCode(normalizeTrackingField(e.target.value).toUpperCase())}
                       placeholder="Código de rastreio (ex: AA123456789BR)"
                       className="flex-1 h-9 text-sm font-mono bg-white"
                     />

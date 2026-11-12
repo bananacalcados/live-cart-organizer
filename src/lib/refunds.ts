@@ -144,7 +144,9 @@ export const REFUND_REASONS = [
 
 export interface RefundFiscalCheck {
   allowed: boolean; error: string | null; warning: string | null; missing: string[];
-  facts: { sale_id: string | null; registered: boolean; received: boolean; return_note_ready: boolean };
+  step?: "estorno_direto" | "cancelar_nota" | "nota_entrada_admin" | "aguardar_nota" | "devolucao" | null;
+  facts: { sale_id: string | null; registered: boolean; received: boolean; return_note_ready: boolean;
+    shipped?: boolean; sale_note_cancellable?: boolean; sale_note_id?: string | null; sale_note_modelo?: number | null; sale_note_numero?: number | string | null };
 }
 export interface RefundFiscalPending {
   estorno_id: string; venda_id: string | null; cliente: string | null; data_estorno: string; valor_estorno: number;

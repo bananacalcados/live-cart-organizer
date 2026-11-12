@@ -1406,6 +1406,12 @@ export function POSExpedition({ storeId, storeName, focusSaleId }: Props) {
                                   <CheckCircle2 className="h-4 w-4" />
                                   Concluído: {o.expedition_finished_at ? new Date(o.expedition_finished_at).toLocaleString("pt-BR") : "—"}
                                 </span>
+                                {(o as any).shipped_at && (
+                                  <span className="flex items-center gap-1">
+                                    <Truck className="h-4 w-4" />
+                                    Enviado: {new Date((o as any).shipped_at).toLocaleString("pt-BR")}{(o as any).shipped_source === "transportadora" ? " · transportadora" : ""}
+                                  </span>
+                                )}
                               </>
                             ) : (
                               <span>{new Date(o.created_at).toLocaleString("pt-BR")}</span>

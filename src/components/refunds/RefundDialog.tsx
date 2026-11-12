@@ -56,7 +56,7 @@ export function RefundDialog({ source, sourceId, label, customerName, onDone }: 
   const parsedAmount = useMemo(() => parseBrlAmount(amount), [amount]);
   const remaining = preview?.remaining ?? 0;
   const isFull = remaining > 0 && Math.abs(parsedAmount - remaining) < 0.005;
-  const canSuggestCancel = source === "order" && isFull && preview?.source && !preview.source.shipped;
+  const canSuggestCancel = isFull && !!preview?.source && !preview.source.shipped && (source === "order" || reason === "cancelamento_antes_envio");
 
   const load = async () => {
     setStep("loading");
@@ -264,7 +264,7 @@ export function RefundDialog({ source, sourceId, label, customerName, onDone }: 
               {canSuggestCancel && (
                 <label className="flex items-start gap-2 rounded-md border border-pos-white/15 bg-pos-white/5 p-3 text-xs cursor-pointer">
                   <input type="checkbox" checked={cancelOrder} onChange={(e) => setCancelOrder(e.target.checked)} className="mt-0.5" />
-                  <span>Também mover este pedido da live para <b>cancelado</b> após o estorno integral (ele ainda não foi enviado).</span>
+                  <span>Também <b>cancelar</b> o pedido após o estorno integral e tirá-lo da fila da Expedição (ele ainda não foi enviado).</span>
                 </label>
               )}
 

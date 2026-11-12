@@ -70,7 +70,7 @@ async function loadSource(supabase: any, source: string, id: string): Promise<So
   }
   const { data } = await supabase
     .from("pos_sales")
-    .select("id, mercadopago_payment_id, mp_account_id, appmax_order_id, austpay_transaction_id, total, status, payment_method, created_at, paid_at, shipped_at, customer_name")
+    .select("id, mercadopago_payment_id, mp_account_id, appmax_order_id, austpay_transaction_id, total, status, payment_method, created_at, paid_at, shipped_at, expedition_stage, customer_name")
     .eq("id", id)
     .maybeSingle();
   if (!data) return null;
@@ -92,7 +92,7 @@ async function loadSource(supabase: any, source: string, id: string): Promise<So
     customerName: data.customer_name || null,
     isPaid: !!data.paid_at || ["paid", "completed", "shipped", "delivered"].includes(String(data.status || "")),
     stageOrStatus: data.status || null,
-    shipped: !!data.shipped_at || ["shipped", "delivered"].includes(String(data.status || "")),
+    shipped: !!data.shipped_at || data.expedition_stage === "concluido" || ["shipped", "delivered"].includes(String(data.status || "")),
     createdAt: data.created_at,
   };
 }

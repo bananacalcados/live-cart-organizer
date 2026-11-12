@@ -141,6 +141,7 @@ export function ExchangeDeskCard({ id, staff, onClose, onChanged }: { id: string
               <div><b>Pedido:</b> {r.order_number || r.order_ref || "—"} {d.sale?.store_name ? `· ${d.sale.store_name}` : ""}</div>
               <div><b>Compra:</b> {fmtDate(d.sale?.created_at)} · {brl(d.sale?.total)}</div>
               <div><b>Telefone:</b> {r.phone}</div>
+              <div><b>Envio:</b> {d.sale?.shipped_at ? `${fmtDate(d.sale.shipped_at)} — ${d.sale.shipped_source === "transportadora" ? "transportadora" : "expedição"}` : "sem data de envio"}</div>
               <div><b>Entrega:</b> {fmtDate(d.delivery?.delivered_at)} — {SOURCE_LABEL(d.delivery?.source)}</div>
               {d.delivery?.customer_reported_at && <div><b>Cliente disse que recebeu:</b> {fmtDate(d.delivery.customer_reported_at)}</div>}
               <div><b>Prazo:</b> {fmtDate(r.deadline_at)} {left !== null && (left >= 0 ? `(${left} dia(s) restantes)` : <span className="text-destructive">({-left} dia(s) excedidos)</span>)}</div>

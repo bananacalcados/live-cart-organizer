@@ -180,3 +180,10 @@
 # Pesquisa nos comentários da apresentadora
 - [x] Caixa de busca no painel de comentários: filtra por @ e pelo texto, sem acento/maiúscula, sobre os comentários já carregados (nenhuma consulta nova)
 - [x] Testar no painel real da live: 600 → 46 (origin), 9 (comprei), 19 (@elisangel), limpar volta a 600; 5 testes, sem publicar
+
+## Data de envio, prazo, cancelamento antes do envio e rastreio (12/11)
+- [x] Data de envio real salva no despacho e corrigida pelo 1º evento da transportadora; retroativo aplicado
+- [x] Prazo garantido por envio + 7 dias de volta na Central e no agente
+- [x] Cancelamento antes do envio guiado (direto / cancelar nota / nota de entrada só admin / despachado = devolução)
+- [x] Rastreio colado como link vira código + transportadora (retroativo)
+- [ ] 2 rastreios com formato não reconhecido e 1 venda com transportadora divergente — conferir à mão

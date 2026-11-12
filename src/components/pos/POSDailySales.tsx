@@ -219,7 +219,7 @@ export function POSDailySales({ storeId }: Props) {
     try {
       const { start, end } = getDateRange();
 
-      const selectFields = "id, created_at, paid_at, subtotal, discount, total, payment_method, seller_id, status, tiny_order_number, tiny_order_id, customer_id, sale_type, customer_name, checkout_step, payment_details, tracking_code, payment_gateway, payment_link, mercadopago_payment_id, external_source, external_order_id, sale_released_at, expedition_stage";
+      const selectFields = "id, created_at, paid_at, subtotal, discount, total, payment_method, seller_id, status, tiny_order_number, tiny_order_id, customer_id, sale_type, customer_name, checkout_step, payment_details, tracking_code, payment_gateway, payment_link, mercadopago_payment_id, external_source, external_order_id, sale_released_at, expedition_stage, shipped_at, shipped_source";
 
       // Query 1: Vendas criadas no período que NÃO foram pagas
       // Query 2: Vendas PAGAS e já LIBERADAS (expedição concluída ou venda de balcão)

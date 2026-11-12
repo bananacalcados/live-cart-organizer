@@ -19936,6 +19936,7 @@ export type Database = {
           sales_channel: string | null
           seller_id: string | null
           shipped_at: string | null
+          shipped_source: string | null
           shipping_address: Json | null
           shipping_carrier: string | null
           shipping_cost: number
@@ -20046,6 +20047,7 @@ export type Database = {
           sales_channel?: string | null
           seller_id?: string | null
           shipped_at?: string | null
+          shipped_source?: string | null
           shipping_address?: Json | null
           shipping_carrier?: string | null
           shipping_cost?: number
@@ -20156,6 +20158,7 @@ export type Database = {
           sales_channel?: string | null
           seller_id?: string | null
           shipped_at?: string | null
+          shipped_source?: string | null
           shipping_address?: Json | null
           shipping_carrier?: string | null
           shipping_cost?: number
@@ -30483,6 +30486,7 @@ export type Database = {
       }
       central_reverse_prepare: { Args: { p_request_id: string }; Returns: Json }
       central_revoke_link: { Args: { p_id: string }; Returns: boolean }
+      central_ship_guarantee: { Args: { p_sale: string }; Returns: string }
       central_submit_atomic:
         | {
             Args: {
@@ -31193,6 +31197,7 @@ export type Database = {
         }
         Returns: boolean
       }
+      first_carrier_event_at: { Args: { p_events: Json }; Returns: string }
       forfeit_physical_prize: {
         Args: { p_order_id: string; p_reason?: string }
         Returns: Json
@@ -32682,6 +32687,10 @@ export type Database = {
       parse_live_comment_codes: { Args: { p_text: string }; Returns: Json }
       parse_payment_methods: { Args: { p_text: string }; Returns: string[] }
       parse_size_from_name: { Args: { p_name: string }; Returns: string }
+      parse_tracking_input: {
+        Args: { p_input: string }
+        Returns: Record<string, unknown>
+      }
       participant_score_ranking: {
         Args: { p_handles?: string[] }
         Returns: {

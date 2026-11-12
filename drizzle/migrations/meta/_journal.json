@@ -1534,6 +1534,20 @@
       "when": 1794487445243,
       "tag": "0218_central_closed_generic_links",
       "breakpoints": true
+    },
+    {
+      "idx": 219,
+      "version": "7",
+      "when": 1794490955173,
+      "tag": "0219_shipped_at_tracking_cancel_before_ship",
+      "breakpoints": true
+    },
+    {
+      "idx": 220,
+      "version": "7",
+      "when": 1794491058832,
+      "tag": "0220_exchange_desk_detail_shipped_at",
+      "breakpoints": true
     }
   ]
 }
