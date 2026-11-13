@@ -20,7 +20,7 @@ const fmtDate = (d?: string | null) => (d ? new Date(d).toLocaleDateString("pt-B
 const brl = (v: any) => `R$ ${Number(v || 0).toFixed(2).replace(".", ",")}`;
 const ACTION_LABEL: Record<string, string> = {
   assign: "Atribuiu", approve: "Aprovou", deny: "Negou", request_info: "Pediu mais informação", offer_size: "Ofereceu outra numeração",
-  note: "Observação", choose_product: "Escolheu e separou o produto", link_troca: "Abriu registro de troca", set_reverse: "Gerou reversa", open_whatsapp: "Abriu WhatsApp",
+  note: "Observação", choose_product: "Escolheu e separou o produto", link_troca: "Abriu registro de troca", set_reverse: "Gerou reversa", open_whatsapp: "Abriu WhatsApp", confirm_intent: "Confirmou troca ou devolução com a cliente",
 };
 
 export function ExchangeDeskCard({ id, staff, onClose, onChanged, onOpenChat }: { id: string; staff: { id: string; name: string }[]; onClose: () => void; onChanged: () => void; onOpenChat: (phone: string, whatsappNumberId: string | null) => void }) {
@@ -128,6 +128,7 @@ export function ExchangeDeskCard({ id, staff, onClose, onChanged, onOpenChat }: 
             </DialogTitle>
           </DialogHeader>
 
+          {r.intent_confirmation_required && <div className="rounded-md border border-destructive p-3 text-sm text-destructive"><b>Confirmar com a cliente: troca ou devolução.</b><br />Não separar produto novo até a cliente confirmar.</div>}
           {r.status === "escalado" && r.escalated_reason && <div className="rounded-md bg-muted p-2 text-sm">Por que veio pra você: <b>{r.escalated_reason}</b></div>}
           {prev.length + Number(d.previous_legacy || 0) > 0 && (
             <div className="rounded-md border border-destructive p-2 text-sm">
@@ -167,6 +168,7 @@ export function ExchangeDeskCard({ id, staff, onClose, onChanged, onOpenChat }: 
 
           <div className="flex flex-wrap gap-2 border-t pt-3">
             <Button size="sm" variant="outline" onClick={() => onOpenChat(r.phone, r.whatsapp_number_id || null)}>Abrir conversa</Button>
+            {r.intent_confirmation_required && <Button size="sm" disabled={busy} onClick={() => run("confirm_intent", { p_note: "Troca ou devolução confirmada pela equipe com a cliente" }, "Confirmação registrada")}>Já confirmei com a cliente</Button>}
             <Button size="sm" variant="outline" disabled={busy} onClick={() => run("assign", {}, "Agora está com você")}>Atribuir a mim</Button>
             <Select onValueChange={(v) => run("assign", { p_assignee: v }, "Reatribuída")}>
               <SelectTrigger className="h-9 w-40"><SelectValue placeholder="Reatribuir…" /></SelectTrigger>
@@ -196,6 +198,7 @@ export function ExchangeDeskCard({ id, staff, onClose, onChanged, onOpenChat }: 
               )}
               {form.kind === "choose_product" && (
                 <div className="space-y-2 text-sm">
+                  {r.intent_confirmation_required && <p className="rounded-md border border-destructive p-2 text-destructive"><b>Confirmar com a cliente: troca ou devolução.</b> A separação está bloqueada.</p>}
                   {r.suggested_size && <p className="rounded-md bg-muted p-2"><b>Numeração sugerida: {r.suggested_size}</b> — confira o relato e o estoque antes de separar.</p>}
                   {choices === null ? "Buscando produtos…" : choices.length === 0 ? "Nenhuma numeração com estoque ou liberada em \"Produtos para troca\"." :
                     <div className="flex flex-wrap gap-2">{choices.map((c) => (

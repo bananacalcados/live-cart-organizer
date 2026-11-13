@@ -6,6 +6,7 @@ import { z } from "npm:zod@3";
 import { createLovableAiGatewayRunIdFetch } from "./run-id.ts";
 import { alreadyResolved, CONSOLIDATION_TEXT, cpfRequestAllowed, isRefundStatusQuestion, linkText, preferredLink, publicCommentReply, silentHandoffText, type SupportFacts, waitingMinutes, withinWindowByShipping } from "./support-policy.ts";
 import { completedRefundText, type SupportRefundConsult } from "./support-refund.ts";
+import { currentCustomerText, resolveReturnFlow, returnFlowContinuation, type ReturnFlowContext, type ReturnFlowState } from "./support-return-flow.ts";
 
 export const TRIAGE_CATEGORIES = ["venda", "troca", "devolucao", "troca_ou_devolucao_ambiguo", "rastreio", "outro_suporte", "nada"] as const;
 export type TriageCategory = typeof TRIAGE_CATEGORIES[number];
@@ -209,6 +210,7 @@ export type AgentDeps = {
   customerReceivedDate?: (ref: string, shippedAt: string | null) => Promise<{ date: string | null; claimed: boolean }>;
   cpfLookup?: () => Promise<{ found?: boolean; error?: string; first_name?: string; product?: string; month?: string; confirmed?: boolean; different_phone?: boolean }>;
   consultRefund?: (ref: string) => Promise<SupportRefundConsult>;
+  returnFlow?: ReturnFlowContext | null;
 };
 export type AgentAction = { acao: string; pedido: Record<string, unknown>; resultado: unknown };
 export function agentOutcomeIsEmpty(out: Pick<AgentOutcome, "text" | "actions" | "link" | "handoff" | "tracking" | "consolidation" | "refund">): boolean {
@@ -228,6 +230,9 @@ export type AgentOutcome = {
   prazoPorRecebimentoInformado?: boolean;
   publicComment?: boolean;
   refund?: SupportRefundConsult | null;
+  returnFlowState?: ReturnFlowState | null;
+  returnFlowReason?: string | null;
+  returnFlowPendingLink?: "troca" | "devolucao" | null;
 };
 
 export async function runAgent(cfg: GatewayConfig, model: string, script: string, nome: string | null, triage: Triage,
@@ -245,7 +250,7 @@ export async function runAgent(cfg: GatewayConfig, model: string, script: string
   if (deps.publicComment) return { ...out, publicComment: true, text: publicCommentReply(nome, deps.supportPhone ?? null), handoff: { motivo: "comentario_publico", resumo: triage.justificativa } };
   if (deps.consolidation) return { ...out, text: CONSOLIDATION_TEXT, consolidation: deps.consolidation };
   const refundQuestion = isRefundStatusQuestion(conv);
-  if (triage.facts?.danger && !refundQuestion) return handoff("situacao_sensivel", triage.justificativa);
+  if (triage.facts?.danger && !refundQuestion && !returnFlowContinuation(deps.returnFlow)) return handoff("situacao_sensivel", triage.justificativa);
   if (!deps.orders.length && deps.cpfLookup) {
     if (!cpfRequestAllowed(triage.categoria, conv, false)) return handoff("pedido_nao_localizado", triage.justificativa);
     const candidate = await deps.cpfLookup();
@@ -256,7 +261,13 @@ export async function runAgent(cfg: GatewayConfig, model: string, script: string
   }
   const selected = deps.orders.length === 1 ? deps.orders[0] : deps.orders.find(o => o.ref === triage.facts?.selected_ref);
   if (deps.orders.length > 1 && !selected) return handoff("varios_pedidos_sem_identificacao", triage.justificativa);
-  const wanted = refundQuestion ? null : preferredLink(triage.categoria, triage.facts ?? {}, deps.offersAlreadyMade);
+  const returnStep = refundQuestion ? null : resolveReturnFlow({
+    category: triage.categoria, text: currentCustomerText(conv), nome,
+    flow: deps.returnFlow, offersAlreadyMade: deps.offersAlreadyMade, maxOffers: deps.maxOffers,
+    originality: !!triage.facts?.originality,
+  });
+  if (returnStep?.kind === "handoff") return handoff(returnStep.motive, triage.justificativa);
+  const wanted = refundQuestion ? null : returnStep?.kind === "link" ? returnStep.linkType : preferredLink(triage.categoria, triage.facts ?? {}, deps.offersAlreadyMade);
   const eligibilityWithEvidence = async (ref: string, tipo: "troca" | "devolucao") => {
     let eligibility = await deps.checkEligibility(ref, tipo);
     rec("checar_elegibilidade", { pedido: ref, tipo }, eligibility);
@@ -279,17 +290,39 @@ export async function runAgent(cfg: GatewayConfig, model: string, script: string
     }
     return { eligibility, askReceivedDate: false };
   };
+  if (returnStep) {
+    out.returnFlowState = returnStep.state;
+    out.returnFlowReason = returnStep.reason;
+  }
+  if (returnStep?.kind === "text") {
+    if (selected?.canal === "online") {
+      const checked = await eligibilityWithEvidence(selected.ref, "devolucao");
+      if (checked.askReceivedDate) {
+        out.text = `${nome ? `${nome}, ` : ""}para eu confirmar o prazo, você lembra em qual dia recebeu o pedido? Pode me passar a data, por favor?`;
+        return out;
+      }
+      if (checked.eligibility.elegivel !== "eligible") return handoff(checked.eligibility.motivo, triage.justificativa);
+    }
+    out.exchangeOffered = returnStep.state === "troca_oferecida";
+    out.text = returnStep.text;
+    rec(returnStep.state === "troca_oferecida" ? "oferecer_troca_sem_link" : "perguntar_motivo_devolucao", {}, { ok: true });
+    return out;
+  }
   if (selected?.canal === "online" && wanted) {
     const checked = await eligibilityWithEvidence(selected.ref, wanted);
     if (checked.askReceivedDate) {
+      if (returnStep?.kind === "link") {
+        out.returnFlowState = deps.returnFlow?.state ?? returnStep.state;
+        out.returnFlowPendingLink = wanted;
+      }
       out.text = `${nome ? `${nome}, ` : ""}para eu confirmar o prazo, você lembra em qual dia recebeu o pedido? Pode me passar a data, por favor?`;
       return out;
     }
     if (checked.eligibility.elegivel !== "eligible") return handoff(checked.eligibility.motivo, triage.justificativa);
     out.link = { ref: selected.ref, tipo: wanted };
-    out.exchangeOffered = triage.categoria === "devolucao" && wanted === "troca";
+    out.exchangeOffered = false;
     rec("preparar_link", { pedido: selected.ref, tipo: wanted }, { ok: true });
-    out.text = linkText(wanted, nome, !!triage.facts?.originality, out.exchangeOffered);
+    out.text = returnStep?.kind === "link" ? returnStep.text : linkText(wanted, nome, !!triage.facts?.originality, false);
     return out;
   }
 

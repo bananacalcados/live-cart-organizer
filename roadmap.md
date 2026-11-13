@@ -236,3 +236,10 @@
 - [x] Isolar a resolução do Instagram por item, mantendo falhas para nova tentativa sem perder o lote
 - [x] Descartar GroupReceipts somente da Pérola/Carol antes do processamento, preservando mensagens, recibos 1:1 e movimentação de grupos
 - [x] Conferir eventos reais após o reimplante, testes e registros finais; sem publicar o front
+
+# Roteiro de devolução em etapas e caso Eliani (13/11)
+- [x] Substituir link imediato por motivo → oferta sem link → aceite ou devolução; troca direta e originalidade preservadas
+- [x] Persistir etapa e permitir continuidade sem o bloqueio de 24h, mantendo intervalo e demais travas; teste transacional reversível
+- [x] Roteiro v5 e 80 testes Deno + 15 Vitest; prazo verificado antes de pergunta/oferta e nenhum envio
+- [x] Eliani marcada, sem produto novo e com bloqueio até confirmação; aviso no cartão/lista e botão de confirmação humana
+- [x] 18 simulações (17 conversas do período + caso inicial da Eliani), 8 mudanças e 10 decisões preservadas; zero saídas criadas, modo auto e roteiro v5 conferidos

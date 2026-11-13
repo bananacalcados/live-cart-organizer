@@ -7825,6 +7825,8 @@ export type Database = {
           fit_detail: string | null
           frenet_quote_id: string | null
           id: string
+          intent_confirmation_note: string | null
+          intent_confirmation_required: boolean
           is_test: boolean
           new_sku: string | null
           new_variant_id: string | null
@@ -7890,6 +7892,8 @@ export type Database = {
           fit_detail?: string | null
           frenet_quote_id?: string | null
           id?: string
+          intent_confirmation_note?: string | null
+          intent_confirmation_required?: boolean
           is_test?: boolean
           new_sku?: string | null
           new_variant_id?: string | null
@@ -7955,6 +7959,8 @@ export type Database = {
           fit_detail?: string | null
           frenet_quote_id?: string | null
           id?: string
+          intent_confirmation_note?: string | null
+          intent_confirmation_required?: boolean
           is_test?: boolean
           new_sku?: string | null
           new_variant_id?: string | null
@@ -25463,6 +25469,10 @@ export type Database = {
           phone: string
           prazo_por_envio: boolean
           reason: string
+          return_flow_continuation: boolean
+          return_flow_pending_link: string | null
+          return_flow_reason: string | null
+          return_flow_state: string | null
           routed_at: string | null
           routed_auto: boolean
           routed_by: string | null
@@ -25514,6 +25524,10 @@ export type Database = {
           phone: string
           prazo_por_envio?: boolean
           reason: string
+          return_flow_continuation?: boolean
+          return_flow_pending_link?: string | null
+          return_flow_reason?: string | null
+          return_flow_state?: string | null
           routed_at?: string | null
           routed_auto?: boolean
           routed_by?: string | null
@@ -25565,6 +25579,10 @@ export type Database = {
           phone?: string
           prazo_por_envio?: boolean
           reason?: string
+          return_flow_continuation?: boolean
+          return_flow_pending_link?: string | null
+          return_flow_reason?: string | null
+          return_flow_state?: string | null
           routed_at?: string | null
           routed_auto?: boolean
           routed_by?: string | null
@@ -33901,6 +33919,10 @@ export type Database = {
           phone: string
           prazo_por_envio: boolean
           reason: string
+          return_flow_continuation: boolean
+          return_flow_pending_link: string | null
+          return_flow_reason: string | null
+          return_flow_state: string | null
           routed_at: string | null
           routed_auto: boolean
           routed_by: string | null
@@ -34033,6 +34055,10 @@ export type Database = {
           phone: string
           prazo_por_envio: boolean
           reason: string
+          return_flow_continuation: boolean
+          return_flow_pending_link: string | null
+          return_flow_reason: string | null
+          return_flow_state: string | null
           routed_at: string | null
           routed_auto: boolean
           routed_by: string | null

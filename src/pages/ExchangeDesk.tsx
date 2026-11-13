@@ -28,7 +28,7 @@ interface Row {
   id: string; request_type: string; first_name: string; customer_name: string | null; phone: string; whatsapp_number_id: string | null;
   order_ref: string | null; order_number: string | null; product_name: string | null; product_size: string | null;
   desired_size: string | null; suggested_size: string | null; requested_quantity: number | null; reason: string | null; status: string;
-  escalated_reason: string | null; created_at: string; assigned_to: string | null; is_test?: boolean;
+  escalated_reason: string | null; created_at: string; assigned_to: string | null; is_test?: boolean; intent_confirmation_required?: boolean;
 }
 const PAGE = 50;
 const TAB_LABEL: Record<ExchangeDeskTab, string> = {
@@ -140,6 +140,7 @@ export default function ExchangeDesk({ storeId }: { storeId: string }) {
                   <div className="flex flex-wrap items-center gap-2">
                     <Badge variant={r.request_type === "troca" ? "default" : "secondary"}>{r.request_type === "troca" ? "Troca" : "Devolução"}</Badge>
                     {r.is_test && <Badge variant="destructive">TESTE</Badge>}
+                    {r.intent_confirmation_required && <Badge variant="destructive">Confirmar troca ou devolução</Badge>}
                     <span className="font-medium">{r.first_name || "Cliente"}</span>
                     <span className="text-sm text-muted-foreground">Pedido {r.order_number || r.order_ref || "—"}</span>
                     <span className="ml-auto flex items-center gap-2 text-xs">
@@ -153,6 +154,7 @@ export default function ExchangeDesk({ storeId }: { storeId: string }) {
                     {r.suggested_size && <span className="ml-2 font-medium">Numeração sugerida: {r.suggested_size}</span>}
                     {tab !== "precisa" && <> · {STATUS_LABEL[r.status] || r.status}</>}
                   </div>
+                  {r.intent_confirmation_required && <div className="mt-1 text-sm font-medium text-destructive">Confirmar com a cliente: troca ou devolução. Não separar produto novo antes.</div>}
                   {r.escalated_reason && r.status === "escalado" && <div className="mt-1 text-sm text-muted-foreground">Por que veio pra você: {r.escalated_reason}</div>}
                   {r.status === "aprovado" && <div className="mt-1 text-sm text-muted-foreground">Aprovada — falta gerar a reversa.</div>}
                   {r.assigned_to && <div className="mt-1 text-xs text-muted-foreground">Com: {staffName[r.assigned_to] || "atendente"}</div>}

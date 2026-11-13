@@ -5,6 +5,7 @@ const staff = { isHuman: true, isStaff: true };
 const robot = { isHuman: false, isStaff: true };
 const esc: DeskReq = { status: "escalado", request_type: "troca", replacement_product_id: "p1" };
 const semProduto: DeskReq = { status: "escalado", request_type: "troca", replacement_product_id: null };
+const semConfirmacao: DeskReq = { ...semProduto, replacement_product_id: "p1", intent_confirmation_required: true };
 
 describe("troca sem produto escolhido pela cliente", () => {
   it("não aprova sem produto separado", () => {
@@ -17,6 +18,10 @@ describe("troca sem produto escolhido pela cliente", () => {
   it("atendente pode escolher e separar enquanto está em análise", () => {
     expect(canAct(semProduto, "choose_product", staff)).toBeNull();
     expect(canAct({ ...semProduto, status: "aprovado" }, "choose_product", staff)).not.toBeNull();
+  expect(canAct(semConfirmacao, "choose_product", staff)).toContain("Confirme com a cliente");
+  expect(canAct(semConfirmacao, "approve", staff, "motivo")).toContain("Confirme com a cliente");
+  expect(canAct(semConfirmacao, "confirm_intent", staff)).toBeNull();
+  expect(canAct({ ...semConfirmacao, intent_confirmation_required: false }, "confirm_intent", staff)).not.toBeNull();
   });
   it("devolução não precisa de produto", () => {
     expect(canAct({ status: "escalado", request_type: "devolucao" }, "approve", staff, "cliente antiga")).toBeNull();
