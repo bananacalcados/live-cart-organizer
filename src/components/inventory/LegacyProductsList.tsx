@@ -55,6 +55,7 @@ interface VariantRow {
   size: string | null;
   is_active: boolean;
   stock: number;
+  code?: string | null;
 }
 
 const toNumber = (value: unknown) => {
@@ -115,7 +116,8 @@ export function LegacyProductsList() {
 
 
     if (term) {
-      const [{ data: variantHits }, { data: posHits }] = await Promise.all([
+      const codeTerm = term.toUpperCase().replace(/[^A-Z0-9-]/g, "");
+      const [{ data: variantHits }, { data: posHits }, { data: codeHits }] = await Promise.all([
         supabase
           .from("product_variants")
           .select("master_id")
@@ -126,8 +128,20 @@ export function LegacyProductsList() {
           .select("parent_sku")
           .or(`barcode.ilike.%${term}%,sku.ilike.%${term}%`)
           .limit(500),
+        codeTerm.length >= 2
+          ? (supabase.from("product_variant_codes" as any) as any)
+              .select("variant_id")
+              .or(`code.ilike.${codeTerm}%,color_code.eq.${codeTerm}`)
+              .limit(200)
+          : Promise.resolve({ data: [] as any[] }),
       ]);
-      const masterIds = Array.from(new Set((variantHits || []).map((v: any) => v.master_id).filter(Boolean)));
+      const codeVariantIds = Array.from(new Set(((codeHits as any[]) || []).map((c: any) => c.variant_id).filter(Boolean)));
+      let codeMasterIds: string[] = [];
+      if (codeVariantIds.length > 0) {
+        const { data: cm } = await supabase.from("product_variants").select("master_id").in("id", codeVariantIds);
+        codeMasterIds = (cm || []).map((v: any) => v.master_id).filter(Boolean);
+      }
+      const masterIds = Array.from(new Set([...(variantHits || []).map((v: any) => v.master_id), ...codeMasterIds].filter(Boolean)));
       const posRoots = Array.from(new Set((posHits || []).map((p: any) => p.parent_sku).filter(Boolean)));
       const orParts = [`name.ilike.%${term}%`, `sku_root.ilike.%${term}%`, `brand.ilike.%${term}%`];
       if (masterIds.length > 0) orParts.push(`id.in.(${masterIds.join(",")})`);
@@ -450,6 +464,7 @@ export function LegacyProductsList() {
       .from("product_variants")
       .select("id,sku,gtin,color,size,master_id")
       .in("master_id", ids);
+    const nameById = new Map(items.map((m: any) => [m.id, m]));
     if (error) { toast.error("Erro ao carregar variações: " + error.message); return; }
     const labels: LabelItem[] = (data || []).map((v: any) => ({
       id: v.id,
@@ -457,6 +472,8 @@ export function LegacyProductsList() {
       gtin: v.gtin || null,
       size: v.size || null,
       color: v.color || null,
+      name: (nameById.get(v.master_id) as any)?.name || null,
+      price: (nameById.get(v.master_id) as any)?.sale_price ?? null,
     }));
     if (labels.length === 0) { toast.error("Nenhuma variação encontrada para os produtos selecionados."); return; }
     setBulkLabelItems(labels);
@@ -788,6 +805,7 @@ export function LegacyProductsList() {
                             </div>
                             {vrows.map((v) => (
                               <div key={v.id} className="flex items-center gap-2 text-sm bg-background rounded border px-2 py-1">
+                                {v.code && <span className="font-mono font-bold text-foreground">{v.code}</span>}
                                 <span className="font-medium">
                                   {[v.size, v.color].filter(Boolean).join(" · ") || v.sku}
                                 </span>
