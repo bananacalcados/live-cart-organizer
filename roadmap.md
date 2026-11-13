@@ -247,4 +247,4 @@
 # Fase 2 — etiquetas e balanços (13/11)
 - [x] Ligar a janela de etiquetas ao saldo da loja e aos lotes de impressão/balanço/entrada.
 - [x] Criar o histórico paginado com detalhes, reimpressão e desfazer.
-- [ ] Testar regras, build e fluxo no preview sem aplicar balanço real.
+- [x] Testar regras, build e fluxo no preview sem aplicar balanço real; desfazer não executado em dados reais.
