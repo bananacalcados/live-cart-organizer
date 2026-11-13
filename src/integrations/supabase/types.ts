@@ -25235,6 +25235,139 @@ export type Database = {
         }
         Relationships: []
       }
+      stock_label_batch_items: {
+        Row: {
+          adjustment_id: string | null
+          batch_id: string
+          counted: number | null
+          delta: number
+          id: string
+          labels: number
+          moved_during_count: number
+          pending_expedition: number
+          pos_product_id: string | null
+          reverted_adjustment_id: string | null
+          skipped_reason: string | null
+          stock_after: number | null
+          stock_before: number | null
+          variant_code: string | null
+          variant_id: string | null
+        }
+        Insert: {
+          adjustment_id?: string | null
+          batch_id: string
+          counted?: number | null
+          delta?: number
+          id?: string
+          labels?: number
+          moved_during_count?: number
+          pending_expedition?: number
+          pos_product_id?: string | null
+          reverted_adjustment_id?: string | null
+          skipped_reason?: string | null
+          stock_after?: number | null
+          stock_before?: number | null
+          variant_code?: string | null
+          variant_id?: string | null
+        }
+        Update: {
+          adjustment_id?: string | null
+          batch_id?: string
+          counted?: number | null
+          delta?: number
+          id?: string
+          labels?: number
+          moved_during_count?: number
+          pending_expedition?: number
+          pos_product_id?: string | null
+          reverted_adjustment_id?: string | null
+          skipped_reason?: string | null
+          stock_after?: number | null
+          stock_before?: number | null
+          variant_code?: string | null
+          variant_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "stock_label_batch_items_batch_id_fkey"
+            columns: ["batch_id"]
+            isOneToOne: false
+            referencedRelation: "stock_label_batches"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      stock_label_batches: {
+        Row: {
+          applied_at: string
+          created_by: string | null
+          created_by_name: string | null
+          id: string
+          items_changed: number
+          master_id: string | null
+          mode: string
+          notes: string | null
+          numero: number
+          opened_at: string
+          reverted_at: string | null
+          reverted_by: string | null
+          reverted_by_name: string | null
+          scope: string
+          status: string
+          store_id: string
+          total_delta: number
+          total_labels: number
+        }
+        Insert: {
+          applied_at?: string
+          created_by?: string | null
+          created_by_name?: string | null
+          id?: string
+          items_changed?: number
+          master_id?: string | null
+          mode: string
+          notes?: string | null
+          numero?: number
+          opened_at: string
+          reverted_at?: string | null
+          reverted_by?: string | null
+          reverted_by_name?: string | null
+          scope?: string
+          status?: string
+          store_id: string
+          total_delta?: number
+          total_labels?: number
+        }
+        Update: {
+          applied_at?: string
+          created_by?: string | null
+          created_by_name?: string | null
+          id?: string
+          items_changed?: number
+          master_id?: string | null
+          mode?: string
+          notes?: string | null
+          numero?: number
+          opened_at?: string
+          reverted_at?: string | null
+          reverted_by?: string | null
+          reverted_by_name?: string | null
+          scope?: string
+          status?: string
+          store_id?: string
+          total_delta?: number
+          total_labels?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "stock_label_batches_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "pos_stores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       stock_movements: {
         Row: {
           barcode: string | null
@@ -30515,6 +30648,19 @@ export type Database = {
         Args: { _gateway: string; _split_id: string; _tx_id: string }
         Returns: Json
       }
+      apply_stock_label_batch: {
+        Args: {
+          p_items: Json
+          p_master_id?: string
+          p_mode: string
+          p_notes?: string
+          p_opened_at: string
+          p_scope?: string
+          p_store_id: string
+          p_user_name?: string
+        }
+        Returns: Json
+      }
       apply_variant_normalization: {
         Args: { p_dry_run?: boolean; p_limit?: number }
         Returns: {
@@ -33063,6 +33209,10 @@ export type Database = {
       pc_norm: { Args: { t: string }; Returns: string }
       pc_ref_prefix: { Args: { t: string }; Returns: string }
       pc_slug: { Args: { t: string }; Returns: string }
+      pending_expedition_qty: {
+        Args: { p_at: string; p_pos_product_id: string }
+        Returns: number
+      }
       phone_ddd: { Args: { e164: string }; Returns: string }
       phone_suffix8: { Args: { e164: string }; Returns: string }
       pos_crediario_norm: { Args: { p: string }; Returns: string }
@@ -33565,6 +33715,10 @@ export type Database = {
         Args: { p_sale_id: string }
         Returns: undefined
       }
+      revert_stock_label_batch: {
+        Args: { p_batch_id: string; p_user_name?: string }
+        Returns: Json
+      }
       rh_admin_config: { Args: never; Returns: Json }
       rh_admin_context: { Args: never; Returns: Json }
       rh_admin_create_link: {
@@ -33892,6 +34046,7 @@ export type Database = {
         Args: { p_accept: boolean; p_id: string; p_region: string }
         Returns: string
       }
+      server_now: { Args: never; Returns: string }
       set_active_mp_account: {
         Args: { p_account_id: string }
         Returns: boolean
@@ -33998,6 +34153,19 @@ export type Database = {
           p_user: string
         }
         Returns: string
+      }
+      stock_label_preview: {
+        Args: { p_master_id: string; p_store_id: string }
+        Returns: {
+          code: string
+          color: string
+          last_batch_at: string
+          pending_expedition: number
+          pos_product_id: string
+          size: string
+          stock: number
+          variant_id: string
+        }[]
       }
       stop_live_shown_product: {
         Args: { p_event_id: string }
@@ -34718,6 +34886,10 @@ export type Database = {
       validate_freight_context: {
         Args: { p_context: Json; p_sale_id: string; p_sale_ids: string[] }
         Returns: undefined
+      }
+      variant_pos_product: {
+        Args: { p_store_id: string; p_variant_id: string }
+        Returns: string
       }
       variant_size_suffix: { Args: { p_size: string }; Returns: string }
       verify_area_password: {
