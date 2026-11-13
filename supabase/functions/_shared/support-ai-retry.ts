@@ -26,6 +26,8 @@ export function shouldRetrySupportAi(error: unknown): boolean {
   const e = error as { name?: string; message?: string; text?: unknown };
   const message = String(e?.message ?? error ?? "");
   if (/abort|timeout|tempo esgotado|recusa|refusal|denied/i.test(`${e?.name ?? ""} ${message}`)) return false;
+  // Resposta HTTP OK porém triagem/agente inválidos: vale a 2ª tentativa no outro modelo.
+  if (/triagem_vazia_ou_invalida|resposta_do_agente_invalida/i.test(message)) return true;
   const status = errorStatus(error);
   if (status !== null) return status === 429 || status >= 500;
   if (/No output generated|stream_interrompido|stream vazio|ia_sem_stream/i.test(message)) {

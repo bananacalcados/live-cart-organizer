@@ -53,3 +53,16 @@ Deno.test("modelo alternativo nunca repete o principal", () => {
   assertEquals(supportAlternateModel("openai/gpt-6-luna", "openai/gpt-6-luna"), "openai/gpt-6-astra");
   assertEquals(supportAlternateModel("openai/gpt-6-astra", "openai/gpt-6-luna"), "openai/gpt-6-luna");
 });
+
+Deno.test("triagem inválida (chaves inventadas) é normalizada e, se ainda inválida, repete no outro modelo", async () => {
+  const { parseTriageOutput } = await import("./support-ai.ts");
+  const real = '{"categoria":"devolucao","confianca":0.99,"justificativa":"pergunta como devolver","motivo_tamanho":null,"facts":{"pedido_ref":"P1","produto":"Tenis"}}';
+  const t = parseTriageOutput(real);
+  if (t.categoria !== "devolucao" || t.motivo_tamanho !== false || t.facts?.danger !== false) throw new Error("normalização falhou");
+  const { shouldRetrySupportAi, runSupportAiWithRetry } = await import("./support-ai-retry.ts");
+  if (!shouldRetrySupportAi(new Error("triagem_vazia_ou_invalida"))) throw new Error("deveria repetir");
+  const models: string[] = [];
+  await runSupportAiWithRetry({ primaryModel: "openai/gpt-6-luna", alternateModel: "openai/gpt-6-astra", wait: async () => {},
+    run: async (m) => { models.push(m); if (models.length === 1) throw new Error("triagem_vazia_ou_invalida"); return 1; }, onAttempt: () => {} });
+  if (models.join() !== "openai/gpt-6-luna,openai/gpt-6-astra") throw new Error(models.join());
+});

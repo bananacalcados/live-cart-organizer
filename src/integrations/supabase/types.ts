@@ -25735,6 +25735,69 @@ export type Database = {
         }
         Relationships: []
       }
+      support_finalization_log: {
+        Row: {
+          created_at: string
+          finished_by: string | null
+          finished_by_name: string | null
+          id: string
+          phone_key: string
+          reason: string | null
+          whatsapp_number_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          finished_by?: string | null
+          finished_by_name?: string | null
+          id?: string
+          phone_key: string
+          reason?: string | null
+          whatsapp_number_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          finished_by?: string | null
+          finished_by_name?: string | null
+          id?: string
+          phone_key?: string
+          reason?: string | null
+          whatsapp_number_id?: string | null
+        }
+        Relationships: []
+      }
+      support_finalizations: {
+        Row: {
+          created_at: string
+          finished_at: string
+          finished_by: string | null
+          finished_by_name: string | null
+          id: string
+          phone_key: string
+          reason: string | null
+          whatsapp_number_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          finished_at?: string
+          finished_by?: string | null
+          finished_by_name?: string | null
+          id?: string
+          phone_key: string
+          reason?: string | null
+          whatsapp_number_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          finished_at?: string
+          finished_by?: string | null
+          finished_by_name?: string | null
+          id?: string
+          phone_key?: string
+          reason?: string | null
+          whatsapp_number_id?: string | null
+        }
+        Relationships: []
+      }
       support_links: {
         Row: {
           created_at: string
@@ -25887,6 +25950,7 @@ export type Database = {
           auto_reply_max_delay_s: number
           auto_reply_min_delay_s: number
           auto_reply_mode: string
+          auto_resumed_at: string | null
           auto_route_support_line: boolean
           central_auto_reverse: boolean
           central_base_url: string
@@ -25918,6 +25982,7 @@ export type Database = {
           auto_reply_max_delay_s?: number
           auto_reply_min_delay_s?: number
           auto_reply_mode?: string
+          auto_resumed_at?: string | null
           auto_route_support_line?: boolean
           central_auto_reverse?: boolean
           central_base_url?: string
@@ -25949,6 +26014,7 @@ export type Database = {
           auto_reply_max_delay_s?: number
           auto_reply_min_delay_s?: number
           auto_reply_mode?: string
+          auto_resumed_at?: string | null
           auto_route_support_line?: boolean
           central_auto_reverse?: boolean
           central_base_url?: string
@@ -33961,6 +34027,7 @@ export type Database = {
         Returns: undefined
       }
       support_auto_route: { Args: { p_id: string }; Returns: boolean }
+      support_central_link_options: { Args: { p_phone: string }; Returns: Json }
       support_classify_intent: { Args: { p: string }; Returns: string }
       support_cost_claim_direct: { Args: { p_id: string }; Returns: boolean }
       support_cost_dashboard: { Args: never; Returns: Json }
@@ -34073,6 +34140,14 @@ export type Database = {
         Args: { p_reason: string }
         Returns: undefined
       }
+      support_finish_conversation: {
+        Args: {
+          p_phone: string
+          p_reason?: string
+          p_whatsapp_number_id: string
+        }
+        Returns: Json
+      }
       support_mask_cpf_text: { Args: { p_value: string }; Returns: string }
       support_normalize_text: { Args: { p: string }; Returns: string }
       support_outbox_claim: {
@@ -34120,6 +34195,10 @@ export type Database = {
       support_shadow_action_guard: {
         Args: { p_id: string }
         Returns: undefined
+      }
+      support_staff_central_link: {
+        Args: { p_phone?: string; p_sale_id: string; p_type: string }
+        Returns: Json
       }
       support_suggestion_auto_enqueue: { Args: { p_id: string }; Returns: Json }
       support_suggestion_discard: {

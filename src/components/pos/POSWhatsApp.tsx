@@ -5,7 +5,7 @@ import { useExchangeRegistry, invalidateExchangeRegistry } from "@/hooks/useExch
 import { CustomerChargebackBadge } from "@/components/pos/CustomerChargebackBadge";
 import { CustomerExchangeBadge } from "@/components/pos/CustomerExchangeBadge";
 import { CustomerOrderActions } from "@/components/pos/CustomerOrderActions";
-import { Phone, MessageCircle, Users, Pencil, Check, ChevronLeft, X, Send, PhoneOff, User, Package, Truck, MoreVertical, ShoppingBag, UserPlus, Trash2, QrCode, CreditCard, Archive, BarChart3, ArrowRightLeft, FileText, HeadphonesIcon, ArrowLeft, CircleDashed, MapPin, Mail, Calendar, Store, Coins, Columns2, Rows3 } from "lucide-react";
+import { Phone, MessageCircle, Users, Pencil, Check, ChevronLeft, X, Send, PhoneOff, User, Package, Truck, MoreVertical, ShoppingBag, UserPlus, Trash2, QrCode, CreditCard, Archive, BarChart3, ArrowRightLeft, FileText, HeadphonesIcon, ArrowLeft, CircleDashed, MapPin, Mail, Calendar, Store, Coins, Columns2, Rows3, RefreshCw, Undo2 } from "lucide-react";
 import { POSWhatsAppLanes } from "./POSWhatsAppLanes";
 import { TransferLaneMenu } from "@/components/chat/TransferLaneMenu";
 import { useChatConversationLanes, type ManualChatLane } from "@/hooks/useChatConversationLanes";
@@ -43,6 +43,8 @@ import { useSupportPhones } from "@/hooks/useSupportPhones";
 import { uploadMediaToStorage } from "@/components/MediaAttachmentPicker";
 import { POSProductCatalogSender } from "./POSProductCatalogSender";
 import { POSLiveOrderPanel } from "./POSLiveOrderPanel";
+import { CentralLinkPanel } from "./CentralLinkPanel";
+import { FinishSupportButton } from "@/components/exchange-desk/FinishSupportButton";
 import { NewConversationDialog } from "./NewConversationDialog";
 import { useCrmPhoneLookup } from "@/hooks/useCrmPhoneLookup";
 import { useCashbackLookup } from "@/hooks/useCashbackLookup";
@@ -298,7 +300,8 @@ export function POSWhatsApp({ storeId, initialFilter, initialPhone, initialWhats
   const [showSendTemplate, setShowSendTemplate] = useState(false);
   const [showWaitlistDialog, setShowWaitlistDialog] = useState(false);
   const [showSupportPanel, setShowSupportPanel] = useState(false);
-  const auxiliaryToolOpen = showCheckout || showPix || showBoleto || showReverse || showCatalog || showWaitlistDialog || showExportDialog || showSupportPanel;
+  const [centralLinkTool, setCentralLinkTool] = useState<{ type: "troca" | "devolucao"; saleId?: string } | null>(null);
+  const auxiliaryToolOpen = showCheckout || showPix || showBoleto || showReverse || showCatalog || showWaitlistDialog || showExportDialog || showSupportPanel || !!centralLinkTool;
   const sideToolOpen = auxiliaryToolOpen || showOrdersModal;
   const [multiInstanceFilter, setMultiInstanceFilter] = useState<string[]>([]);
 
@@ -314,6 +317,7 @@ export function POSWhatsApp({ storeId, initialFilter, initialPhone, initialWhats
     setShowWaitlistDialog(false);
     setShowExportDialog(false);
     setShowSupportPanel(false);
+    setCentralLinkTool(null);
   }, []);
 
   // Voltar ao chat = ferramentas fechadas e ficha completa como painel padrão.
@@ -335,6 +339,12 @@ export function POSWhatsApp({ storeId, initialFilter, initialPhone, initialWhats
     if (tool === "waitlist") setShowWaitlistDialog(true);
     if (tool === "export") setShowExportDialog(true);
     if (tool === "support") setShowSupportPanel(true);
+  }, [resetSideTools]);
+
+  const openCentralLink = useCallback((type: "troca" | "devolucao", saleId?: string) => {
+    resetSideTools();
+    setShowOrdersModal(false);
+    setCentralLinkTool({ type, saleId });
   }, [resetSideTools]);
 
 
@@ -2733,6 +2743,17 @@ export function POSWhatsApp({ storeId, initialFilter, initialPhone, initialWhats
                   <Truck className="h-3.5 w-3.5" />
                   <span className="hidden xl:inline">Reversa</span>
                 </Button>
+                <Button variant="ghost" size="sm" className="h-7 px-1.5 text-xs gap-1 text-emerald-600" onClick={() => openCentralLink("troca")} title="Link de troca da Central" disabled={requiresInstanceSelection}>
+                  <RefreshCw className="h-3.5 w-3.5" />
+                  <span className="hidden xl:inline">Link troca</span>
+                </Button>
+                <Button variant="ghost" size="sm" className="h-7 px-1.5 text-xs gap-1 text-rose-600" onClick={() => openCentralLink("devolucao")} title="Link de devolução da Central" disabled={requiresInstanceSelection}>
+                  <Undo2 className="h-3.5 w-3.5" />
+                  <span className="hidden xl:inline">Link devolução</span>
+                </Button>
+                {selectedConversation && !selectedConversation.isGroup && (
+                  <FinishSupportButton compact phone={selectedPhone} whatsappNumberId={selectedConvNumberId ?? null} />
+                )}
                 <Button variant="ghost" size="sm" className="h-7 px-1.5 text-xs gap-1" onClick={() => openSideTool("catalog")} title="Catálogo" disabled={requiresInstanceSelection}>
                   <ShoppingBag className="h-3.5 w-3.5" />
                   <span className="hidden xl:inline">Catálogo</span>
@@ -2908,7 +2929,7 @@ export function POSWhatsApp({ storeId, initialFilter, initialPhone, initialWhats
                 statusLabels={statusLabels}
                 riskBadges={(customerChargebacks.length > 0 || customerExchanges.length > 0) ? <div className="flex flex-wrap gap-1">{customerExchanges.length > 0 && <CustomerExchangeBadge exchanges={customerExchanges} size="sm" />}{customerChargebacks.length > 0 && <CustomerChargebackBadge chargebacks={customerChargebacks} size="sm" />}</div> : null}
                 liveOrderPanel={liveOrderRef ? <POSLiveOrderPanel orderId={liveOrderRef.orderId} eventId={liveOrderRef.eventId} eventName={liveOrderRef.eventName} /> : null}
-                renderOrderActions={(o) => o.kind === "pos_sale" ? <CustomerOrderActions saleId={o.id} saleLabel={`${o.orderName || "Venda"}${o.createdAt ? ` · ${new Date(o.createdAt).toLocaleDateString("pt-BR")}` : ""}`} saleTotal={o.totalPrice} hasMpPayment={o.hasMpPayment} mpPaymentError={o.mpPaymentError} sellerId={selectedSellerId} sellerName={selectedSellerName} customer={{ name: selectedConversation?.customerName || crmData?.name, phone: selectedPhone, cpf: crmData?.cpf, email: crmData?.email, unifiedId: crmData?.unifiedId }} chargebacks={customerChargebacks.filter((c) => c.pos_sale_id === o.id)} exchanges={exBySale(o.id)} onChanged={refreshRiskRegistries} sendVia={(selectedSendNumber?.provider as 'meta' | 'zapi' | 'uazapi' | 'wasender') ?? 'zapi'} selectedNumberId={selectedSendNumber?.id ?? selectedSendNumberId} /> : null}
+                renderOrderActions={(o) => o.kind === "pos_sale" ? <><div className="mb-1 flex flex-wrap gap-1"><Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => openCentralLink("troca", o.id)}>Link de troca</Button><Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => openCentralLink("devolucao", o.id)}>Link de devolução</Button></div><CustomerOrderActions saleId={o.id} saleLabel={`${o.orderName || "Venda"}${o.createdAt ? ` · ${new Date(o.createdAt).toLocaleDateString("pt-BR")}` : ""}`} saleTotal={o.totalPrice} hasMpPayment={o.hasMpPayment} mpPaymentError={o.mpPaymentError} sellerId={selectedSellerId} sellerName={selectedSellerName} customer={{ name: selectedConversation?.customerName || crmData?.name, phone: selectedPhone, cpf: crmData?.cpf, email: crmData?.email, unifiedId: crmData?.unifiedId }} chargebacks={customerChargebacks.filter((c) => c.pos_sale_id === o.id)} exchanges={exBySale(o.id)} onChanged={refreshRiskRegistries} sendVia={(selectedSendNumber?.provider as 'meta' | 'zapi' | 'uazapi' | 'wasender') ?? 'zapi'} selectedNumberId={selectedSendNumber?.id ?? selectedSendNumberId} /></> : null}
               />}
               {showCheckout && <POSWhatsAppCheckoutDialog embedded open onOpenChange={(value) => { if (!value) { closeSideTools(); setPendingOrdersRefresh((n) => n + 1); } }} storeId={storeId} phone={selectedPhone} customerName={selectedConversation?.customerName} sendVia={(selectedSendNumber?.provider as 'meta' | 'zapi' | 'uazapi' | 'wasender') ?? 'zapi'} selectedNumberId={selectedSendNumber?.id ?? selectedSendNumberId} />}
               {showPix && <POSWhatsAppPixDialog embedded open onOpenChange={(v) => { if (!v) closeSideTools(); }} storeId={storeId} phone={selectedPhone} customerName={selectedConversation?.customerName} sendVia={(selectedSendNumber?.provider as 'meta' | 'zapi' | 'uazapi' | 'wasender') ?? 'zapi'} selectedNumberId={selectedSendNumber?.id ?? selectedSendNumberId} />}
@@ -2917,6 +2938,7 @@ export function POSWhatsApp({ storeId, initialFilter, initialPhone, initialWhats
               {showCatalog && <POSProductCatalogSender embedded open onOpenChange={(v) => { if (!v) closeSideTools(); }} storeId={storeId} phone={selectedPhone} sendVia={(selectedSendNumber?.provider as 'meta' | 'zapi' | 'uazapi' | 'wasender') ?? 'zapi'} selectedNumberId={selectedSendNumber?.id ?? selectedSendNumberId} />}
               {showWaitlistDialog && <ProductWaitlistDialog embedded open onOpenChange={(v) => { if (!v) closeSideTools(); }} phone={selectedPhone} customerName={selectedConversation?.customerName} whatsappNumberId={selectedConvNumberId} storeId={storeId === "expedition" ? null : storeId} sellerName={selectedSellerName} onSaved={() => waitlist.refresh()} />}
               {showExportDialog && selectedConversation && <ExportConversationDialog embedded open onOpenChange={(v) => { if (!v) closeSideTools(); }} conversation={selectedConversation} />}
+              {centralLinkTool && selectedPhone && <CentralLinkPanel key={`${centralLinkTool.type}-${centralLinkTool.saleId ?? ""}`} phone={selectedPhone} customerName={selectedConversation?.customerName} type={centralLinkTool.type} saleId={centralLinkTool.saleId} sendVia={selectedSendNumber?.provider ?? 'zapi'} selectedNumberId={selectedSendNumber?.id ?? selectedSendNumberId} onDone={closeSideTools} />}
               {showSupportPanel && <CreateSupportTicketDialog embedded open onOpenChange={(v) => { if (!v) closeSideTools(); }} phone={selectedPhone} customerName={selectedConversation?.customerName} onCreated={() => { closeSideTools(); if (viewMode === "lanes") moveConversationLane(selectedPhone, selectedConvNumberId, "support"); }} />}
               </div>
             </aside>

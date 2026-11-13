@@ -1,7 +1,7 @@
 // Fase 4b — triagem e agente de suporte por IA (modo sombra).
 // A IA só sugere texto e pede ações por ferramenta; quem decide e valida é o servidor.
 import { createOpenAI } from "npm:@ai-sdk/openai@4";
-import { jsonSchema, stepCountIs, streamText, tool } from "npm:ai@7";
+import { jsonSchema, Output, stepCountIs, streamText, tool } from "npm:ai@7";
 import { z } from "npm:zod@3";
 import { createLovableAiGatewayRunIdFetch } from "./run-id.ts";
 import { alreadyResolved, CONSOLIDATION_TEXT, cpfRequestAllowed, isRefundStatusQuestion, linkText, preferredLink, publicCommentReply, silentHandoffText, type SupportFacts, waitingMinutes, withinWindowByShipping } from "./support-policy.ts";
@@ -109,7 +109,7 @@ Leia as últimas mensagens (a mais recente é a última) e o contexto de pedidos
 - nada: saudação, agradecimento, assunto sem relação.
 Considere o histórico unificado e marque fatos do assunto ATUAL, não reclamações antigas já resolvidas. Indique outra instância só se uma pessoa respondeu sobre esse mesmo assunto nas últimas 72h; mensagens automáticas não contam.
 Seja conservador: na dúvida entre troca e devolução use troca_ou_devolucao_ambiguo.
-Responda SOMENTE com um objeto JSON válido, sem markdown, contendo categoria, confianca, justificativa, motivo_tamanho e facts com todos os campos pedidos.`;
+Responda SOMENTE com um objeto JSON válido, sem markdown, contendo categoria, confianca, justificativa, motivo_tamanho e facts com exatamente: originality, danger, selected_ref, insisted_return, exchange_offer_made, same_subject_instance, confirmed_product.`;
 
 export type GatewayConfig = { apiKey: string; baseURL: string; timeoutMs: number; guardedFetch?: typeof fetch };
 export type CallLog = { kind: "triagem" | "agente"; model: string; ok: boolean; error?: string; ms: number; inTok?: number; outTok?: number };
@@ -142,14 +142,35 @@ const TRIAGE_TEXT_SCHEMA = z.object({
 }).strict();
 const AGENT_TEXT_SCHEMA = z.string().max(4000);
 
+const FACT_DEFAULTS = { originality: false, danger: false, selected_ref: null, insisted_return: false, exchange_offer_made: false, same_subject_instance: null, confirmed_product: null };
+
+/** Normaliza variações inofensivas (chaves extras, null em boolean, confiança fora da faixa) antes do schema estrito. */
+function normalizeTriage(raw: any): unknown {
+  if (!raw || typeof raw !== "object") return raw;
+  const f = raw.facts && typeof raw.facts === "object" ? raw.facts : {};
+  const facts: Record<string, unknown> = {};
+  for (const [k, d] of Object.entries(FACT_DEFAULTS)) {
+    const v = f[k];
+    facts[k] = typeof d === "boolean" ? v === true : (typeof v === "string" && v.trim() ? v : null);
+  }
+  const c = Number(raw.confianca);
+  return {
+    categoria: raw.categoria,
+    confianca: Number.isFinite(c) ? Math.min(1, Math.max(0, c > 1 && c <= 100 ? c / 100 : c)) : 0,
+    justificativa: String(raw.justificativa ?? "").slice(0, 300),
+    motivo_tamanho: raw.motivo_tamanho === true,
+    facts,
+  };
+}
+
 export function parseTriageOutput(value: unknown): Triage {
   let parsed = value;
   if (typeof value === "string") {
     const text = value.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "");
     if (!text) throw new Error("triagem_vazia_ou_invalida");
-    parsed = JSON.parse(text);
+    try { parsed = JSON.parse(text); } catch { throw new Error("triagem_vazia_ou_invalida"); }
   }
-  const checked = TRIAGE_TEXT_SCHEMA.safeParse(parsed);
+  const checked = TRIAGE_TEXT_SCHEMA.safeParse(normalizeTriage(parsed));
   if (!checked.success) throw new Error("triagem_vazia_ou_invalida");
   return checked.data;
 }
@@ -166,6 +187,9 @@ export async function runTriage(cfg: GatewayConfig, model: string, conv: ConvMes
     const result = streamText({
       model: provider(cfg).responses(model),
       instructions: TRIAGE_INSTRUCTIONS,
+      // Envia o JSON schema estrito ao gateway (sem ele o modelo inventava chaves em facts);
+      // a leitura continua sendo result.text + validação Zod local.
+      output: Output.object({ schema: TRIAGE_SCHEMA }),
       messages: [{ role: "user", content: `PEDIDOS (60 dias):\n${JSON.stringify(orders)}\n\nCONVERSA:\n${conversationTranscript(conv)}` }],
       ...(cfg.guardedFetch ? { maxRetries: 0 } : {}),
       abortSignal: AbortSignal.timeout(cfg.timeoutMs),

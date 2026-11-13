@@ -1674,6 +1674,20 @@
       "when": 1794587181942,
       "tag": "0238_support_return_flow_and_eliani_guard",
       "breakpoints": true
+    },
+    {
+      "idx": 239,
+      "version": "7",
+      "when": 1794588757898,
+      "tag": "0239_support_finish_central_links_ai_watchdog",
+      "breakpoints": true
+    },
+    {
+      "idx": 240,
+      "version": "7",
+      "when": 1794588908994,
+      "tag": "0240_support_ai_watchdog_window_after_resume",
+      "breakpoints": true
     }
   ]
 }

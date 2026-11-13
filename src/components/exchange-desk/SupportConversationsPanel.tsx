@@ -4,6 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { deskCall } from "./api";
+import { FinishSupportButton } from "./FinishSupportButton";
 import { STATUS_LABEL } from "@/lib/exchangeDesk/rules";
 import { formatSupportAge, supportWaitInfo } from "@/lib/exchangeDesk/supportQueue";
 
@@ -148,6 +149,10 @@ export function SupportConversationsPanel({ refreshKey, onOpenChat }: {
                   </div>
                   <p className="mt-0.5 text-xs text-muted-foreground">{row.instance_label || "WhatsApp"}{row.instance_phone ? ` · ${row.instance_phone}` : ""}</p>
                 </div>
+                <FinishSupportButton phone={row.phone} whatsappNumberId={row.whatsapp_number_id} onFinished={() => {
+                  setRows((current) => current.filter((r) => !(r.phone === row.phone && r.whatsapp_number_id === row.whatsapp_number_id)));
+                  setTotal((t) => Math.max(0, t - 1));
+                }} />
                 <Button size="sm" variant="outline" onClick={() => onOpenChat(row.phone, row.whatsapp_number_id)} aria-label={`Abrir conversa de ${row.customer_name}`}>
                   <MessageCircle className="mr-1 h-4 w-4" />Abrir conversa
                 </Button>
