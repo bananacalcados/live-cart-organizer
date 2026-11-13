@@ -1660,6 +1660,13 @@
       "when": 1794525029120,
       "tag": "0236_selfservice_confirmation_preserve_orders",
       "breakpoints": true
+    },
+    {
+      "idx": 237,
+      "version": "7",
+      "when": 1794584511682,
+      "tag": "0237_rh_candidate_conditions_version",
+      "breakpoints": true
     }
   ]
 }

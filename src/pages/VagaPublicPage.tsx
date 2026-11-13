@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
+import { rhCondicoesPergunta } from "@/lib/rh/conditions";
 
 type Cenario = { id: string; contexto: string | null; mensagem: string };
 type Exp = { onde: string; funcao: string; tempo: string; unidade: "meses" | "anos" };
@@ -257,7 +258,7 @@ export default function VagaPublicPage() {
       {!menor && <>
         <section className="space-y-3" data-field="aceita_condicoes">
           <h2 className="text-lg font-bold">2. Condições</h2>
-          <p>Você topa trabalhar com R$ 1.950 fixo + comissão + bônus, escala 5x2, sábado e dias de live até as 19h?</p>
+          <p>{rhCondicoesPergunta(info.resumo)}</p>
           <div className="grid grid-cols-2 gap-2"><Btn active={form.aceita_condicoes === true} onClick={() => set("aceita_condicoes", true)}>Sim</Btn><Btn active={form.aceita_condicoes === false} onClick={() => set("aceita_condicoes", false)}>Não</Btn></div>
           <Err msg={errors.aceita_condicoes} />
         </section>

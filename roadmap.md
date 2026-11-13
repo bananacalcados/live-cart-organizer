@@ -1,3 +1,9 @@
+# Condições da vaga de vendedor(a) — RH (13/11)
+- [x] Montar a pergunta a partir do resumo atual da vaga, sem alterar pontuação ou avaliação
+- [x] Gravar a versão somente nos novos envios; antigos permanecem nulos e identificados como condição anterior
+- [x] Mostrar o selo na lista e no detalhe do RH
+- [x] Rodar testes da pergunta, do registro e das regras existentes; preservar todos os dados de candidatos
+
 # Comprovante autorizado da Fabiane (12/11)
 - [x] Enviado uma única vez pelo Whats Pérola, última instância de atendimento, às 23:16:07 UTC; documento entregue e campos de envio preenchidos
 - [x] Vera Lúcia Pinheiro, Vera Lúcia Santos e Josiane Azevedo marcadas como antigas que não devem ser enviadas, por decisão do dono

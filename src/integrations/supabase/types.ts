@@ -23639,6 +23639,7 @@ export type Database = {
           bairro: string | null
           cidade: string | null
           computador: string | null
+          condicoes_versao: string | null
           consentimento_at: string | null
           created_at: string
           dispositivo: string | null
@@ -23664,6 +23665,7 @@ export type Database = {
           bairro?: string | null
           cidade?: string | null
           computador?: string | null
+          condicoes_versao?: string | null
           consentimento_at?: string | null
           created_at?: string
           dispositivo?: string | null
@@ -23689,6 +23691,7 @@ export type Database = {
           bairro?: string | null
           cidade?: string | null
           computador?: string | null
+          condicoes_versao?: string | null
           consentimento_at?: string | null
           created_at?: string
           dispositivo?: string | null
