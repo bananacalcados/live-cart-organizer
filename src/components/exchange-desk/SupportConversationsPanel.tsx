@@ -16,6 +16,7 @@ type Exchange = { id: string; code: string; type: string; status: string; create
 type Reverse = { id: string; code: string | null; status: string; created_at: string };
 type Refund = { id: string; status: string; amount: number; reason: string | null; created_at: string };
 export type SupportConversation = {
+  channel: "whatsapp" | "instagram";
   phone: string;
   phone_suffix: string;
   customer_name: string;
@@ -144,7 +145,7 @@ export function SupportConversationsPanel({ refreshKey, onOpenChat }: {
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="font-semibold">{row.customer_name}</span>
-                    <span className="text-xs text-muted-foreground">final {row.phone_suffix}</span>
+                    <span className="text-xs text-muted-foreground">{row.channel === "instagram" ? `Instagram · final ${row.phone_suffix}` : `final ${row.phone_suffix}`}</span>
                     {wait.waiting && <Badge variant={badgeVariant}>{wait.level === "normal" ? "Aguardando" : `+${wait.level}`}</Badge>}
                   </div>
                   <p className="mt-0.5 text-xs text-muted-foreground">{row.instance_label || "WhatsApp"}{row.instance_phone ? ` · ${row.instance_phone}` : ""}</p>

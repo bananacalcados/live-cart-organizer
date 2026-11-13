@@ -62,7 +62,8 @@ Deno.serve(withAccessLog("support-ai-training", async (req) => {
           return;
         }
         const outcome = await runAgent({ ...cfg, guardedFetch: budgetGateway(sb, meta, "agente") }, st.ai_agent_model, script?.body ?? "", ctx.nome, triage, ctx.conv,
-          { ...ctx.deps, offersAlreadyMade: 0, maxOffers: st.max_offer_attempts ?? 1, now: at, supportPhone: st.support_whatsapp_phone ?? null }, log);
+          { ...ctx.deps, offersAlreadyMade: 0, maxOffers: st.max_offer_attempts ?? 1, now: at, supportPhone: st.support_whatsapp_phone ?? null,
+            instagram: it.channel === 'instagram', instagramHandle: ctx.instagramHandle }, log);
         const dec = finalDecision(outcome, ctx.orders);
         await save({
           ...base, ...tok(), status: "ok", review_group: "suporte", agent_text: outcome.text, agent_actions: outcome.actions,

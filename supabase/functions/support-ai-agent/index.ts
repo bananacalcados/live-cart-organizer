@@ -116,6 +116,7 @@ Deno.serve(withAccessLog("support-ai-agent", async (req) => {
       alternateModel: st.ai_triage_model,
       run: (model) => runAgent({ ...cfg, guardedFetch: budgetGateway(sb, meta, "agente") }, model, script?.body ?? "", nome, triage, conv, {
         ...ctx.deps, offersAlreadyMade: offers ?? 0, maxOffers: st.max_offer_attempts ?? 1, supportPhone: st.support_whatsapp_phone ?? null,
+        instagram: s.channel === 'instagram', instagramHandle: ctx.instagramHandle,
         returnFlow, now: dryRun ? Date.parse(s.created_at) : Date.now(),
       }, log, () => { agentModelCalled = true; }),
       onAttempt: (attempt) => !dryRun && agentModelCalled ? recordAttempt("agente", attempt) : undefined,

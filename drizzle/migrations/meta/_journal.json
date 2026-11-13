@@ -1688,6 +1688,13 @@
       "when": 1794588908994,
       "tag": "0240_support_ai_watchdog_window_after_resume",
       "breakpoints": true
+    },
+    {
+      "idx": 241,
+      "version": "7",
+      "when": 1794614088882,
+      "tag": "0241_instagram_direct_support",
+      "breakpoints": true
     }
   ]
 }

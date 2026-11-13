@@ -7,6 +7,7 @@ import { createLovableAiGatewayRunIdFetch } from "./run-id.ts";
 import { alreadyResolved, CONSOLIDATION_TEXT, cpfRequestAllowed, isRefundStatusQuestion, linkText, preferredLink, publicCommentReply, silentHandoffText, type SupportFacts, waitingMinutes, withinWindowByShipping } from "./support-policy.ts";
 import { completedRefundText, type SupportRefundConsult } from "./support-refund.ts";
 import { currentCustomerText, resolveReturnFlow, returnFlowContinuation, type ReturnFlowContext, type ReturnFlowState } from "./support-return-flow.ts";
+import { instagramDmHandoff } from "./instagram-support.ts";
 
 export const TRIAGE_CATEGORIES = ["venda", "troca", "devolucao", "troca_ou_devolucao_ambiguo", "rastreio", "outro_suporte", "nada"] as const;
 export type TriageCategory = typeof TRIAGE_CATEGORIES[number];
@@ -98,7 +99,7 @@ const TRIAGE_SCHEMA = jsonSchema<Triage>({
   },
 });
 
-const TRIAGE_INSTRUCTIONS = `Você classifica conversas de WhatsApp de uma loja de calçados. Não responda à cliente.
+const TRIAGE_INSTRUCTIONS = `Você classifica conversas de WhatsApp ou Instagram Direct de uma loja de calçados. Não responda à cliente.
 Leia as últimas mensagens (a mais recente é a última) e o contexto de pedidos e escolha UMA categoria:
 - venda: quer comprar, preço, estoque para comprar, pagamento de compra nova.
 - troca: pede explicitamente troca ou outro tamanho/modelo/cor.
@@ -229,6 +230,8 @@ export type AgentDeps = {
   consolidation?: { id: string; label: string } | null;
   publicComment?: boolean;
   supportPhone?: string | null;
+  instagram?: boolean;
+  instagramHandle?: string | null;
   now?: number;
   shippedAt?: (ref: string) => Promise<string | null>;
   customerReceivedDate?: (ref: string, shippedAt: string | null) => Promise<{ date: string | null; claimed: boolean }>;
@@ -275,6 +278,27 @@ export async function runAgent(cfg: GatewayConfig, model: string, script: string
   if (deps.consolidation) return { ...out, text: CONSOLIDATION_TEXT, consolidation: deps.consolidation };
   const refundQuestion = isRefundStatusQuestion(conv);
   if (triage.facts?.danger && !refundQuestion && !returnFlowContinuation(deps.returnFlow)) return handoff("situacao_sensivel", triage.justificativa);
+  if (deps.instagram) {
+    if (!deps.orders.length && deps.cpfLookup && conv.some(m => m.from === "cliente" && /\b\d{3}\.?\d{3}\.?\d{3}-?\d{2}\b/.test(m.text))) {
+      const candidate = await deps.cpfLookup();
+      rec("buscar_pedido_por_cpf", {}, candidate);
+      if (candidate.found && !candidate.confirmed && candidate.first_name && candidate.product) {
+        return { ...out, text: `Encontrei um pedido no nome de ${candidate.first_name}. É o do ${candidate.product} comprado em ${candidate.month}?` };
+      }
+      if (candidate.confirmed) out.cpfDifferentPhone = candidate.different_phone;
+    }
+    if (triage.categoria === "rastreio" && deps.orders.length === 1 && deps.tracking) {
+      const info = await deps.tracking(deps.orders[0].ref);
+      if (info && !trackingNeedsHuman(info)) {
+        out.tracking = { ref: deps.orders[0].ref, info };
+        rec("consultar_rastreio", { pedido: deps.orders[0].ref }, { etapa: info.etapa, tem_link: !!info.url });
+        const stage = info.etapa === "entregue" ? "consta como entregue" : info.etapa === "enviado" ? "foi enviado" : info.etapa === "separado" ? "está separado" : "está em separação";
+        out.text = `Achei seu pedido 😊 Ele ${stage}.${info.url ? ` Acompanhe aqui: ${info.url}` : " Assim que houver rastreio, a gente te atualiza."}`;
+        return out;
+      }
+    }
+    return { ...out, text: instagramDmHandoff(nome, deps.supportPhone, deps.instagramHandle, deps.orders.length === 0) };
+  }
   if (!deps.orders.length && deps.cpfLookup) {
     if (!cpfRequestAllowed(triage.categoria, conv, false)) return handoff("pedido_nao_localizado", triage.justificativa);
     const candidate = await deps.cpfLookup();

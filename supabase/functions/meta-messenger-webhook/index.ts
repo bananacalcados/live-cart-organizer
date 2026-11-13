@@ -478,7 +478,7 @@ serve(withAccessLog("meta-messenger-webhook", async (req) => {
           console.log(`Saved ${channel} DM from ${senderId} (${senderName || 'unknown'}): ${messageText.slice(0, 80)}`);
         }
 
-        // Upsert chat_contacts with display_name
+        // Upsert chat_contacts and the immutable provider ID ↔ @ binding used by PDV/support.
         if (senderName) {
           await supabase
             .from('chat_contacts')
@@ -486,6 +486,15 @@ serve(withAccessLog("meta-messenger-webhook", async (req) => {
               { phone: senderId, display_name: senderName },
               { onConflict: 'phone', ignoreDuplicates: false }
             );
+          if (channel === 'instagram') {
+            const username = normalizeIgUsername(senderName);
+            if (username) {
+              const { error: linkError } = await supabase.from('instagram_user_links').upsert({
+                username, ig_user_id: senderId, source: 'webhook_dm', last_seen_at: new Date().toISOString(),
+              }, { onConflict: 'username', ignoreDuplicates: false });
+              if (linkError) console.error('[ig-dm] identity link failed:', linkError.message);
+            }
+          }
         }
 
         // Story rules retain their behavior; ordinary inbound DMs opt into RH only.

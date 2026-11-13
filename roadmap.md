@@ -248,3 +248,10 @@
 - [x] Ligar a janela de etiquetas ao saldo da loja e aos lotes de impressão/balanço/entrada.
 - [x] Criar o histórico paginado com detalhes, reimpressão e desfazer.
 - [x] Testar regras, build e fluxo no preview sem aplicar balanço real; desfazer não executado em dados reais.
+
+# Instagram Direct e suporte (13/11)
+- [x] Diagnosticar assinatura/permissões da Meta e o caminho dos DMs até o armazenamento, sem expor credenciais.
+- [x] Corrigir recebimento de DM/resposta a story, identidade por @/id e exibição no chat/Em suporte; 87 testes e simulação real sem envio.
+- [x] Ativar regras próprias do agente para Instagram DM, janela de 24h e encaminhamento ao WhatsApp, preservando o automático do WhatsApp.
+- [x] Direcionar comentários públicos de suporte para resposta privada com convite ao WhatsApp, respeitando live/post/reel.
+- [ ] Confirmar um Direct/resposta a story novo chegando ao PDV — depende de uma mensagem nova de cliente ou de teste do dono; eventos antigos não são reenviados pela Meta.

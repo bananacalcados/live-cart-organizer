@@ -5,6 +5,7 @@ import { withAccessLog } from "../_shared/withAccessLog.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { isAuthorizedCron, unauthorizedResponse } from "../_shared/cron-guard.ts";
 import { resolveIgAccountByAccountId } from "../_shared/instagram-account.ts";
+import { instagramSupportCommentKind, instagramSupportCommentMessage } from "../_shared/instagram-support.ts";
 import {
   buildPrivateReply, decideModeration, firstName, isRateLimitError, normalizeClass, skipReason,
 } from "../_shared/ig-moderation-rules.ts";
@@ -80,6 +81,7 @@ Deno.serve(withAccessLog("ig-comment-moderate", async (req) => {
   const sb = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
   const { data: settings } = await sb.from("ig_moderation_settings").select("*").maybeSingle();
   if (!settings) return json({ ok: false, error: "sem configuração" });
+  const { data: supportSettings } = await sb.from("support_settings").select("support_whatsapp_phone").limit(1).maybeSingle();
   if (settings.paused_until && new Date(settings.paused_until) > new Date()) return json({ ok: true, paused_until: settings.paused_until });
 
   const { data: rows, error } = await sb.rpc("ig_moderation_claim", { p_limit: 30 });
@@ -133,13 +135,16 @@ Deno.serve(withAccessLog("ig-comment-moderate", async (req) => {
         customer = data;
       }
 
-      const ai = await classify(row.text_original, media?.caption || null, !!customer);
+      const supportKind = instagramSupportCommentKind(row.text_original);
+      const ai = supportKind
+        ? { raw: "suporte_deterministico", cls: "pedido_rastreio" as const, confidence: 1, reason: `suporte_${supportKind}` }
+        : await classify(row.text_original, media?.caption || null, !!customer);
       if (!ai.cls) throw new Error(`classe inválida: ${ai.raw}`);
       const d = decideModeration(ai.cls, ai.confidence, settings);
 
       const patch: Record<string, unknown> = {
         ...mediaPatch, class: d.finalClass, ai_class_raw: ai.raw, confidence: ai.confidence, reason: ai.reason,
-        ai_model: AI_MODEL, classified_at: new Date().toISOString(),
+        ai_model: supportKind ? "deterministico" : AI_MODEL, classified_at: new Date().toISOString(),
         customer_id: customer?.id || null, customer_name: customer?.name || null, customer_phone: customer?.phone_e164 || null,
         status: "kept",
       };
@@ -163,7 +168,7 @@ Deno.serve(withAccessLog("ig-comment-moderate", async (req) => {
           .eq("id", row.id).is("private_reply_sent_at", null).is("private_reply_error", null).select("id");
         if (reserved?.length) {
           let trackingUrl: string | null = null;
-          if (customer?.phone_suffix8) {
+          if (!supportKind && customer?.phone_suffix8) {
             const { data: sales } = await sb.from("pos_sales").select("id").eq("phone_suffix8", customer.phone_suffix8)
               .neq("sales_channel", "presencial").order("created_at", { ascending: false }).limit(5);
             const ids = (sales || []).map((s: any) => s.id);
@@ -173,8 +178,10 @@ Deno.serve(withAccessLog("ig-comment-moderate", async (req) => {
               if (sim?.tracking_code) trackingUrl = TRACK_BASE + sim.tracking_code;
             }
           }
-          const msg = buildPrivateReply(settings.private_reply_template, settings.private_reply_tracking_suffix,
-            firstName(customer?.name, row.username), trackingUrl);
+          const msg = supportKind
+            ? instagramSupportCommentMessage(row.username, supportSettings?.support_whatsapp_phone)
+            : buildPrivateReply(settings.private_reply_template, settings.private_reply_tracking_suffix,
+              firstName(customer?.name, row.username), trackingUrl);
           const r = await fetch("https://graph.instagram.com/v25.0/me/messages", {
             method: "POST",
             headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },

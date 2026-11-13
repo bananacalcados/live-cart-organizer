@@ -5,6 +5,7 @@ import { firstName } from "./support-ai.ts";
 import { consolidationAllowed, cpfIdentityConfirmed, humanOtherInstances, unifyMessages, validCpf, type SupportFacts } from "./support-policy.ts";
 import { customerReceiptFromConversation } from "./support-received-date.ts";
 import { consultSupportRefund } from "./support-refund.ts";
+import { normalizeInstagramHandle } from "./instagram-support.ts";
 
 export const ONLINE_CHANNELS = ["site", "live", "link_online", "whatsapp"];
 export const TRACK_BASE = "https://checkout.bananacalcados.com.br/rastreio/";
@@ -14,6 +15,7 @@ export type SupportContext = {
   saleIds: Map<string, string>;
   deps: Omit<AgentDeps, "offersAlreadyMade" | "maxOffers">;
   otherInstances: { id: string; label: string }[];
+  instagramHandle: string | null;
   configure: (facts: SupportFacts, category?: string) => void;
 };
 
@@ -29,12 +31,18 @@ export async function loadConversation(sb: Sb, phone: string, numberId: string |
 export async function buildSupportContext(sb: Sb, s: { phone: string; whatsapp_number_id: string | null; channel: string },
   opts: { shareLastEvent: boolean; until?: string; saleId?: string; sourceKey?: string; allowReceiptSend?: boolean }): Promise<SupportContext> {
   let conv: ConvMessage[];
+  let instagramHandle: string | null = null;
   if (s.channel === "instagram") {
-    const { data, error } = await sb.from("whatsapp_messages").select("message,direction,created_at,whatsapp_number_id,sender_user_id").eq("phone", s.phone).eq("channel", "instagram").lte("created_at", opts.until ?? new Date().toISOString()).order("created_at", { ascending: false }).limit(60);
+    const { data, error } = await sb.from("whatsapp_messages").select("message,direction,created_at,whatsapp_number_id,sender_user_id,sender_name").eq("phone", s.phone).eq("channel", "instagram").lte("created_at", opts.until ?? new Date().toISOString()).order("created_at", { ascending: false }).limit(60);
     if (error) throw new Error("historico_instagram_indisponivel");
-    conv = (data ?? []).filter((m: any) => m.message).reverse().map((m: any) => ({ from: m.direction === "incoming" ? "cliente" : "loja", text: m.message, at: m.created_at, instance_id: m.whatsapp_number_id, instance: "Instagram", human: m.direction === "outgoing" && !!m.sender_user_id }));
+    instagramHandle = normalizeInstagramHandle((data ?? []).find((m: any) => m.sender_name)?.sender_name) || null;
+    conv = (data ?? []).filter((m: any) => m.message && !String(m.message).startsWith("💬 Comentário")).reverse().map((m: any) => ({ from: m.direction === "incoming" ? "cliente" : "loja", text: m.message, at: m.created_at, instance_id: m.whatsapp_number_id, instance: "Instagram", human: m.direction === "outgoing" && !!m.sender_user_id }));
+    if (!instagramHandle) {
+      const { data: link } = await sb.from("instagram_user_links").select("username").eq("ig_user_id", s.phone).limit(1).maybeSingle();
+      instagramHandle = normalizeInstagramHandle(link?.username) || null;
+    }
   } else conv = await loadConversation(sb, s.phone, s.whatsapp_number_id, opts.until);
-  const s8 = String(s.phone || "").replace(/\D/g, "").slice(-8);
+  let s8 = s.channel === "instagram" ? "" : String(s.phone || "").replace(/\D/g, "").slice(-8);
   const saleIds = new Map<string, string>(); const saleShip = new Map<string, string | null>(); const itemSku = new Map<string, string | null>();
   const sims = new Map<string, any>();
   let orders: OrderCtx[] = []; let nome: string | null = null;
@@ -42,8 +50,20 @@ export async function buildSupportContext(sb: Sb, s: { phone: string; whatsapp_n
   const otherInstances = [...new Map(conv.filter(m => m.instance_id && m.instance_id !== s.whatsapp_number_id).map(m => [m.instance_id, { id: m.instance_id as string, label: m.instance ?? "WhatsApp" }])).values()];
   const humanIds = humanOtherInstances(conv, s.whatsapp_number_id, Date.parse(opts.until ?? new Date().toISOString()));
   const { data: conversationNames } = await sb.from("whatsapp_conversations").select("sender_name").eq("phone", s.phone).limit(1);
-  const conversationName = firstName(conversationNames?.[0]?.sender_name);
-  if (s.channel !== "instagram" && s8.length === 8) {
+  let conversationName = firstName(conversationNames?.[0]?.sender_name);
+  if (s.channel === "instagram") {
+    const { data: byProviderId } = await sb.from("customers_unified").select("id,name,phone_suffix8,instagram_handle").eq("instagram_user_id", s.phone).limit(5);
+    let candidates = byProviderId ?? [];
+    if (!candidates.length && instagramHandle) {
+      const { data: byHandle } = await sb.from("customers_unified").select("id,name,phone_suffix8,instagram_handle").ilike("instagram_handle", instagramHandle).limit(5);
+      candidates = byHandle ?? [];
+    }
+    const phoneKeys = [...new Set<string>(candidates.map((c: any) => String(c.phone_suffix8 || "").replace(/\D/g, "").slice(-8)).filter((v: string) => v.length === 8))];
+    if (phoneKeys.length === 1) s8 = phoneKeys[0];
+    conversationName = firstName(candidates[0]?.name);
+    nome = conversationName;
+  }
+  if (opts.saleId || s8.length === 8) {
     let saleQuery = sb.from("pos_sales").select("id,created_at,sales_channel,status,customer_name,status_cancelamento,shipped_at,expedition_finished_at");
     saleQuery = opts.saleId ? saleQuery.eq("id", opts.saleId) : saleQuery.eq("phone_suffix8", s8);
     const { data: sales } = await saleQuery.gte("created_at", new Date(Date.now() - 60 * 864e5).toISOString())
@@ -137,7 +157,7 @@ export async function buildSupportContext(sb: Sb, s: { phone: string; whatsapp_n
       return { found: true, first_name: candidate.first_name, product: candidate.product, month: candidate.month, confirmed, different_phone: true };
     },
   };
-  return { conv, orders, nome, saleIds, deps, otherInstances, configure: (value, category = "") => {
+  return { conv, orders, nome, saleIds, deps, otherInstances, instagramHandle, configure: (value, category = "") => {
     facts = value;
     const target = value.same_subject_instance ?? "";
     deps.consolidation = humanIds.includes(target) && consolidationAllowed(conv, target, category) ? otherInstances.find(i => i.id === target) ?? null : null;

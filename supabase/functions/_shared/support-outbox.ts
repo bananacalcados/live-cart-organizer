@@ -5,6 +5,7 @@ export const SUPPORT_OUTBOX_INSTANCES = [
   'ae453235-50e1-4ef6-8a87-8c8a77b2b440',
   '1f715932-e118-4e88-8051-85a5c14f5a4b',
   'c01d2777-df4c-4746-9433-d8c97c57d529',
+  '531883b0-b8bc-48b9-a094-edb04a7a0478',
 ] as const;
 
 export function supportOutboxPreflight(input: {
@@ -13,11 +14,11 @@ export function supportOutboxPreflight(input: {
 }) {
   if (!SUPPORT_OUTBOX_INSTANCES.includes(input.instanceId as any)) return 'Instância não permitida para o assistente';
   const digits = String(input.phone || '').replace(/\D/g, '');
-  if (digits.length < 10 || digits.length > 13) return 'Telefone inválido';
+  if (input.provider === 'instagram' ? (digits.length < 5 || digits.length > 20) : (digits.length < 10 || digits.length > 13)) return 'Telefone inválido';
   const full = input.text + (input.link ? `\n${input.link}` : '');
   if (!input.text.trim() || full.length > 1000) return 'A mensagem deve ter de 1 a 1.000 caracteres';
   if (input.sentLastHour >= 30) return 'Limite de 30 envios por hora atingido';
-  if (input.provider === 'meta') {
+  if (input.provider === 'meta' || input.provider === 'instagram') {
     const incoming = input.incomingAt ? Date.parse(input.incomingAt) : NaN;
     const now = input.now ?? Date.now();
     if (!Number.isFinite(incoming) || incoming > now + 5 * 60_000 || now - incoming > 24 * 3_600_000) {
@@ -29,6 +30,7 @@ export function supportOutboxPreflight(input: {
 
 export function supportOutboxFunction(provider: string) {
   return provider === 'meta' ? 'meta-whatsapp-send'
+    : provider === 'instagram' ? 'meta-messenger-send'
     : provider === 'uazapi' ? 'uazapi-send-message'
     : provider === 'wasender' ? 'wasender-send-message'
     : provider === 'zapi' ? 'zapi-send-message'
@@ -67,7 +69,9 @@ export async function processSupportOutbox(supabase: any) {
 
     if (fn && message.length <= 1000) {
       const res = await supabase.functions.invoke(fn, {
-        body: { phone: job.phone, message, whatsapp_number_id: job.whatsapp_number_id },
+        body: instance.provider === 'instagram'
+          ? { recipientId: job.phone, message, channel: 'instagram', whatsapp_number_id: job.whatsapp_number_id }
+          : { phone: job.phone, message, whatsapp_number_id: job.whatsapp_number_id },
         headers: { ...(await internalCallHeaders()), 'x-force-instance': 'true' },
       });
       data = res.data;
@@ -78,11 +82,12 @@ export async function processSupportOutbox(supabase: any) {
 
     if (!sendError) {
       const fullText = message;
-      const { error: historyError } = await supabase.from('whatsapp_messages').insert({
+      // instagram-dm-send já grava o envio com @/ID e janela validada; não duplicar o histórico.
+      const historyError = instance.provider === 'instagram' ? null : (await supabase.from('whatsapp_messages').insert({
         phone: job.phone, message: fullText, direction: 'outgoing', status: 'sent',
         whatsapp_number_id: job.whatsapp_number_id, sender_name: 'Assistente do dono',
         ...(providerMessageId ? { message_id: String(providerMessageId) } : {}),
-      });
+      })).error;
       await supabase.from('support_outbox').update({
         status: 'sent', sent_at: new Date().toISOString(), provider_message_id: providerMessageId ? String(providerMessageId) : null,
         error: historyError ? `Enviada, mas o histórico precisa de revisão: ${historyError.message}`.slice(0, 1000) : null,
