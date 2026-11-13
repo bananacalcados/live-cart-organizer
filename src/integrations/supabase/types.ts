@@ -20954,6 +20954,90 @@ export type Database = {
           },
         ]
       }
+      pos_stock_adjustments_dup_backup_20261113: {
+        Row: {
+          barcode: string | null
+          count_id: string | null
+          created_at: string | null
+          direction: string | null
+          exchange_id: string | null
+          exchange_number: string | null
+          id: string | null
+          movement_type: string | null
+          new_stock: number | null
+          previous_stock: number | null
+          product_id: string | null
+          product_name: string | null
+          quantity: number | null
+          reason: string | null
+          sale_event: string | null
+          sale_id: string | null
+          seller_id: string | null
+          seller_name: string | null
+          sku: string | null
+          store_id: string | null
+          tiny_id: number | null
+          tiny_mirror_status: string | null
+          tiny_mirrored_at: string | null
+          user_id: string | null
+          user_name: string | null
+        }
+        Insert: {
+          barcode?: string | null
+          count_id?: string | null
+          created_at?: string | null
+          direction?: string | null
+          exchange_id?: string | null
+          exchange_number?: string | null
+          id?: string | null
+          movement_type?: string | null
+          new_stock?: number | null
+          previous_stock?: number | null
+          product_id?: string | null
+          product_name?: string | null
+          quantity?: number | null
+          reason?: string | null
+          sale_event?: string | null
+          sale_id?: string | null
+          seller_id?: string | null
+          seller_name?: string | null
+          sku?: string | null
+          store_id?: string | null
+          tiny_id?: number | null
+          tiny_mirror_status?: string | null
+          tiny_mirrored_at?: string | null
+          user_id?: string | null
+          user_name?: string | null
+        }
+        Update: {
+          barcode?: string | null
+          count_id?: string | null
+          created_at?: string | null
+          direction?: string | null
+          exchange_id?: string | null
+          exchange_number?: string | null
+          id?: string | null
+          movement_type?: string | null
+          new_stock?: number | null
+          previous_stock?: number | null
+          product_id?: string | null
+          product_name?: string | null
+          quantity?: number | null
+          reason?: string | null
+          sale_event?: string | null
+          sale_id?: string | null
+          seller_id?: string | null
+          seller_name?: string | null
+          sku?: string | null
+          store_id?: string | null
+          tiny_id?: number | null
+          tiny_mirror_status?: string | null
+          tiny_mirrored_at?: string | null
+          user_id?: string | null
+          user_name?: string | null
+        }
+        Relationships: []
+      }
       pos_stock_transfers: {
         Row: {
           created_at: string
@@ -32941,6 +33025,31 @@ export type Database = {
           phone: string
           sale_id: string
         }[]
+      }
+      pos_stock_balance_to: {
+        Args: {
+          p_product_id: string
+          p_reason?: string
+          p_seller_id?: string
+          p_seller_name?: string
+          p_target: number
+          p_user_id?: string
+          p_user_name?: string
+        }
+        Returns: Json
+      }
+      pos_stock_move: {
+        Args: {
+          p_direction: string
+          p_product_id: string
+          p_quantity: number
+          p_reason?: string
+          p_seller_id?: string
+          p_seller_name?: string
+          p_user_id?: string
+          p_user_name?: string
+        }
+        Returns: Json
       }
       pos_transfer_find_dest: {
         Args: { p_src_id: string; p_to: string }
