@@ -22208,6 +22208,45 @@ export type Database = {
           },
         ]
       }
+      product_variant_codes: {
+        Row: {
+          code: string
+          color_code: string
+          created_at: string
+          size_suffix: string
+          variant_id: string
+        }
+        Insert: {
+          code: string
+          color_code: string
+          created_at?: string
+          size_suffix: string
+          variant_id: string
+        }
+        Update: {
+          code?: string
+          color_code?: string
+          created_at?: string
+          size_suffix?: string
+          variant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "product_variant_codes_variant_id_fkey"
+            columns: ["variant_id"]
+            isOneToOne: true
+            referencedRelation: "product_variant_stock"
+            referencedColumns: ["variant_id"]
+          },
+          {
+            foreignKeyName: "product_variant_codes_variant_id_fkey"
+            columns: ["variant_id"]
+            isOneToOne: true
+            referencedRelation: "product_variants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       product_variants: {
         Row: {
           color: string | null
@@ -31344,6 +31383,7 @@ export type Database = {
         Args: { p_color: string; p_master_id: string }
         Returns: string
       }
+      ensure_variant_code: { Args: { p_variant_id: string }; Returns: string }
       event_buyer_origin_matrix: { Args: { p_event_id: string }; Returns: Json }
       event_buyer_origin_matrix_v2: {
         Args: { p_event_id: string }
@@ -32440,6 +32480,7 @@ export type Database = {
       legacy_master_variants: {
         Args: { p_master_id: string }
         Returns: {
+          code: string
           color: string
           gtin: string
           id: string
@@ -34678,6 +34719,7 @@ export type Database = {
         Args: { p_context: Json; p_sale_id: string; p_sale_ids: string[] }
         Returns: undefined
       }
+      variant_size_suffix: { Args: { p_size: string }; Returns: string }
       verify_area_password: {
         Args: { p_area: string; p_password: string }
         Returns: Json
