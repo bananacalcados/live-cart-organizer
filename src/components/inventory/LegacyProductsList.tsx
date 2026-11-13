@@ -474,6 +474,7 @@ export function LegacyProductsList() {
       color: v.color || null,
       name: (nameById.get(v.master_id) as any)?.name || null,
       price: (nameById.get(v.master_id) as any)?.sale_price ?? null,
+      masterId: v.master_id,
     }));
     if (labels.length === 0) { toast.error("Nenhuma variação encontrada para os produtos selecionados."); return; }
     setBulkLabelItems(labels);

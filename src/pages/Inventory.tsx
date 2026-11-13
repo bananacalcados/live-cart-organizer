@@ -17,6 +17,7 @@ import { SaleUnmatchedItems } from "@/components/inventory/SaleUnmatchedItems";
 import { InventoryDashboard } from "@/components/inventory/InventoryDashboard";
 import { InventoryHealthDashboard } from "@/components/inventory/InventoryHealthDashboard";
 import { InventoryAnalytics } from "@/components/inventory/InventoryAnalytics";
+import { LabelBatchesHistory } from "@/components/inventory/LabelBatchesHistory";
 import InventoryAIAnalysis from "@/components/inventory/InventoryAIAnalysis";
 import InventoryBulkActions from "@/components/inventory/InventoryBulkActions";
 import { POSBarcodeScanner } from "@/components/pos/POSBarcodeScanner";
@@ -196,7 +197,7 @@ export default function Inventory() {
   const [cloneScanQty, setCloneScanQty] = useState(1);
   const [activeTab, setActiveTab] = useState("counting");
   const [pastCounts, setPastCounts] = useState<InventoryCount[]>([]);
-  const [inventoryMode, setInventoryMode] = useState<"dashboard" | "health" | "analytics" | "ai" | "bulk" | "stock" | "capture" | "products" | "nfe" | "shopify" | "depara" | "divergencias">("dashboard");
+  const [inventoryMode, setInventoryMode] = useState<"dashboard" | "health" | "analytics" | "ai" | "bulk" | "stock" | "capture" | "products" | "nfe" | "labels" | "shopify" | "depara" | "divergencias">("dashboard");
 
   // Unknown barcode states
   const [unresolvedBarcodes, setUnresolvedBarcodes] = useState<UnresolvedBarcode[]>([]);
@@ -1281,6 +1282,14 @@ export default function Inventory() {
                   >
                     <FileText className="h-3 w-3" /> NF-e Entrada
                   </Button>
+                  <Button
+                    variant={inventoryMode === "labels" ? "default" : "ghost"}
+                    size="sm"
+                    onClick={() => setInventoryMode("labels")}
+                    className="text-xs h-7 gap-1"
+                  >
+                    <Printer className="h-3 w-3" /> Etiquetas e Balanços
+                  </Button>
                   <Link to="/inventory/categorias">
                     <Button variant="ghost" size="sm" className="text-xs h-7 gap-1">
                       <Tag className="h-3 w-3" /> Categorias
@@ -1366,6 +1375,8 @@ export default function Inventory() {
           <ProductsList />
         ) : inventoryMode === "nfe" ? (
           <NfeImporter />
+        ) : inventoryMode === "labels" ? (
+          <LabelBatchesHistory stores={stores} initialStoreId={selectedStoreId} />
         ) : !activeCount ? (
           <div className="max-w-lg mx-auto space-y-6">
             <Card>

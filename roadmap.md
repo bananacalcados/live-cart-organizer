@@ -243,3 +243,8 @@
 - [x] Roteiro v5 e 80 testes Deno + 15 Vitest; prazo verificado antes de pergunta/oferta e nenhum envio
 - [x] Eliani marcada, sem produto novo e com bloqueio até confirmação; aviso no cartão/lista e botão de confirmação humana
 - [x] 18 simulações (17 conversas do período + caso inicial da Eliani), 8 mudanças e 10 decisões preservadas; zero saídas criadas, modo auto e roteiro v5 conferidos
+
+# Fase 2 — etiquetas e balanços (13/11)
+- [x] Ligar a janela de etiquetas ao saldo da loja e aos lotes de impressão/balanço/entrada.
+- [x] Criar o histórico paginado com detalhes, reimpressão e desfazer.
+- [ ] Testar regras, build e fluxo no preview sem aplicar balanço real.

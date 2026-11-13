@@ -92,7 +92,7 @@ const CFOP_OPTIONS = [
 ];
 
 /** Monta itens de etiqueta (uma por variação cor+tamanho) a partir de um grupo. */
-function buildLabelGroup(g: GroupRow): { name: string; items: LabelItem[] } {
+function buildLabelGroup(g: GroupRow): { name: string; masterSku: string | null; items: LabelItem[] } {
   const seen = new Map<string, LabelItem>();
   for (const s of g.skus) {
     const color = s.color || s.variant || "";
@@ -115,7 +115,7 @@ function buildLabelGroup(g: GroupRow): { name: string; items: LabelItem[] } {
     (a.color || "").localeCompare(b.color || "") ||
     (a.size || "").localeCompare(b.size || "", undefined, { numeric: true })
   );
-  return { name: g.master?.name || g.parent_sku, items };
+  return { name: g.master?.name || g.parent_sku, masterSku: g.master?.parent_sku || null, items };
 }
 
 export function UnifiedProductsList() {
@@ -133,7 +133,7 @@ export function UnifiedProductsList() {
   const [editingVariation, setEditingVariation] = useState<
     { parentSku: string; productName: string; color: string; size: string; ids: string[] } | null
   >(null);
-  const [labelGroup, setLabelGroup] = useState<{ name: string; items: LabelItem[] } | null>(null);
+  const [labelGroup, setLabelGroup] = useState<{ name: string; masterSku: string | null; items: LabelItem[] } | null>(null);
   const [balanceTarget, setBalanceTarget] = useState<
     { productName: string; variationLabel: string; rows: BalanceStoreRow[] } | null
   >(null);
@@ -721,6 +721,7 @@ export function UnifiedProductsList() {
         open={!!labelGroup}
         onOpenChange={(v) => !v && setLabelGroup(null)}
         productName={labelGroup?.name}
+        masterSku={labelGroup?.masterSku}
         items={labelGroup?.items || []}
       />
 
