@@ -151,20 +151,9 @@ export function ProductStockManagerDialog({ masterId, open, onOpenChange }: Prop
       return;
     }
 
-    let direction: "in" | "out";
-    let qty: number;
-    if (e.mode === "balance") {
-      const diff = inputQty - row.stock;
-      if (diff === 0) {
-        toast.info("Estoque já está em " + inputQty);
-        return;
-      }
-      direction = diff > 0 ? "in" : "out";
-      qty = Math.abs(diff);
-    } else {
-      direction = e.mode;
-      qty = inputQty;
-    }
+    const moveFields = e.mode === "balance"
+      ? { target_stock: inputQty }
+      : { direction: e.mode, quantity: inputQty };
 
     setSavingKey(k);
     try {
@@ -172,8 +161,7 @@ export function ProductStockManagerDialog({ masterId, open, onOpenChange }: Prop
         body: {
           store_id: row.storeId,
           tiny_id: row.tinyId,
-          quantity: qty,
-          direction,
+          ...moveFields,
           reason: e.reason || (e.mode === "balance" ? `Balanço para ${inputQty}` : "Ajuste manual via Estoque"),
           product_name: master?.name || variant.sku,
           sku: variant.sku,
@@ -185,7 +173,7 @@ export function ProductStockManagerDialog({ masterId, open, onOpenChange }: Prop
         throw new Error(await extractEdgeError(error));
       }
       if (!data?.success) throw new Error(data?.error || "Falha ao ajustar");
-      toast.success(`OK: ${row.storeName} ${row.stock} → ${data.new_stock}`);
+      toast.success(`OK: ${row.storeName} ${data.previous_stock} → ${data.new_stock}`);
       // Update local
       setStockMap((prev) => ({
         ...prev,

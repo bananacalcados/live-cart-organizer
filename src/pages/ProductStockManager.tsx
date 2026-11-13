@@ -216,17 +216,9 @@ export default function ProductStockManager() {
     if (isNaN(inputQty) || inputQty < 0) { toast.error("Quantidade inválida"); return; }
     if (!selectedRow.id) { toast.error("Variação sem cadastro nesta loja"); return; }
 
-    let direction: "in" | "out";
-    let q: number;
-    if (mode === "balance") {
-      const diff = inputQty - selectedRow.stock;
-      if (diff === 0) { toast.info("Estoque já está em " + inputQty); return; }
-      direction = diff > 0 ? "in" : "out";
-      q = Math.abs(diff);
-    } else {
-      direction = mode;
-      q = inputQty;
-    }
+    const moveFields = mode === "balance"
+      ? { target_stock: inputQty }
+      : { direction: mode, quantity: inputQty };
 
     setSaving(true);
     try {
@@ -234,8 +226,7 @@ export default function ProductStockManager() {
         body: {
           store_id: selectedRow.store_id,
           tiny_id: selectedRow.tiny_id,
-          quantity: q,
-          direction,
+          ...moveFields,
           reason: reason || (mode === "balance" ? `Balanço para ${inputQty}` : "Ajuste manual via Estoque"),
           product_name: master?.name || selectedVariant.sku,
           sku: selectedVariant.sku,
@@ -247,7 +238,7 @@ export default function ProductStockManager() {
         throw new Error(await extractEdgeError(error));
       }
       if (!data?.success) throw new Error(data?.error || "Falha ao ajustar");
-      toast.success(`OK: ${selectedRow.stock} → ${data.new_stock}`);
+      toast.success(`OK: ${data.previous_stock} → ${data.new_stock}`);
       // update local stock
       setPosRows((prev) => prev.map((p) => (p.id === selectedRow.id ? { ...p, stock: data.new_stock } : p)));
       setQty("");

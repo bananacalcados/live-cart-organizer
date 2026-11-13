@@ -22,9 +22,14 @@ serve(withAccessLog("pos-stock-balance", async (req) => {
 { const denied = await requireStaffOrInternal(req, ["inventory","pos"], false); if (denied) return denied; }
 
   try {
-    const { store_id, tiny_id, quantity, direction, reason, product_name, sku, barcode, product_id, seller_id, seller_name } = await req.json();
+    const { store_id, tiny_id, quantity, direction, reason, product_name, sku, barcode, product_id, seller_id, seller_name, target_stock } = await req.json();
 
-    if (!quantity || !direction) {
+    const hasTarget = target_stock !== undefined && target_stock !== null && target_stock !== '';
+    const target = hasTarget ? Number(target_stock) : NaN;
+    if (hasTarget && (!Number.isFinite(target) || target < 0)) {
+      throw new Error('target_stock inválido');
+    }
+    if (!hasTarget && (!quantity || (direction !== 'in' && direction !== 'out'))) {
       throw new Error('quantity e direction são obrigatórios');
     }
     if (!product_id && !(store_id && (tiny_id || sku || barcode))) {
@@ -64,38 +69,24 @@ serve(withAccessLog("pos-stock-balance", async (req) => {
       throw new Error('Produto não encontrado no estoque local (pos_products)');
     }
 
-    // 2. Calcula novo saldo absoluto a partir do estoque local
-    const currentStock = Number(row.stock || 0);
-    const qty = parseFloat(quantity);
-    const newStock = direction === 'in'
-      ? currentStock + qty
-      : Math.max(0, currentStock - qty);
-
-    console.log(`[pos-stock-balance][LOCAL] ${product_name || row.sku} (loja ${row.store_id}): ${currentStock} ${direction === 'in' ? '+' : '-'} ${qty} = ${newStock}`);
-
-    // 3. Atualiza o estoque local
-    const { error: updErr } = await supabase
-      .from('pos_products')
-      .update({ stock: newStock, synced_at: new Date().toISOString() })
-      .eq('id', row.id);
-    if (updErr) throw new Error('Falha ao atualizar pos_products: ' + updErr.message);
-
-    // 4. Registra o histórico do ajuste
-    await supabase.from('pos_stock_adjustments').insert({
-      store_id: row.store_id,
-      product_id: row.id,
-      tiny_id: row.tiny_id ?? tiny_id ?? null,
-      sku: sku || row.sku || null,
-      barcode: barcode || row.barcode || null,
-      product_name: product_name || 'Unknown',
-      direction,
-      quantity: qty,
-      previous_stock: currentStock,
-      new_stock: newStock,
-      reason: reason || null,
-      seller_id: seller_id || null,
-      seller_name: seller_name || null,
-    });
+    // 2. Ajuste atômico no banco (trava a linha, calcula, grava histórico e saldo)
+    const common = {
+      p_product_id: row.id,
+      p_reason: reason || null,
+      p_seller_id: seller_id || null,
+      p_seller_name: seller_name || null,
+      p_user_id: null,
+      p_user_name: null,
+    };
+    const { data: rpc, error: rpcErr } = hasTarget
+      ? await supabase.rpc('pos_stock_balance_to', { ...common, p_target: target })
+      : await supabase.rpc('pos_stock_move', { ...common, p_direction: direction, p_quantity: parseFloat(quantity) });
+    if (rpcErr) throw new Error('Falha ao ajustar estoque: ' + rpcErr.message);
+    const res: any = rpc || {};
+    if (res.success === false) throw new Error(res.error || 'Falha ao ajustar estoque');
+    const currentStock = Number(res.previous_stock ?? 0);
+    const newStock = Number(res.new_stock ?? 0);
+    console.log(`[pos-stock-balance][LOCAL] ${product_name || row.sku} (loja ${row.store_id}): ${currentStock} -> ${newStock}`);
 
     return new Response(JSON.stringify({
       success: true,
