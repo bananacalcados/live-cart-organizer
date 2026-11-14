@@ -564,7 +564,7 @@ export function CustomerFichaPanel({ order, onClose, className, getPixChannel }:
       if (linkMode === "live") {
         if (!liveCartLink) throw new Error("Carrinho da live indisponível para este pedido.");
         const greet = order.customer?.instagram_handle || form.full_name.split(" ")[0] || "";
-        const message = `Olá ${greet}! 🍌\n\nSegue o link do seu carrinho da live:\n\n${liveCartLink}`;
+        const message = `Olá ${greet}! 🍌\n\nSegue o link do seu carrinho da live:\n\n${liveCartLink}\n\nDaqui há pouco volto pra ver se deu certo o pagamento, ta bom?`;
         const channel = getPixChannel?.();
         if (channel && !["instagram", "messenger"].includes(channel.provider)) {
           const messageId = await channel.sendText(message);
