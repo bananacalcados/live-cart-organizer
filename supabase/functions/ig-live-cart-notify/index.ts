@@ -1,3 +1,4 @@
+import { registerDmDecision } from '../_shared/register-dm-rules.ts';
 import { withAccessLog } from "../_shared/withAccessLog.ts";
 // deno-lint-ignore-file no-explicit-any
 // Avisos automáticos na live do Instagram quando um carrinho é montado no Eventos.
@@ -6,7 +7,6 @@ import { withAccessLog } from "../_shared/withAccessLog.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { globalIgToken } from "../_shared/instagram-account.ts";
 import { buildRhVagaMetaMessage, rhVagaDirectWindowOpen } from "../_shared/rh-vaga-automation.ts";
-import { replacesLegacyFollowups } from '../_shared/live-followup.ts';
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -214,14 +214,12 @@ Deno.serve(withAccessLog("ig-live-cart-notify", async (req) => {
         await sendRhVagaDm(sb, job, accounts!, results);
         continue;
       }
-      if (job.kind==='selfservice_register_dm' && await replacesLegacyFollowups(sb)) {
-        await sb.from('ig_live_cart_notifications').update({status:'skipped',error:'substituído pelo follow-up global'}).eq('id',job.id).eq('status','processing');
-        continue;
-      }
+      // Cadastro pelo Instagram NÃO é substituído pelo follow-up global (que só cuida do WhatsApp).
       // pedido ainda válido?
       const { data: order } = await sb.from("orders").select("stage, phone_last4, registered_at, is_paid").eq("id", job.order_id).maybeSingle();
       if (!order || order.is_paid || ["cancelled", "paid", "completed", "shipped"].includes(order.stage)) { await fail("pedido não está mais aberto"); continue; }
       if (job.kind === "selfservice_register_dm") {
+        if (registerDmDecision(order) !== "send") { await sb.from("ig_live_cart_notifications").update({ status: "skipped", error: "cliente já se cadastrou" }).eq("id", job.id).eq("status", "processing"); continue; }
         await sendRegisterDm(sb, job, order, accounts!, liveByEvent, results);
         continue;
       }

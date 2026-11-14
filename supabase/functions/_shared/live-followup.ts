@@ -1,6 +1,7 @@
 import { DEFAULT_FOLLOWUP_CONFIG, scheduleStep, renderFollowup, stopReason, crossellWindow, type FollowupConfig, type FollowupType } from './live-followup-rules.ts';
 import { internalCallHeaders } from './requireAuth.ts';
 import { instagramFollowupMode } from './instagram-window.ts';
+import { followupFAllowed } from './register-dm-rules.ts';
 type Client = any;
 const MAX_SCHEDULE_BASE_AGE_MIN = 60;
 export async function followupConfig(sb: Client): Promise<FollowupConfig> {
@@ -54,6 +55,10 @@ export async function scheduleGlobalFollowups(sb: Client, simulation?: {eventId:
     // No cart exists for a filled registration without an order: never manufacture one.
     if (!type || !base || !cfg.types[type].enabled || !cfg.enabled_since || Date.parse(base)<Date.parse(cfg.enabled_since)) { await ack(); continue; }
     if (!phone && type !== 'F') { await ack(); continue; }
+    if (type === 'F' && o?.id) {
+      const { data: dms } = await sb.from('ig_live_cart_notifications').select('status').eq('order_id', o.id).eq('kind', 'selfservice_register_dm');
+      if (!followupFAllowed((dms || []).map((d: any) => d.status))) { await ack(); continue; }
+    }
     // Stale bases (e.g. a source that changed hours later or a recovered backlog) never create late reminders.
     if (!simulation && Date.now() - Date.parse(base) > MAX_SCHEDULE_BASE_AGE_MIN * 60000) { await ack(); continue; }
     // Context uses the same live_event_sender RPC as event-sender.ts, batched in SQL.
