@@ -84,6 +84,7 @@ export function PresenterTeamChat({ eventId, presenterMode = false }: PresenterT
 
   // Sound for presenter mode
   const playSound = useCallback(() => {
+    return; // apitos desligados em todo o sistema (vazavam na live pelo OBS)
     if (!presenterMode) return;
     try {
       const ctx = new AudioContext();

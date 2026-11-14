@@ -87,7 +87,7 @@ export function POSAiAssistanceRequests({ storeId }: Props) {
           try {
             const audio = new Audio("data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdH2JkZeYl5KNiIaCgoSIjZKWmJmXk46JhYKBgoaLkJWYmZiUj4qGgoGChYuQlZiZmJSPioWCgYKGi5CVmJmYlI+KhYKBgoaLkJWYmZiUj4qFgoGChg==");
             audio.volume = 0.3;
-            audio.play().catch(() => {});
+            void audio; // apito desligado
           } catch {}
         }
       })

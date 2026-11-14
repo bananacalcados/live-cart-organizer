@@ -18,6 +18,7 @@ export function PixPaidGlobalAlert() {
   // Beep curto pra chamar atenção quando abrir o alerta.
   useEffect(() => {
     if (!paidAlert) return;
+    return; // apitos desligados em todo o sistema (vazavam na live pelo OBS)
     try {
       const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
       const osc = ctx.createOscillator();

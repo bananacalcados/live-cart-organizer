@@ -28,6 +28,7 @@ const invoke = async (body: Record<string, unknown>) => {
 };
 
 function beep(ok: boolean) {
+  return; // apitos desligados em todo o sistema (vazavam na live pelo OBS)
   try {
     const ctx = new AudioContext();
     const o = ctx.createOscillator(); const g = ctx.createGain();

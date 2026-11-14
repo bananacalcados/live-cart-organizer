@@ -119,6 +119,7 @@ export default function PresenterDashboard() {
   }, []);
 
   const playNotificationSound = useCallback(() => {
+    return; // apitos desligados em todo o sistema (vazavam na live pelo OBS)
     if (!soundEnabled) return;
     try {
       const ctx = new AudioContext();

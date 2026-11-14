@@ -380,6 +380,7 @@ export function LiveInstagramComments({ eventId, currentEventName = "Esta live",
   }, [eventId, isLiveActive, togglingLive, refreshLiveStatus]);
 
   const playBeep = useCallback(() => {
+    return; // apitos desligados em todo o sistema (vazavam na live pelo OBS)
     if (!soundEnabled) return;
     try {
       const ctx = new AudioContext();

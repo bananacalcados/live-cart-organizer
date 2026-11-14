@@ -26,6 +26,7 @@ interface EventStockAlertsProps {
 // Audio for alert
 let alertAudio: HTMLAudioElement | null = null;
 const playAlertSound = () => {
+  return; // apitos desligados em todo o sistema (vazavam na live pelo OBS)
   try {
     if (!alertAudio) {
       alertAudio = new Audio("data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgipuYf19NVX2Nk4x2YVljdYiKgnBhXWRxfoOBdm1obHJ3eHVwbGtucXNzcG5sbG5wcnJwbm1sbnBycnBubWxucHJycG5tbG5wcnJwbm1sbnBycnBubWxucHJycG5tbG5wcnJwbm0=");
