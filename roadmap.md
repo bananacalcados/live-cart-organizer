@@ -289,3 +289,10 @@
 - [x] Restringir chat editável aos pedidos desta live e estabilizar callbacks com referência dos pedidos.
 - [x] Condicionar alertas de cadastro ao modo de autoatendimento já carregado.
 - [x] 21 testes passaram e compilação limpa; live real confirmou chat histórico com ID sintético/orderless=true, pedido atual com orderless=false e alerta de cadastro presente; sem envio ou publicação.
+
+# Rascunhos dos disparos de 14/11 (urgente)
+- [x] Reutilizar os disparos-base de 07/11 e 01/11, live a5c0b75b de hoje, variáveis e imagem provisória de 07/11.
+- [x] Criar os históricos d1450001 e d1450002 pausados e gerar destinatários pelo motor de cotas, sem override ou reenvio forçado.
+- [x] Primeiro: 13.725 elegíveis; exclusões 823 por compra em 30 dias, 1.383 por toque em 5 dias, 40 por opt-out/bloqueio e 9.376 por silêncio/tipo não permitido; todos com cliente unificado e tracking.
+- [x] Segundo: zero porque a live de hoje ainda não tinha leads; precisa regenerar o público especial antes da aprovação.
+- [x] Conferir IDs, variáveis, imagem, status scheduled_paused, destinatários pendentes e zero envios; nenhuma tela alterada ou publicada.
