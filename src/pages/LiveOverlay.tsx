@@ -2,8 +2,9 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { hiddenByConflict, measureBlocks } from "@/lib/overlayConflicts";
 import { useParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
-import { OverlayConfig, PaymentTimer, expiredAlertTemplate, fill, formatTimer, shouldShowCurrentShownProduct, takeNextTimer, timerShowSeconds, timerStillValid, withOverlayDefaults, overlayEventChanged } from "@/lib/liveOverlay";
+import { OverlayConfig, PaymentTimer, expiredAlertTemplate, fill, formatTimer, normalizeReloadNonce, shouldReloadOverlayForNonce, shouldShowCurrentShownProduct, takeNextTimer, timerShowSeconds, timerStillValid, withOverlayDefaults, overlayEventChanged } from "@/lib/liveOverlay";
 import { OverlayBlock } from "@/components/events/OverlayBlock";
+import { OverlayPanel } from "@/components/events/OverlayPanel";
 
 interface OvEvent { id: number; kind: string; payload: any; created_at: string }
 interface ShownItem { code: string; product_name?: string; color?: string; sale_price?: number; offer_price?: number | null; free_shipping?: boolean; interest_free_installments?: number | null; shown_at?: string; source?: string | null }
@@ -36,10 +37,14 @@ export default function LiveOverlay() {
   const ctaTimer = useRef<number | null>(null);
   const cfgRef = useRef<OverlayConfig | null>(null);
   const cfgKey = useRef("");
+  const reloadNonce = useRef<number | null>(null);
+  const reloadNonceSeen = useRef(false);
+  const overlayBusy = useRef(true);
   // Relógios: fila (um por vez). currentTimer é o único na tela.
   const timerQueue = useRef<PaymentTimer[]>([]);
   const [currentTimer, setCurrentTimer] = useState<PaymentTimer | null>(null);
   const [now, setNow] = useState(() => Date.now());
+  overlayBusy.current = Boolean(alert || currentTimer || spin || raffleWinner || cta);
   // Produto em exibição: só via overlay_shown_products (respeita minutos e is_current).
   const [shown, setShown] = useState<ShownData | null>(null);
   const shownBusy = useRef(false);
@@ -82,6 +87,28 @@ export default function LiveOverlay() {
       document.body.style.background = prev[0];
       document.documentElement.style.background = prev[1];
     };
+  }, []);
+
+  // Detecta publicação nova sem consultar o banco. Só recarrega com a tela livre.
+  useEffect(() => {
+    const mainScript = (root: Document) => Array.from(root.scripts)
+      .map((script) => script.getAttribute("src") || "")
+      .find((src) => /\/assets\/index-[^/]+\.js(?:\?|$)/.test(src));
+    const loadedScript = mainScript(document);
+    if (!loadedScript) return;
+    let stopped = false;
+    const checkVersion = async () => {
+      if (stopped || document.hidden || overlayBusy.current) return;
+      try {
+        const response = await fetch("/", { cache: "no-store" });
+        if (!response.ok) return;
+        const html = await response.text();
+        const publishedScript = mainScript(new DOMParser().parseFromString(html, "text/html"));
+        if (!stopped && publishedScript && publishedScript !== loadedScript && !overlayBusy.current) window.location.reload();
+      } catch { /* Uma falha de rede não interfere na live; tenta novamente em 5 min. */ }
+    };
+    const interval = window.setInterval(checkVersion, 5 * 60_000);
+    return () => { stopped = true; window.clearInterval(interval); };
   }, []);
 
   const showCta = (text: string) => {
@@ -153,6 +180,13 @@ export default function LiveOverlay() {
       if (key !== cfgKey.current) {
         cfgKey.current = key;
         const c = withOverlayDefaults(d.settings?.config);
+        const incomingNonce = normalizeReloadNonce(c.reload_nonce);
+        if (shouldReloadOverlayForNonce(reloadNonce.current, incomingNonce, reloadNonceSeen.current)) {
+          window.location.reload();
+          return;
+        }
+        reloadNonce.current = incomingNonce;
+        reloadNonceSeen.current = true;
         cfgRef.current = c;
         setConfig(c);
       }
@@ -283,7 +317,6 @@ export default function LiveOverlay() {
   const pct = rb.goal_count > 0 ? Math.min(100, (raffleCount / rb.goal_count) * 100) : 0;
   const tickerText = tickerItems.length ? tickerItems[tickerIdx % tickerItems.length].text : "";
 
-  const panel = "overlay-panel";
   const scale = Math.min(viewport.width / 1080, viewport.height / 1920);
   const offset = (viewport.width - 1080 * scale) / 2;
 
@@ -296,15 +329,15 @@ export default function LiveOverlay() {
     >
       {config.ticker.enabled && tickerText && (
         <OverlayBlock position={config.layout.ticker} blockKey="ticker">
-          <div key={tickerIdx} className={`${panel} font-bold animate-in fade-in duration-700`}>
+          <OverlayPanel key={tickerIdx} blockKey="ticker" styles={config.styles} className="animate-in fade-in duration-700">
             {tickerText}
-          </div>
+          </OverlayPanel>
         </OverlayBlock>
       )}
 
       {rb.enabled && (
         <OverlayBlock position={config.layout.raffle_bar} blockKey="raffle_bar">
-          <div className={`${panel} w-full font-bold`}>
+          <OverlayPanel blockKey="raffle_bar" styles={config.styles} className="w-full">
             {raffleWinner
               ? <span className="overlay-wheel-winner">🏆 Ganhadora: {raffleWinner.label}</span>
               : fill(rb.text_template, { count: raffleCount })}
@@ -316,15 +349,15 @@ export default function LiveOverlay() {
                 {remaining > 0 && <div className="mt-[0.3em]">{fill(rb.goal_text, { remaining, count: raffleCount })}</div>}
               </>
             )}
-          </div>
+          </OverlayPanel>
         </OverlayBlock>
       )}
 
       {alert && (
         <OverlayBlock position={config.layout.alert} blockKey="alert">
-          <div key={alert.key} className={`${panel} ${alert.tone === "expired" ? "overlay-alert-expired" : ""} font-extrabold animate-in slide-in-from-left fade-in duration-500`} style={{ lineHeight: 1.2 }}>
+          <OverlayPanel key={alert.key} blockKey="alert" styles={config.styles} expired={alert.tone === "expired"} className="animate-in slide-in-from-left fade-in duration-500" style={{ lineHeight: 1.2 }}>
             {alert.text}
-          </div>
+          </OverlayPanel>
         </OverlayBlock>
       )}
 
@@ -332,10 +365,10 @@ export default function LiveOverlay() {
         <OverlayBlock position={config.layout.timers} blockKey="timers">
           <div className="flex flex-col gap-[0.3em]">
             {[currentTimer].map((t) => (
-              <div key={t.orderId} data-overlay-timer={t.orderId} className={`${panel} font-bold animate-in fade-in duration-500`} style={{ lineHeight: 1.2 }}>
+              <OverlayPanel key={t.orderId} blockKey="timers" styles={config.styles} data-overlay-timer={t.orderId} className="animate-in fade-in duration-500" style={{ lineHeight: 1.2 }}>
                 {fill(config.payment_timers.template, { handle: t.handle, product: t.product, size: t.size, timer: formatTimer(t.expiresAt - now) })
                   .split(formatTimer(t.expiresAt - now)).flatMap((part, i, arr) => i < arr.length - 1 ? [part, <span key={i} className="overlay-timer">{formatTimer(t.expiresAt - now)}</span>] : [part])}
-              </div>
+              </OverlayPanel>
             ))}
           </div>
         </OverlayBlock>
@@ -343,7 +376,7 @@ export default function LiveOverlay() {
 
       {spin && (
         <OverlayBlock position={config.layout.wheel} blockKey="wheel">
-          <div key={spin.key} className={`${panel} relative font-extrabold animate-in fade-in zoom-in-95 duration-500`} style={{ lineHeight: 1.2 }}>
+          <OverlayPanel key={spin.key} blockKey="wheel" styles={config.styles} className="relative animate-in fade-in zoom-in-95 duration-500" style={{ lineHeight: 1.2 }}>
             {spin.done && spin.raffle && (
               <div className="overlay-confetti" aria-hidden>
                 {Array.from({ length: 28 }).map((_, i) => (
@@ -359,7 +392,7 @@ export default function LiveOverlay() {
               {spin.raffle ? `🎁 Sorteio${spin.prize ? ` · ${spin.prize}` : ""}` : fill(config.wheel.title_template, { handle: spin.handle })}
             </div>
             <div className={spin.done ? "overlay-wheel-winner mt-[0.25em]" : "mt-[0.25em]"}>{spin.done ? `🎉 ${spin.text}` : spin.text}</div>
-          </div>
+          </OverlayPanel>
         </OverlayBlock>
       )}
 
@@ -367,7 +400,7 @@ export default function LiveOverlay() {
         <OverlayBlock position={config.layout.shown_product} blockKey="shown_product">
           <div className="flex flex-col gap-[0.25em]">
             {shouldShowCurrentShownProduct(shown.show_codes, shown.current) && shown.current && (
-              <div key={shown.current.code + (shown.current.shown_at || "")} className={`${panel} animate-in fade-in zoom-in-95 duration-500`} style={{ lineHeight: 1.1 }}>
+              <OverlayPanel key={shown.current.code + (shown.current.shown_at || "")} blockKey="shown_product" styles={config.styles} className="animate-in fade-in zoom-in-95 duration-500" style={{ lineHeight: 1.1 }}>
                 <div className="font-black tracking-wide" style={{ fontSize: "2.2em", whiteSpace: "nowrap" }}>{shown.current.code}</div>
                 <div className="font-bold" style={{ fontSize: "0.6em" }}>{shown.current.product_name}</div>
                 {shown.current.color && <div style={{ fontSize: "0.5em" }}>{shown.current.color}</div>}
@@ -379,12 +412,12 @@ export default function LiveOverlay() {
                 ) : shown.current.sale_price != null && <div className="font-extrabold mt-[0.15em]" style={{ fontSize: "0.75em" }}>{brl(shown.current.sale_price)}</div>}
                 {!!shown.current.interest_free_installments && <div className="font-bold" style={{ fontSize: "0.42em" }}>em até {shown.current.interest_free_installments}x sem juros</div>}
                 {shown.current.free_shipping && <div className="font-extrabold" style={{ fontSize: "0.48em" }}>FRETE GRÁTIS</div>}
-              </div>
+              </OverlayPanel>
             )}
             {shown.show_codes && shown.previous.filter((p) => p.code !== shown.current?.code).slice(0, 8).map((p) => (
-              <div key={p.code} className={`${panel} font-bold animate-in fade-in duration-500`} style={{ fontSize: "0.42em", lineHeight: 1.2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+              <OverlayPanel key={p.code} blockKey="shown_product" styles={config.styles} className="animate-in fade-in duration-500" style={{ fontWeight: 700, fontSize: "0.42em", lineHeight: 1.2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                 {p.code} · {(p.product_name || "").split(" ").slice(0, 3).join(" ")}{p.color ? ` · ${p.color}` : ""}
-              </div>
+              </OverlayPanel>
             ))}
           </div>
         </OverlayBlock>
@@ -392,9 +425,9 @@ export default function LiveOverlay() {
 
       {cta && (
         <OverlayBlock position={config.layout.cta} blockKey="cta">
-          <div className={`${panel} font-extrabold animate-in fade-in zoom-in-95 duration-500`}>
+          <OverlayPanel blockKey="cta" styles={config.styles} className="animate-in fade-in zoom-in-95 duration-500">
             {cta}
-          </div>
+          </OverlayPanel>
         </OverlayBlock>
       )}
     </div>

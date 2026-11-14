@@ -11,6 +11,7 @@ import { toast } from "sonner";
 import { ArrowDown, ArrowUp, Copy, Dices, Eye, EyeOff, Plus, RefreshCw, Save, Send, Trash2 } from "lucide-react";
 import { DEFAULT_OVERLAY_CONFIG, DEFAULT_OVERLAY_LAYOUT, OverlayConfig, OverlayItem, OverlayLayout, withOverlayDefaults } from "@/lib/liveOverlay";
 import { OverlayLayoutEditor } from "./OverlayLayoutEditor";
+import { OverlayStyleEditor } from "./OverlayStyleEditor";
 
 const sb = supabase as any;
 const newId = () => Math.random().toString(36).slice(2, 9);
@@ -55,6 +56,7 @@ export function LiveOverlayControl({ eventId }: { eventId: string }) {
   const [dirty, setDirty] = useState(false);
   const [editPositions, setEditPositions] = useState(false);
   const [layoutSaving, setLayoutSaving] = useState(false);
+  const [reloadingObs, setReloadingObs] = useState(false);
   const saveQueue = useRef<Promise<void>>(Promise.resolve());
   const [savingParticipants, setSavingParticipants] = useState(false);
   const [fakeHandles, setFakeHandles] = useState<string>(() => { try { return localStorage.getItem(`overlay-fake-handles:${eventId}`) ?? localStorage.getItem("overlay-fake-handles") ?? "@ana_paula\n@bia_souza\n@carla_lima\n@cliente_exemplo"; } catch { return ""; } });
@@ -105,7 +107,7 @@ export function LiveOverlayControl({ eventId }: { eventId: string }) {
 
   useEffect(() => { load(); }, [load]);
 
-  const update = <K extends keyof OverlayConfig>(k: K, patch: Partial<OverlayConfig[K]>) => {
+  const update = <K extends Exclude<keyof OverlayConfig, "reload_nonce">>(k: K, patch: Partial<OverlayConfig[K]>) => {
     setCfg((c) => ({ ...c, [k]: { ...c[k], ...patch } }));
     setDirty(true);
   };
@@ -116,6 +118,27 @@ export function LiveOverlayControl({ eventId }: { eventId: string }) {
     if (error) return toast.error("Não foi possível aplicar");
     setDirty(false);
     toast.success("Aplicado na live");
+  };
+
+  const reloadObs = async () => {
+    setReloadingObs(true);
+    try {
+      await saveQueue.current;
+      const { data, error: readError } = await sb.from("live_overlay_settings").select("config").eq("event_id", eventId).single();
+      if (readError) throw readError;
+      const reloadNonce = Date.now();
+      const { error } = await sb.from("live_overlay_settings").update({
+        config: { ...data.config, reload_nonce: reloadNonce },
+        updated_at: new Date().toISOString(),
+      }).eq("event_id", eventId);
+      if (error) throw error;
+      setCfg((current) => ({ ...current, reload_nonce: reloadNonce }));
+      toast.success("Recarregamento pedido — o OBS atualiza em alguns segundos");
+    } catch {
+      toast.error("Não foi possível pedir o recarregamento");
+    } finally {
+      setReloadingObs(false);
+    }
   };
 
   const toggleHidden = async () => {
@@ -204,6 +227,9 @@ export function LiveOverlayControl({ eventId }: { eventId: string }) {
               </Button>
               <Button variant="outline" className="gap-1" onClick={testRaffle} disabled={savingParticipants}>
                 <Dices className="h-4 w-4" /> Testar sorteio
+              </Button>
+              <Button variant="outline" className="gap-1" onClick={reloadObs} disabled={reloadingObs}>
+                <RefreshCw className="h-4 w-4" /> {reloadingObs ? "Pedindo…" : "Recarregar overlay no OBS"}
               </Button>
             </div>
             <div className="space-y-1">
@@ -325,6 +351,10 @@ export function LiveOverlayControl({ eventId }: { eventId: string }) {
           </CardContent>
         </Card>
 
+        <OverlayStyleEditor config={cfg} onChange={(styles) => {
+          setCfg((current) => ({ ...current, styles }));
+          setDirty(true);
+        }} />
 
         <div className="sticky bottom-0 flex flex-wrap gap-2 border-t bg-background py-3">
           <Button onClick={apply} disabled={!dirty || layoutSaving}>Aplicar</Button>

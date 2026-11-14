@@ -88,3 +88,38 @@ describe("expired alert", () => {
     expect(expiredAlertTemplate(c, { has_stock: false })).toBe("⌛ @{handle}, o prazo da bolsa acabou!");
   });
 });
+
+import { DEFAULT_OVERLAY_STYLES, normalizeOverlayStyle, normalizeReloadNonce, overlayPanelStyle, shouldReloadOverlayForNonce } from "@/lib/liveOverlay";
+describe("overlay block styles", () => {
+  it("keeps the existing black, white and block-specific font weights by default", () => {
+    const config = withOverlayDefaults({});
+    expect(config.styles).toEqual(DEFAULT_OVERLAY_STYLES);
+    expect(config.styles.alert.font_weight).toBe(800);
+    expect(config.styles.shown_product.font_weight).toBe(400);
+    expect(overlayPanelStyle(config.styles, "ticker")).toMatchObject({ background: "rgba(0, 0, 0, 0.6)", color: "#ffffff", fontWeight: 700 });
+  });
+  it("normalizes invalid colors, opacity and font weight without breaking the overlay", () => {
+    expect(normalizeOverlayStyle({ bg_color: "red", bg_opacity: 9, text_color: "#abcdef", font_weight: 100, border_color: "invalid" }, "ticker")).toEqual({ bg_color: "#000000", bg_opacity: 1, text_color: "#abcdef", font_weight: 700 });
+    expect(normalizeOverlayStyle({ bg_opacity: -2, font_weight: 900, border_color: "#A1B2C3" }, "ticker")).toMatchObject({ bg_opacity: 0, font_weight: 900, border_color: "#a1b2c3" });
+    expect(normalizeOverlayStyle({ bg_opacity: "bad", font_weight: 650 }, "ticker")).toMatchObject({ bg_opacity: 0.6, font_weight: 700 });
+  });
+  it("keeps the expired alert's own background even when the block is green", () => {
+    const styles = withOverlayDefaults({ styles: { alert: { bg_color: "#16a34a", bg_opacity: 0.95, text_color: "#ffffff", font_weight: 900 } } }).styles;
+    expect(overlayPanelStyle(styles, "alert", true)).toMatchObject({ background: "hsl(var(--overlay-expired) / 0.85)", color: "#ffffff", fontWeight: 900 });
+  });
+});
+describe("overlay reload nonce", () => {
+  it("does not reload for the first nonce and reloads only when it changes", () => {
+    const first = normalizeReloadNonce(1_700_000_000_000);
+    expect(first).toBe(1_700_000_000_000);
+    expect(shouldReloadOverlayForNonce(null, first, false)).toBe(false);
+    expect(shouldReloadOverlayForNonce(first, first, true)).toBe(false);
+    expect(shouldReloadOverlayForNonce(first, first! + 1, true)).toBe(true);
+  });
+  it("accepts the first manual reload when the old config had no nonce and rejects invalid values", () => {
+    expect(shouldReloadOverlayForNonce(null, 123, true)).toBe(true);
+    expect(normalizeReloadNonce(-1)).toBeNull();
+    expect(normalizeReloadNonce("invalid")).toBeNull();
+    expect(shouldReloadOverlayForNonce(123, "invalid", true)).toBe(true);
+  });
+});

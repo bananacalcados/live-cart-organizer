@@ -4,6 +4,15 @@ export function overlayEventChanged(previous: string | null, incoming: string | 
   return previous !== null && incoming !== null && previous !== incoming;
 }
 export type OverlayBlockKey = "ticker" | "raffle_bar" | "alert" | "cta" | "wheel" | "timers" | "shown_product";
+export type OverlayFontWeight = 400 | 600 | 700 | 800 | 900;
+export interface OverlayBlockStyle {
+  bg_color: string;
+  bg_opacity: number;
+  text_color: string;
+  font_weight: OverlayFontWeight;
+  border_color?: string;
+}
+export type OverlayStyles = Record<OverlayBlockKey, OverlayBlockStyle>;
 export interface OverlayPosition { x: number; y: number; width: number; font_size: number; align: "left" | "center" | "right" }
 export type OverlayLayout = Record<OverlayBlockKey, OverlayPosition>;
 /**
@@ -25,8 +34,20 @@ export function normalizeOverlayPosition(raw: OverlayPosition): OverlayPosition 
   const width = Math.min(1080, Math.max(160, Number(raw.width) || 160));
   return { ...raw, width, x: Math.min(1080 - width, Math.max(0, Number(raw.x) || 0)), y: Math.min(1919, Math.max(0, Number(raw.y) || 0)), font_size: Math.min(160, Math.max(16, Number(raw.font_size) || 40)), align: ["left", "center", "right"].includes(raw.align) ? raw.align : "center" };
 }
+export const DEFAULT_OVERLAY_STYLES: OverlayStyles = {
+  ticker: { bg_color: "#000000", bg_opacity: 0.6, text_color: "#ffffff", font_weight: 700 },
+  raffle_bar: { bg_color: "#000000", bg_opacity: 0.6, text_color: "#ffffff", font_weight: 700 },
+  alert: { bg_color: "#000000", bg_opacity: 0.6, text_color: "#ffffff", font_weight: 800 },
+  cta: { bg_color: "#000000", bg_opacity: 0.6, text_color: "#ffffff", font_weight: 800 },
+  wheel: { bg_color: "#000000", bg_opacity: 0.6, text_color: "#ffffff", font_weight: 800 },
+  timers: { bg_color: "#000000", bg_opacity: 0.6, text_color: "#ffffff", font_weight: 700 },
+  shown_product: { bg_color: "#000000", bg_opacity: 0.6, text_color: "#ffffff", font_weight: 400 },
+};
+
 export interface OverlayConfig {
   layout: OverlayLayout;
+  styles: OverlayStyles;
+  reload_nonce?: number;
   ticker: { enabled: boolean; interval_seconds: number; items: OverlayItem[] };
   raffle_bar: { enabled: boolean; text_template: string; goal_enabled: boolean; goal_count: number; goal_text: string };
   paid_alert: { enabled: boolean; template: string; duration_seconds: number };
@@ -43,6 +64,7 @@ export interface OverlayConfig {
 
 export const DEFAULT_OVERLAY_CONFIG: OverlayConfig = {
   layout: DEFAULT_OVERLAY_LAYOUT,
+  styles: DEFAULT_OVERLAY_STYLES,
   ticker: { enabled: true, interval_seconds: 6, items: [] },
   raffle_bar: {
     enabled: true,
@@ -64,12 +86,54 @@ export const DEFAULT_OVERLAY_CONFIG: OverlayConfig = {
   shown_product: { enabled: true },
 };
 
+const HEX_COLOR = /^#[0-9a-f]{6}$/i;
+const FONT_WEIGHTS: OverlayFontWeight[] = [400, 600, 700, 800, 900];
+const normalizeHex = (value: unknown, fallback: string) => typeof value === "string" && HEX_COLOR.test(value) ? value.toLowerCase() : fallback;
+
+export function normalizeOverlayStyle(raw: any, key: OverlayBlockKey): OverlayBlockStyle {
+  const fallback = DEFAULT_OVERLAY_STYLES[key];
+  const numericOpacity = Number(raw?.bg_opacity);
+  const numericWeight = Number(raw?.font_weight) as OverlayFontWeight;
+  const border = raw?.border_color == null ? undefined : normalizeHex(raw.border_color, "");
+  return {
+    bg_color: normalizeHex(raw?.bg_color, fallback.bg_color),
+    bg_opacity: raw?.bg_opacity == null || !Number.isFinite(numericOpacity) ? fallback.bg_opacity : Math.min(1, Math.max(0, numericOpacity)),
+    text_color: normalizeHex(raw?.text_color, fallback.text_color),
+    font_weight: FONT_WEIGHTS.includes(numericWeight) ? numericWeight : fallback.font_weight,
+    ...(border ? { border_color: border } : {}),
+  };
+}
+
+export function overlayPanelStyle(styles: OverlayStyles, key: OverlayBlockKey, expired = false) {
+  const style = normalizeOverlayStyle(styles?.[key], key);
+  const hex = style.bg_color.slice(1);
+  const rgb = [0, 2, 4].map((offset) => parseInt(hex.slice(offset, offset + 2), 16)).join(", ");
+  return {
+    background: expired ? "hsl(var(--overlay-expired) / 0.85)" : `rgba(${rgb}, ${style.bg_opacity})`,
+    color: style.text_color,
+    fontWeight: style.font_weight,
+    ...(style.border_color ? { borderColor: style.border_color } : {}),
+  };
+}
+
+export function normalizeReloadNonce(value: unknown): number | null {
+  const nonce = Number(value);
+  return Number.isFinite(nonce) && nonce > 0 ? nonce : null;
+}
+
+/** O primeiro valor só inicializa; uma mudança posterior pede recarga. */
+export function shouldReloadOverlayForNonce(previous: number | null, incoming: unknown, initialized: boolean): boolean {
+  return initialized && previous !== normalizeReloadNonce(incoming);
+}
+
 /** Junta o config salvo com os padrões, para nunca faltar campo. */
 export function withOverlayDefaults(raw: any): OverlayConfig {
   const c = raw || {};
   const d = DEFAULT_OVERLAY_CONFIG;
   return {
     layout: Object.fromEntries((Object.keys(DEFAULT_OVERLAY_LAYOUT) as OverlayBlockKey[]).map((key) => [key, normalizeOverlayPosition({ ...DEFAULT_OVERLAY_LAYOUT[key], ...(c.layout?.[key] || {}) })])) as OverlayLayout,
+    styles: Object.fromEntries((Object.keys(DEFAULT_OVERLAY_STYLES) as OverlayBlockKey[]).map((key) => [key, normalizeOverlayStyle(c.styles?.[key], key)])) as OverlayStyles,
+    reload_nonce: normalizeReloadNonce(c.reload_nonce) ?? undefined,
     ticker: { ...d.ticker, ...(c.ticker || {}), items: c.ticker?.items || [] },
     raffle_bar: { ...d.raffle_bar, ...(c.raffle_bar || {}) },
     paid_alert: { ...d.paid_alert, ...(c.paid_alert || {}) },

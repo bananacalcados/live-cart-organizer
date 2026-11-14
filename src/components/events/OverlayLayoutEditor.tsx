@@ -6,6 +6,7 @@ import { Label } from "@/components/ui/label";
 import { MoveDiagonal2 } from "lucide-react";
 import { fill, normalizeOverlayPosition, OverlayBlockKey, OverlayConfig, OverlayLayout } from "@/lib/liveOverlay";
 import { OverlayBlock } from "./OverlayBlock";
+import { OverlayPanel } from "./OverlayPanel";
 
 const names: Record<OverlayBlockKey, string> = { ticker: "Faixa", raffle_bar: "Sorteio", alert: "Aviso", cta: "Chamada", wheel: "Roleta", timers: "Relógios", shown_product: "Produto" };
 const keys = Object.keys(names) as OverlayBlockKey[];
@@ -60,10 +61,10 @@ export function OverlayLayoutEditor({ config, onChange, onSave }: { config: Over
         <div className="overlay-guide absolute inset-x-0 top-0 flex items-center justify-center text-foreground" style={{ height: 180, fontSize: 34 }}>Perfil do Instagram</div>
         <div className="overlay-guide absolute inset-x-0 bottom-0 flex items-end justify-center pb-10 text-foreground" style={{ height: 420, fontSize: 34 }}>Comentários do Instagram</div>
         {keys.map((key) => <OverlayBlock key={key} position={config.layout[key]} blockKey={key}>
-          <div aria-label={`Arrastar ${names[key]}`} role="group" className={`relative cursor-move touch-none select-none border-4 border-dashed overlay-panel ${conflicted.has(key) ? "border-destructive" : "border-primary"} font-bold`} onPointerDown={(e) => start(e, key, "move")} onPointerMove={move} onPointerUp={finish} onPointerCancel={finish}>
+          <OverlayPanel blockKey={key} styles={config.styles} aria-label={`Arrastar ${names[key]}`} role="group" className={`relative cursor-move touch-none select-none border-4 border-dashed ${conflicted.has(key) ? "border-destructive" : "border-primary"}`} onPointerDown={(e) => start(e, key, "move")} onPointerMove={move} onPointerUp={finish} onPointerCancel={finish}>
             {texts[key]}
             <Button aria-label={`Largura ${names[key]}`} title={`Largura ${names[key]}`} variant="secondary" size="icon" className="absolute bottom-0 right-0 h-16 w-16 cursor-ew-resize touch-none" onPointerDown={(e) => start(e, key, "width")} onPointerMove={move} onPointerUp={finish} onPointerCancel={finish}><MoveDiagonal2 className="h-10 w-10" /></Button>
-          </div>
+          </OverlayPanel>
         </OverlayBlock>)}
       </div>
     </div>
