@@ -51,7 +51,8 @@ export function normalizeCorreiosEvents(payload: any, trackingNumber: string): R
       at,
       description,
       location: eventLocation(event),
-      type: String(event?.codigo || event?.tipo || ''),
+      type: String(event?.codigo || ''),
+      status: event?.tipo != null && event?.tipo !== '' ? String(event.tipo) : undefined,
     } satisfies RealEvent;
   }).filter((event: RealEvent | null): event is RealEvent => !!event)
     .sort((a: RealEvent, b: RealEvent) => new Date(a.at).getTime() - new Date(b.at).getTime());

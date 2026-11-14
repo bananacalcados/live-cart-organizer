@@ -1,3 +1,4 @@
+import { classifyDeliveryEvent } from '../../../supabase/functions/_shared/delivery-event';
 import { useEffect, useMemo, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -310,6 +311,17 @@ export function ShipmentSimulations() {
                         Etapa atual: <strong>{STAGE_LABEL[r.stage] ?? r.stage}</strong>
                         {r.fulfillment === 'pickup' ? ' • Retirada em loja' : ''}
                       </p>
+                      {(() => {
+                        const evs = Array.isArray((r as any).real_events) ? [...(r as any).real_events].sort((a: any, b: any) => +new Date(a.at) - +new Date(b.at)) : [];
+                        const last = evs[evs.length - 1];
+                        const kind = !r.delivered_at && last ? classifyDeliveryEvent(last, (r as any).real_carrier) : null;
+                        if (kind !== 'failed_attempt' && kind !== 'awaiting_pickup' && kind !== 'returning') return null;
+                        return (
+                          <p className="text-xs mt-1 font-semibold text-destructive">
+                            ⚠ {kind === 'awaiting_pickup' ? 'Aguardando retirada na agência' : kind === 'returning' ? 'Voltando ao remetente' : 'Tentativa de entrega sem sucesso'}: {last.description} ({new Date(last.at).toLocaleString('pt-BR')}) — falar com a cliente
+                          </p>
+                        );
+                      })()}
                       <p className="text-xs text-muted-foreground mt-1">
                         {r.real_tracking_code
                           ? `Código real (interno): ${r.real_tracking_code}`

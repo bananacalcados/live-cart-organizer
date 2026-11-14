@@ -1,3 +1,4 @@
+import { isRealDeliveryEvent } from './delivery-event.ts';
 // Consulta sob demanda do rastreio real na Frenet.
 // Nunca expõe transportadora ou código real ao cliente — uso interno apenas.
 
@@ -6,6 +7,8 @@ export type RealEvent = {
   description: string;
   location: string;
   type?: string;
+  /** Código de status do evento (Correios: 01 = entregue; 20 = carteiro não atendido...). */
+  status?: string;
 };
 
 const FRENET_URL = 'https://api.frenet.com.br/tracking/trackinginfo';
@@ -93,6 +96,7 @@ export async function fetchFrenetEvents(
         description: String(ev?.EventDescription ?? ''),
         location: String(ev?.EventLocation ?? ''),
         type: String(ev?.EventType ?? ''),
+        status: ev?.EventStatus != null ? String(ev.EventStatus) : undefined,
       }));
       return { events, serviceCode: code };
     } catch (e) {
@@ -110,20 +114,18 @@ export function mergeRealEvents(existing: RealEvent[], incoming: RealEvent[]): R
       (e) => e.at === item.at && e.description === item.description && e.location === item.location,
     );
     if (!dup) merged.push(item);
+    else if (item.status) {
+      const known = merged.find((e) => e.at === item.at && e.description === item.description && e.location === item.location);
+      if (known && !known.status) Object.assign(known, { status: item.status, type: item.type || known.type });
+    }
   }
   merged.sort((a, b) => new Date(a.at).getTime() - new Date(b.at).getTime());
   return merged;
 }
 
-// Entrega confirmada por transportadora. Para estender, acrescente um item aqui
-// (o backfill de 08/11/2026 usou exatamente estes padrões).
-export const CARRIER_DELIVERY_PATTERNS: { carrier: RegExp; description: RegExp }[] = [
-  { carrier: /^J&T/i, description: /^\s*(\[[^\]]*\]\s*)?o pacote foi assinado/i },
-  { carrier: /^Transportadora/i, description: /^\s*entrega realizada/i },
-];
-
-export const isDeliveredEvent = (description: string, carrier?: string | null) =>
-  /entregue|delivered/i.test(description) ||
-  CARRIER_DELIVERY_PATTERNS.some(
-    (p) => !!carrier && p.carrier.test(carrier) && p.description.test(description),
-  );
+// Entrega confirmada: regra única em delivery-event.ts (insucesso nunca vira entrega).
+export const isDeliveredEvent = (
+  description: string,
+  carrier?: string | null,
+  ev?: { type?: string | null; status?: string | null },
+) => isRealDeliveryEvent({ description, type: ev?.type, status: ev?.status }, carrier);

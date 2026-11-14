@@ -219,7 +219,7 @@ Deno.serve(withAccessLog("shipment-tracking-public", async (req) => {
             Array.isArray(sim.real_events) ? (sim.real_events as any[]) : [],
             fetched.events,
           );
-          const delivered = [...merged].reverse().find((e) => isDeliveredEvent(e.description, sim.real_carrier as string | null));
+          const delivered = [...merged].reverse().find((e) => isDeliveredEvent(e.description, sim.real_carrier as string | null, e));
           patch.real_events = merged;
           patch.real_service_code = nativeShipment?.servico_codigo || ('serviceCode' in fetched ? fetched.serviceCode : null);
           patch.last_real_sync = now.toISOString();
@@ -342,7 +342,7 @@ Deno.serve(withAccessLog("shipment-tracking-public", async (req) => {
 
       for (const ev of real) {
         const when = new Date(ev.at || ev.EventDateTime || now).getTime();
-        const tr = translateRealEvent(String(ev.description || ev.EventDescription || ''), fulfillment);
+        const tr = translateRealEvent(String(ev.description || ev.EventDescription || ''), fulfillment, ev);
         if (!tr) continue;
         const { city, state } = cityOf(ev);
         // Escondemos as movimentações que ainda estão na nossa própria cidade

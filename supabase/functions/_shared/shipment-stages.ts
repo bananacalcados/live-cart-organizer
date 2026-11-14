@@ -1,3 +1,4 @@
+import { classifyDeliveryEvent } from './delivery-event.ts';
 // Etapas públicas do acompanhamento de envio (área do cliente).
 // Nunca expõe nome de transportadora nem o código real de rastreio.
 
@@ -192,10 +193,33 @@ export function sanitize(text: string): string {
 export function translateRealEvent(
   description: string,
   fulfillment: string,
+  ev?: { type?: string | null; status?: string | null },
 ): { title: string; detail?: string; terminal?: boolean } | null {
   const t = String(description || '').toLowerCase();
+  const kind = classifyDeliveryEvent({ description, type: ev?.type, status: ev?.status });
 
-  if (/entregue|entrega efetuada|delivered/.test(t)) {
+  if (kind === 'awaiting_pickup') {
+    return {
+      title: 'Aguardando retirada na agência',
+      detail: 'Os Correios não conseguiram entregar e o pedido está esperando você retirar na agência. Fale com a gente se precisar de ajuda.',
+    };
+  }
+  if (kind === 'failed_attempt') {
+    const last = /ultima tentativa|última tentativa/.test(t);
+    const address = /endere[cç]o (insuficiente|inexistente|incorreto|incompleto)/.test(t);
+    return {
+      title: 'Tentativa de entrega sem sucesso',
+      detail: address
+        ? 'Os Correios não conseguiram entregar por um problema no endereço. Fale com a gente para conferir.'
+        : last
+          ? 'Os Correios tentaram entregar pela última vez e não conseguiram. Fale com a gente para combinar a retirada.'
+          : 'Os Correios tentaram entregar e não conseguiram. Eles vão tentar de novo.',
+    };
+  }
+  if (kind === 'returning') {
+    return { title: 'Pedido em retorno', detail: 'Seu pedido está retornando. Fale com a gente.' };
+  }
+  if (kind === 'delivered') {
     return {
       title: fulfillment === 'pickup' ? 'Pedido retirado' : 'Pedido entregue',
       detail: 'Seu pedido foi entregue.',

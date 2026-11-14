@@ -79,15 +79,19 @@ Deno.serve(withAccessLog("shipment-frenet-webhook", async (req) => {
         description: String(ev?.EventDescription ?? ''),
         location: String(ev?.EventLocation ?? ''),
         type: String(ev?.EventType ?? ''),
+        ...(ev?.EventStatus != null ? { status: String(ev.EventStatus) } : {}),
       };
       const dup = merged.some(
         (e) => e.at === item.at && e.description === item.description && e.location === item.location,
       );
       if (!dup) merged.push(item);
-      if (isDeliveredEvent(item.description, row.real_carrier)) delivered = item.at;
     }
 
     merged.sort((a, b) => new Date(a.at).getTime() - new Date(b.at).getTime());
+    // Só entrega real conta (tentativa frustrada nunca); baixa manual da equipe é preservada.
+    const realDelivery = [...merged].reverse().find((e) => isDeliveredEvent(e.description, row.real_carrier, e));
+    if (realDelivery) delivered = realDelivery.at;
+    else if (!row.delivered_source || row.delivered_source === 'carrier') delivered = null;
 
     const { error } = await supabase
       .from('shipment_simulations')

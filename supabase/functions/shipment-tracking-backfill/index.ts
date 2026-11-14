@@ -52,7 +52,7 @@ Deno.serve(withAccessLog('shipment-tracking-backfill', async (req) => {
         : await fetchFrenetEvents(trackingCode, sim.real_service_code || guessServiceCode(sim.real_carrier));
       if (!fetched) { failures.push({ id: sim.id, error: 'transportadora_sem_eventos_ou_indisponivel' }); continue; }
       const merged = mergeRealEvents(Array.isArray(sim.real_events) ? sim.real_events : [], fetched.events);
-      const deliveredEvent = [...merged].reverse().find((e) => isDeliveredEvent(e.description, sim.real_carrier));
+      const deliveredEvent = [...merged].reverse().find((e) => isDeliveredEvent(e.description, sim.real_carrier, e));
       const patch: Record<string, unknown> = {
         real_events: merged, real_service_code: nativeShipment?.servico_codigo || ('serviceCode' in fetched ? fetched.serviceCode : null),
         last_real_sync: new Date().toISOString(),
