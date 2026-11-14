@@ -26,7 +26,7 @@ const GoogleG = () => (
   </svg>
 );
 type Ord = {
-  id: string; products: { title: string; variant?: string; price: number; quantity: number; image?: string | null }[];
+  id: string; products: { title: string; variant?: string; price: number; quantity: number; image?: string | null; full_price?: number; final_price?: number }[];
   total: number; pix_total: number; payment_window_expires_at: string | null; cashback_deadline: string | null;
   shipping_cost: number; free_shipping: boolean; checkout_installment_config?: unknown;
 };
@@ -164,7 +164,7 @@ export default function SelfServiceCartPage() {
                 <div className="flex-1">
                   <p className="font-semibold leading-tight">{p.title}</p>
                   {p.variant && <p className="text-sm text-muted-foreground">{p.variant}</p>}
-                  <p className="mt-1 text-sm">{p.quantity}x {brl(p.price)}</p>
+                  <ItemPrice p={p} />
                 </div>
               </div>
             ))}
@@ -251,6 +251,19 @@ export default function SelfServiceCartPage() {
           Único WhatsApp oficial da Banana: final <strong>{ev.official_last4 || "----"}</strong>. Qualquer outro número é golpe.
         </p>
       </div>
+    </div>
+  );
+}
+
+function ItemPrice({ p }: { p: { price: number; quantity: number; full_price?: number; final_price?: number } }) {
+  const full = p.full_price ?? p.price;
+  const final = p.final_price ?? p.price;
+  const brlx = (n: number) => n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+  if (final >= full - 0.009) return <p className="mt-1 text-sm">{p.quantity}x {brlx(final)}</p>;
+  return (
+    <div className="mt-1">
+      <p className="text-xs text-muted-foreground line-through">De {brlx(full)}</p>
+      <p className="text-lg font-extrabold text-primary">{p.quantity}x {brlx(final)} <span className="ml-1 rounded bg-primary px-1.5 py-0.5 align-middle text-[10px] font-bold uppercase text-primary-foreground">preço da live</span></p>
     </div>
   );
 }

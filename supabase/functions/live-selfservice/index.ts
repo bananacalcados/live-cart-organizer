@@ -415,7 +415,23 @@ Deno.serve(withAccessLog("live-selfservice", async (req) => {
       const noPix = !!o.cashback_id || Number(o.cashback_amount || 0) > 0;
       return {
         id: o.id,
-        products: (o.products || []).map((p: any) => ({ title: p.title, variant: p.variant, price: Number(p.price || 0), quantity: Number(p.quantity || 1), image: p.image || null })),
+        products: (() => {
+          // Preço de vitrine: cheio (basePrice) e o que a cliente paga de fato (promoção do item + desconto do pedido rateado).
+          const items = Array.isArray(o.products) ? o.products : [];
+          const sub = items.reduce((s: number, p: any) => s + Number(p.price || 0) * Number(p.quantity || 1), 0);
+          const disc = o.discount_type && o.discount_value
+            ? (o.discount_type === "percentage" ? sub * (Number(o.discount_value) / 100) : Number(o.discount_value)) : 0;
+          const factor = sub > 0 ? Math.max(0, sub - disc) / sub : 1;
+          return items.map((p: any) => {
+            const price = Number(p.price || 0);
+            const base = Number(p.basePrice || 0);
+            return {
+              title: p.title, variant: p.variant, price, quantity: Number(p.quantity || 1), image: p.image || null,
+              full_price: base > price ? base : price,
+              final_price: Math.round(price * factor * 100) / 100,
+            };
+          });
+        })(),
         total: tot,
         pix_total: noPix || !pixPct ? tot : Math.round(tot * (1 - pixPct / 100) * 100) / 100,
         created_at: o.created_at,
