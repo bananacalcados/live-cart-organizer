@@ -1,15 +1,21 @@
-import { useEffect, useState, useCallback, useRef, useMemo } from "react";
+import { memo, useEffect, useState, useCallback, useRef, useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Input } from "@/components/ui/input";
-import { Instagram, ShoppingCart, HelpCircle, MessageSquare, Sparkles, Volume2, VolumeX, ExternalLink, Radio, Search, X } from "lucide-react";
+import { Instagram, ShoppingCart, HelpCircle, MessageSquare, Sparkles, Volume2, VolumeX, ExternalLink, Radio, Search, X, MessageCircle } from "lucide-react";
 import { toast } from "sonner";
-import { isPaidOrderStage } from "@/lib/orderPaymentStages";
 import { matchesSearch, normalizeSearch } from "@/lib/liveCommentSearch";
-
+import {
+  buildPresenterHandleData,
+  cleanPresenterHandle,
+  type IgHandleSummary,
+  type PresenterCommentOrder,
+  type PresenterHandleData,
+  type PresenterSelfServiceAccess,
+} from "@/lib/presenterCommentSummaries";
 
 interface LiveComment {
   id: string;
@@ -22,39 +28,18 @@ interface LiveComment {
   created_at: string;
 }
 
-interface CartCustomerMatch {
+interface WhatsAppTarget {
   handle: string;
-  customerId: string;
-  orderId: string;
-  productCount: number;
-  total: number;
-  whatsapp: string | null;
-  createdAt: string | null;
-  productNames: string[];
+  whatsapp: string;
+  orderId?: string;
 }
-
-interface HandleOrderStatus {
-  openCurrent: number;
-  openOther: number;
-  unconfirmedCurrent: number;
-  unconfirmedOther: number;
-  paidCurrent: number;
-  paidOther: number;
-  cancelledCurrent: number;
-  cancelledOther: number;
-  /** Nomes das lives/eventos anteriores em que a cliente teve pedido cancelado */
-  cancelledOtherEvents: string[];
-  /** Nomes das lives/eventos anteriores em que a cliente teve pedido concluído/pago */
-  paidOtherEvents: string[];
-  hasWhatsapp: boolean;
-  hasAnyOrder: boolean;
-}
-
-
 
 interface LiveInstagramCommentsProps {
   eventId: string;
+  currentEventName?: string;
+  currentOrders: PresenterCommentOrder[];
   onOpenOrder?: (orderId: string) => void;
+  onOpenWhatsApp?: (target: WhatsAppTarget) => void;
 }
 
 const classificationConfig: Record<string, { label: string; icon: typeof MessageSquare; color: string }> = {
@@ -65,50 +50,265 @@ const classificationConfig: Record<string, { label: string; icon: typeof Message
   spam: { label: "🚫 Spam", icon: MessageSquare, color: "bg-zinc-700/20 text-zinc-500 border-zinc-700/30" },
 };
 
-const cleanHandle = (h: string) => (h || "").replace(/^@/, "").trim().toLowerCase();
-/** Cache de @ → cliente compartilhado entre montagens do painel. */
-const presenterHandleCache = new Map<string, { customerId: string | null; whatsapp: string | null; checkedAt: number }>();
-/** @ sem cadastro voltam a ser consultados após 45 s (cliente pode se cadastrar depois de comentar). */
+const ACCESS_COLUMNS = "id, event_id, order_ids, phone_key, confirmed_phone_key, instagram, registered_at";
+const presenterHandleCache = new Map<string, { summary: IgHandleSummary; checkedAt: number }>();
 const PRESENTER_NEGATIVE_TTL_MS = 45_000;
 
-export function LiveInstagramComments({ eventId, onOpenOrder }: LiveInstagramCommentsProps) {
+const formatTime = (iso: string) => new Date(iso).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+const formatPurchaseDate = (iso: string) => new Date(iso).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "2-digit" });
+const formatCartAge = (iso: string | null, now: number) => {
+  if (!iso) return null;
+  const mins = Math.max(0, Math.floor((now - new Date(iso).getTime()) / 60000));
+  if (mins < 1) return "agora";
+  if (mins < 60) return `${mins} min`;
+  const h = Math.floor(mins / 60);
+  const m = mins % 60;
+  return m ? `${h}h ${m}min` : `${h}h`;
+};
+
+function normalizeSummary(row: any): IgHandleSummary {
+  return {
+    handle: cleanPresenterHandle(row.handle),
+    customer_id: row.customer_id || null,
+    whatsapp: row.whatsapp || null,
+    open_other: Number(row.open_other || 0),
+    unconfirmed_other: Number(row.unconfirmed_other || 0),
+    paid_other: Number(row.paid_other || 0),
+    cancelled_other: Number(row.cancelled_other || 0),
+    paid_other_events: Array.isArray(row.paid_other_events) ? row.paid_other_events : [],
+    cancelled_other_events: Array.isArray(row.cancelled_other_events) ? row.cancelled_other_events : [],
+    purchases: Array.isArray(row.purchases) ? row.purchases : [],
+  };
+}
+
+interface CommentCardProps {
+  comment: LiveComment;
+  data?: PresenterHandleData;
+  isHighlighted: boolean;
+  nowTick: number;
+  onOpenOrder?: (orderId: string) => void;
+  onOpenWhatsApp?: (target: WhatsAppTarget) => void;
+}
+
+const CommentCard = memo(function CommentCard({
+  comment,
+  data,
+  isHighlighted,
+  nowTick,
+  onOpenOrder,
+  onOpenWhatsApp,
+}: CommentCardProps) {
+  const [showAllPurchases, setShowAllPurchases] = useState(false);
+  const handle = cleanPresenterHandle(comment.username);
+  const cart = data?.cart || null;
+  const classKey = comment.ai_classification || "comment";
+  const config = classificationConfig[classKey] || classificationConfig.comment;
+  const Icon = config.icon;
+  const missingWhatsapp = !!data?.hasAnyOrder && !data.hasWhatsapp;
+  const registrationAlert = cart && cart.productCount > 0 ? data?.registrationAlert : "none";
+  const purchases = data?.purchases || [];
+  const visiblePurchases = showAllPurchases ? purchases : purchases.slice(0, 2);
+
+  return (
+    <Card
+      className={`border transition-all ${
+        isHighlighted
+          ? "bg-orange-500/20 border-orange-400 shadow-lg shadow-orange-500/30 animate-pulse"
+          : cart
+          ? "bg-orange-500/10 border-orange-500/40"
+          : "bg-card border-border"
+      }`}
+    >
+      <CardContent className="p-4">
+        <div className="flex items-start gap-3">
+          {comment.profile_pic_url ? (
+            <img
+              src={comment.profile_pic_url}
+              alt={comment.username}
+              className="w-12 h-12 rounded-full object-cover border border-border"
+              onError={(event) => { (event.target as HTMLImageElement).style.display = "none"; }}
+            />
+          ) : (
+            <div className="w-12 h-12 rounded-full bg-gradient-to-br from-pink-500 to-purple-600 flex items-center justify-center text-base font-bold text-white">
+              {comment.username.charAt(0).toUpperCase()}
+            </div>
+          )}
+
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 flex-wrap mb-1">
+              <span className="font-bold text-base text-pink-500 dark:text-pink-300">@{handle}</span>
+              {data?.whatsapp && onOpenWhatsApp && (
+                <Button
+                  size="sm"
+                  className="h-6 gap-1 bg-green-600 px-2 text-[10px] font-bold text-white hover:bg-green-700"
+                  onClick={() => onOpenWhatsApp({ handle, whatsapp: data.whatsapp!, orderId: data.latestOrderId || undefined })}
+                >
+                  <MessageCircle className="h-3 w-3" /> WhatsApp
+                </Button>
+              )}
+              <span className="text-xs text-muted-foreground">{formatTime(comment.created_at)}</span>
+              <Badge variant="outline" className={`text-[11px] py-0 ${config.color}`}>
+                <Icon className="h-3 w-3 mr-1" />
+                {config.label}
+              </Badge>
+
+              {!!data?.unconfirmedCurrent && (
+                <span className="rounded-full bg-orange-600 px-2 py-0.5 text-[11px] font-bold uppercase text-white" title="Carrinho montado, mas a cliente ainda não confirmou o pedido">
+                  ⚠️ Pedido não confirmado · esta live{data.unconfirmedCurrent > 1 ? ` (${data.unconfirmedCurrent})` : ""}
+                </span>
+              )}
+              {!!data?.unconfirmedOther && (
+                <span className="rounded-full bg-orange-800 px-2 py-0.5 text-[11px] font-bold uppercase text-white">
+                  ⚠️ Pedido não confirmado · outros eventos ({data.unconfirmedOther})
+                </span>
+              )}
+              {!!data?.openCurrent && (
+                <span className="rounded-full bg-neutral-900 px-2 py-0.5 text-[11px] font-bold uppercase text-white">
+                  Pedido aberto · esta live{data.openCurrent > 1 ? ` (${data.openCurrent})` : ""}
+                </span>
+              )}
+              {!!data?.openOther && (
+                <span className="rounded-full bg-neutral-600 px-2 py-0.5 text-[11px] font-bold uppercase text-white">
+                  Pedido aberto · outros eventos ({data.openOther})
+                </span>
+              )}
+              {!!data?.paidCurrent && (
+                <span className="rounded-full bg-green-600 px-2 py-0.5 text-[11px] font-bold uppercase text-white">
+                  Concluído · esta live{data.paidCurrent > 1 ? ` (${data.paidCurrent})` : ""}
+                </span>
+              )}
+              {!!data?.paidOther && (
+                <span className="rounded-full bg-emerald-700 px-2 py-0.5 text-[11px] font-bold uppercase text-white" title={data.paidOtherEvents.join(" • ")}>
+                  Concluído ({data.paidOther}) · {data.paidOtherEvents.slice(0, 2).join(" • ") || "outros eventos"}
+                  {data.paidOtherEvents.length > 2 ? ` +${data.paidOtherEvents.length - 2}` : ""}
+                </span>
+              )}
+              {!!data?.cancelledCurrent && (
+                <span className="rounded-full bg-red-600 px-2 py-0.5 text-[11px] font-bold uppercase text-white">
+                  Cancelado · esta live{data.cancelledCurrent > 1 ? ` (${data.cancelledCurrent})` : ""}
+                </span>
+              )}
+              {!!data?.cancelledOther && (
+                <span className="rounded-full bg-red-800 px-2 py-0.5 text-[11px] font-bold uppercase text-white" title={data.cancelledOtherEvents.join(" • ")}>
+                  Cancelado ({data.cancelledOther}) · {data.cancelledOtherEvents.slice(0, 2).join(" • ") || "outros eventos"}
+                  {data.cancelledOtherEvents.length > 2 ? ` +${data.cancelledOtherEvents.length - 2}` : ""}
+                </span>
+              )}
+              {missingWhatsapp && (
+                <span className="rounded-full bg-amber-500 px-2 py-0.5 text-[11px] font-bold uppercase text-black" title="Cliente com pedido sem WhatsApp cadastrado">
+                  📱 Sem WhatsApp
+                </span>
+              )}
+            </div>
+
+            <p className="text-lg leading-snug font-medium text-foreground mb-1 break-words">{comment.comment_text}</p>
+
+            {cart && registrationAlert === "not_opened" && cart.productCount === 1 && (
+              <div className="mt-2 rounded-md bg-orange-500 px-3 py-2 text-sm font-black uppercase text-white">
+                ⚠️ 1 item · NÃO ABRIU O CADASTRO
+              </div>
+            )}
+            {cart && registrationAlert === "opened_unfinished" && cart.productCount === 1 && (
+              <div className="mt-2 rounded-md bg-orange-500 px-3 py-2 text-sm font-black uppercase text-white">
+                ⚠️ 1 item · ABRIU, NÃO TERMINOU O CADASTRO
+              </div>
+            )}
+            {cart && registrationAlert !== "none" && cart.productCount >= 2 && (
+              <div className="mt-3 w-full rounded-lg border-2 border-red-400 bg-red-600 px-4 py-3 text-base font-black uppercase leading-snug text-white shadow-lg md:text-lg">
+                🚨 {cart.productCount} ITENS NO CARRINHO E {registrationAlert === "not_opened" ? "AINDA NÃO ABRIU O CADASTRO" : "ABRIU MAS NÃO TERMINOU O CADASTRO"} — COBRE ANTES DE ADICIONAR MAIS
+              </div>
+            )}
+
+            {cart && (
+              <div className="mt-2 gap-2 rounded border border-orange-700 bg-orange-600 p-2.5 dark:border-orange-500/30 dark:bg-orange-500/15">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2 text-sm">
+                    <ShoppingCart className="h-4 w-4 shrink-0 text-white dark:text-orange-300" />
+                    <span className="font-medium text-white dark:text-orange-200">
+                      <strong>{cart.productCount} {cart.productCount === 1 ? "item" : "itens"}</strong> · R$ {cart.total.toFixed(2)}
+                    </span>
+                    {cart.createdAt && (
+                      <span className="rounded-full bg-black/30 px-2 py-0.5 text-[11px] font-bold text-white dark:bg-orange-500/20 dark:text-orange-200">
+                        ⏱ aberto há {formatCartAge(cart.createdAt, nowTick)}
+                      </span>
+                    )}
+                  </div>
+                  {onOpenOrder && (
+                    <Button variant="ghost" size="sm" className="h-7 shrink-0 gap-1 px-2 text-xs font-semibold text-white hover:bg-orange-700 dark:text-orange-200 dark:hover:bg-orange-500/30" onClick={() => onOpenOrder(cart.orderId)}>
+                      Ver pedido <ExternalLink className="h-3.5 w-3.5" />
+                    </Button>
+                  )}
+                </div>
+                {cart.productNames.length > 0 && (
+                  <ul className="mt-1.5 space-y-0.5 text-[13px] text-white/90 dark:text-orange-100/90">
+                    {cart.productNames.map((name, index) => <li key={`${cart.orderId}-${index}`} className="break-words">• {name}</li>)}
+                  </ul>
+                )}
+              </div>
+            )}
+
+            {purchases.length > 0 && (
+              <div className="mt-2 rounded-md border border-border bg-muted/40 p-2.5">
+                <p className="mb-1.5 text-xs font-bold text-foreground">🛍️ Compras anteriores ({purchases.length})</p>
+                <div className="space-y-2">
+                  {visiblePurchases.map((purchase) => (
+                    <div key={purchase.order_id} className="text-xs">
+                      <p className="font-semibold text-foreground">{formatPurchaseDate(purchase.paid_at)} · {purchase.event_name}</p>
+                      <ul className="mt-0.5 space-y-0.5 text-muted-foreground">
+                        {purchase.items.map((item, index) => (
+                          <li key={`${purchase.order_id}-${index}`} className="break-words">
+                            • {item.quantity > 1 ? `${item.quantity}x ` : ""}{item.title}{item.variant ? ` · ${item.variant}` : ""}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  ))}
+                </div>
+                {purchases.length > 2 && (
+                  <Button variant="ghost" size="sm" className="mt-1 h-6 px-1 text-[11px]" onClick={() => setShowAllPurchases((value) => !value)}>
+                    {showAllPurchases ? "ver menos" : `ver todas (${purchases.length})`}
+                  </Button>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+});
+
+export function LiveInstagramComments({ eventId, currentEventName = "Esta live", currentOrders, onOpenOrder, onOpenWhatsApp }: LiveInstagramCommentsProps) {
   const [comments, setComments] = useState<LiveComment[]>([]);
-  const [cartByHandle, setCartByHandle] = useState<Map<string, CartCustomerMatch>>(new Map());
-  const [statusByHandle, setStatusByHandle] = useState<Map<string, HandleOrderStatus>>(new Map());
+  const [historyByHandle, setHistoryByHandle] = useState<Map<string, IgHandleSummary>>(new Map());
+  const [accesses, setAccesses] = useState<Map<string, PresenterSelfServiceAccess>>(new Map());
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [filter, setFilter] = useState<"all" | "orders" | "carts">("all");
   const [search, setSearch] = useState("");
   const [recentlyHighlighted, setRecentlyHighlighted] = useState<Set<string>>(new Set());
   const [liveActiveUntil, setLiveActiveUntil] = useState<Date | null>(null);
   const [togglingLive, setTogglingLive] = useState(false);
-  const scrollRef = useRef<HTMLDivElement>(null);
-  const cartByHandleRef = useRef<Map<string, CartCustomerMatch>>(new Map());
-  const commentsRef = useRef<LiveComment[]>([]);
   const [nowTick, setNowTick] = useState(() => Date.now());
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const realtimeStatusRef = useRef("IDLE");
+  const dataRef = useRef<Map<string, PresenterHandleData>>(new Map());
 
   useEffect(() => {
-    const t = setInterval(() => setNowTick(Date.now()), 30000);
-    return () => clearInterval(t);
+    const timer = setInterval(() => setNowTick(Date.now()), 30000);
+    return () => clearInterval(timer);
   }, []);
 
-
   const isLiveActive = !!liveActiveUntil && liveActiveUntil.getTime() > Date.now();
-
-  // Load current live_active_until + poll every 60s so the "expira em Xh" stays accurate
   const refreshLiveStatus = useCallback(async () => {
     if (!eventId) return;
-    const { data } = await supabase
-      .from("events")
-      .select("live_active_until")
-      .eq("id", eventId)
-      .maybeSingle();
+    const { data } = await supabase.from("events").select("live_active_until").eq("id", eventId).maybeSingle();
     setLiveActiveUntil(data?.live_active_until ? new Date(data.live_active_until) : null);
   }, [eventId]);
 
   useEffect(() => {
-    refreshLiveStatus();
-    const t = setInterval(refreshLiveStatus, 60000);
-    return () => clearInterval(t);
+    void refreshLiveStatus();
+    const timer = setInterval(refreshLiveStatus, 60000);
+    return () => clearInterval(timer);
   }, [refreshLiveStatus]);
 
   const toggleLiveActive = useCallback(async () => {
@@ -126,22 +326,12 @@ export function LiveInstagramComments({ eventId, onOpenOrder }: LiveInstagramCom
         if (data) setLiveActiveUntil(new Date(data));
       }
       await refreshLiveStatus();
-    } catch (e: any) {
-      toast.error("Erro ao alternar Live: " + (e?.message || "desconhecido"));
+    } catch (error: any) {
+      toast.error("Erro ao alternar Live: " + (error?.message || "desconhecido"));
     } finally {
       setTogglingLive(false);
     }
   }, [eventId, isLiveActive, togglingLive, refreshLiveStatus]);
-
-
-  useEffect(() => {
-    cartByHandleRef.current = cartByHandle;
-  }, [cartByHandle]);
-
-  useEffect(() => {
-    commentsRef.current = comments;
-  }, [comments]);
-
 
   const playBeep = useCallback(() => {
     if (!soundEnabled) return;
@@ -149,13 +339,11 @@ export function LiveInstagramComments({ eventId, onOpenOrder }: LiveInstagramCom
       const ctx = new AudioContext();
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
-      osc.connect(gain);
-      gain.connect(ctx.destination);
+      osc.connect(ctx.destination);
       osc.frequency.value = 1100;
-      osc.type = "sine";
       gain.gain.setValueAtTime(0.25, ctx.currentTime);
       gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.4);
-      osc.start(ctx.currentTime);
+      osc.start();
       osc.stop(ctx.currentTime + 0.4);
     } catch {}
   }, [soundEnabled]);
@@ -171,322 +359,161 @@ export function LiveInstagramComments({ eventId, onOpenOrder }: LiveInstagramCom
     if (data) setComments(data as LiveComment[]);
   }, [eventId]);
 
-  const loadCarts = useCallback(async () => {
-    if (!eventId) return;
+  useEffect(() => { void loadComments(); }, [loadComments]);
 
-    // 1) Busca SÓ os clientes dos @ que comentaram (antes baixava a base inteira
-    //    de clientes com Instagram a cada novo comentário — pesava no banco todo).
-    //    Resolve via RPC resolve_ig_handles (índice por @ normalizado) e guarda em
-    //    cache de módulo: só @ novos (ou "sem cadastro" vencido) vão ao banco.
-    const wanted = Array.from(new Set(commentsRef.current.map(c => cleanHandle(c.username)).filter(Boolean)));
+  const handles = useMemo(
+    () => [...new Set(comments.map((comment) => cleanPresenterHandle(comment.username)).filter(Boolean))].sort(),
+    [comments],
+  );
+  const handlesKey = handles.join(",");
+
+  // Histórico em lote: somente @ novos (ou sem cadastro há 45 s). Pedidos da live
+  // não entram nas dependências, portanto nunca disparam nova consulta histórica.
+  useEffect(() => {
+    let cancelled = false;
+    const wanted = handlesKey ? handlesKey.split(",") : [];
     const now = Date.now();
-    const toResolve = wanted.filter((h) => {
-      const c = presenterHandleCache.get(h);
-      if (!c) return true;
-      if (c.customerId && c.whatsapp) return false;
-      return now - c.checkedAt > PRESENTER_NEGATIVE_TTL_MS;
-    });
-    for (let i = 0; i < toResolve.length; i += 300) {
-      const batch = toResolve.slice(i, i + 300);
-      const { data, error } = await supabase.rpc("resolve_ig_handles", { _handles: batch });
-      if (error) break;
-      const found = new Set<string>();
-      for (const r of (data || []) as any[]) {
-        const h = cleanHandle(r.handle || "");
-        if (!h) continue;
-        found.add(h);
-        presenterHandleCache.set(h, { customerId: r.customer_id || null, whatsapp: r.whatsapp || null, checkedAt: now });
+    const cached = new Map<string, IgHandleSummary>();
+    const toResolve: string[] = [];
+    for (const handle of wanted) {
+      const key = `${eventId}:${handle}`;
+      const entry = presenterHandleCache.get(key);
+      if (entry) cached.set(handle, entry.summary);
+      if (!entry || (!entry.summary.customer_id && now - entry.checkedAt > PRESENTER_NEGATIVE_TTL_MS)) toResolve.push(handle);
+    }
+    setHistoryByHandle(cached);
+    if (!toResolve.length) return () => { cancelled = true; };
+
+    const load = async () => {
+      for (let index = 0; index < toResolve.length; index += 300) {
+        const batch = toResolve.slice(index, index + 300);
+        const { data, error } = await supabase.rpc("get_ig_handle_summaries", { _event_id: eventId, _handles: batch });
+        if (error) {
+          console.warn("[LiveComments] Falha no resumo de Instagram:", error.message);
+          break;
+        }
+        const found = new Set<string>();
+        for (const row of (data || []) as any[]) {
+          const summary = normalizeSummary(row);
+          if (!summary.handle) continue;
+          found.add(summary.handle);
+          presenterHandleCache.set(`${eventId}:${summary.handle}`, { summary, checkedAt: Date.now() });
+        }
+        for (const handle of batch) {
+          if (!found.has(handle)) {
+            const summary = normalizeSummary({ handle });
+            presenterHandleCache.set(`${eventId}:${handle}`, { summary, checkedAt: Date.now() });
+          }
+        }
+        if (cancelled) break;
+        setHistoryByHandle((previous) => {
+          const next = new Map(previous);
+          for (const handle of batch) next.set(handle, presenterHandleCache.get(`${eventId}:${handle}`)!.summary);
+          return next;
+        });
       }
-      batch.forEach((h) => {
-        if (!found.has(h)) presenterHandleCache.set(h, { customerId: null, whatsapp: null, checkedAt: now });
+    };
+    void load();
+    return () => { cancelled = true; };
+  }, [eventId, handlesKey]);
+
+  // Uma carga na abertura; depois entra/sai somente o acesso alterado.
+  useEffect(() => {
+    let active = true;
+    const apply = (row: PresenterSelfServiceAccess) => {
+      setAccesses((previous) => {
+        const next = new Map(previous);
+        next.set(row.id, row);
+        return next;
       });
-    }
-    const handleToCustomers = new Map<string, any[]>();
-    for (const h of wanted) {
-      const c = presenterHandleCache.get(h);
-      if (c?.customerId) handleToCustomers.set(h, [{ id: c.customerId, instagram_handle: h, whatsapp: c.whatsapp }]);
-    }
-
-    // 2) Só busca pedidos dos @ que aparecem nos comentários (atual + históricos)
-    const commentHandles = new Set(
-      commentsRef.current.map(c => cleanHandle(c.username)).filter(Boolean)
-    );
-    const customerIds: string[] = [];
-    const customerById = new Map<string, any>();
-    commentHandles.forEach(h => {
-      (handleToCustomers.get(h) || []).forEach(c => {
-        customerIds.push(c.id);
-        customerById.set(c.id, c);
+    };
+    void (supabase as any)
+      .from("live_selfservice_accesses")
+      .select(ACCESS_COLUMNS)
+      .eq("event_id", eventId)
+      .order("created_at", { ascending: false })
+      .limit(5000)
+      .then(({ data }: any) => {
+        if (!active) return;
+        setAccesses(new Map(((data || []) as PresenterSelfServiceAccess[]).map((row) => [row.id, row])));
       });
-    });
-
-    if (customerIds.length === 0) {
-      setCartByHandle(new Map());
-      setStatusByHandle(new Map());
-      return;
-    }
-
-    const orders: any[] = [];
-    const CHUNK = 200;
-    for (let i = 0; i < customerIds.length; i += CHUNK) {
-      const { data } = await supabase
-        .from("orders")
-        .select("id, customer_id, event_id, products, stage, is_paid, created_at")
-        .in("customer_id", customerIds.slice(i, i + CHUNK));
-      if (data) orders.push(...data);
-    }
-
-    // WhatsApp da ficha do pedido (cadastro geral pode estar sem número).
-    const regPhoneByCustomer = new Map<string, string>();
-    const noPhoneOrderIds = orders
-      .filter((o: any) => !(customerById.get(o.customer_id)?.whatsapp || "").trim())
-      .map((o: any) => o.id);
-    for (let i = 0; i < noPhoneOrderIds.length; i += CHUNK) {
-      const { data } = await supabase
-        .from("customer_registrations")
-        .select("order_id, whatsapp")
-        .in("order_id", noPhoneOrderIds.slice(i, i + CHUNK));
-      const byOrder = new Map(orders.map((o: any) => [o.id, o.customer_id]));
-      for (const r of (data || []) as any[]) {
-        const w = String(r.whatsapp || "").trim();
-        const cid = byOrder.get(r.order_id);
-        if (w && cid) regPhoneByCustomer.set(cid, w);
-      }
-    }
-
-    // Nome dos eventos anteriores (para mostrar em QUAL live o pedido foi cancelado)
-    const otherEventIds = Array.from(
-      new Set(orders.filter((o: any) => o.event_id && o.event_id !== eventId).map((o: any) => o.event_id)),
-    );
-    const eventNameById = new Map<string, string>();
-    if (otherEventIds.length > 0) {
-      const { data: evs } = await supabase
-        .from("events")
-        .select("id, name")
-        .in("id", otherEventIds as string[]);
-      (evs || []).forEach((e: any) => eventNameById.set(e.id, e.name || "Evento"));
-    }
-
-    const map = new Map<string, CartCustomerMatch>();
-    const statusMap = new Map<string, HandleOrderStatus>();
-
-    const OPEN_STAGES = [
-      "new", "contacted", "no_response", "awaiting_confirmation",
-      "incomplete_order", "awaiting_payment", "endereco", "confirmar_endereco",
-      "dados_pessoais", "forma_pagamento", "aguardando_pix", "aguardando_cartao", "aguardando_boleto",
-    ];
-    // Carrinho montado, mas a cliente ainda NÃO confirmou o pedido
-    const UNCONFIRMED_STAGES = ["pre_sale", "incomplete_order", "awaiting_confirmation"];
-
-    orders.forEach((o: any) => {
-      const cust: any = customerById.get(o.customer_id);
-      if (!cust?.instagram_handle) return;
-      const key = cleanHandle(cust.instagram_handle);
-      if (!key) return;
-
-      const isCurrent = o.event_id === eventId;
-      const products = (o.products as any[]) || [];
-      const total = products.reduce((s, p: any) => s + Number(p.price || 0) * Number(p.quantity || 1), 0);
-      const whatsapp = (cust.whatsapp || "").trim() || regPhoneByCustomer.get(o.customer_id) || null;
-
-      const st: HandleOrderStatus = statusMap.get(key) || {
-        openCurrent: 0, openOther: 0,
-        unconfirmedCurrent: 0, unconfirmedOther: 0,
-        paidCurrent: 0, paidOther: 0,
-        cancelledCurrent: 0, cancelledOther: 0,
-        cancelledOtherEvents: [],
-        paidOtherEvents: [],
-        hasWhatsapp: false, hasAnyOrder: false,
-      };
-      if (whatsapp) st.hasWhatsapp = true;
-      st.hasAnyOrder = true;
-
-      const isPaid = Boolean(o.is_paid) || isPaidOrderStage(o.stage);
-      if (o.stage === "cancelled") {
-        if (isCurrent) {
-          st.cancelledCurrent += 1;
-        } else {
-          st.cancelledOther += 1;
-          const evName = eventNameById.get(o.event_id) || "Evento anterior";
-          if (!st.cancelledOtherEvents.includes(evName)) st.cancelledOtherEvents.push(evName);
-        }
-      } else if (isPaid) {
-        if (isCurrent) {
-          st.paidCurrent += 1;
-        } else {
-          st.paidOther += 1;
-          const evName = eventNameById.get(o.event_id) || "Evento anterior";
-          if (!st.paidOtherEvents.includes(evName)) st.paidOtherEvents.push(evName);
-        }
-      } else if (OPEN_STAGES.includes(o.stage)) {
-        if (isCurrent) st.openCurrent += 1; else st.openOther += 1;
-      }
-      if (o.stage !== "cancelled" && !isPaid && UNCONFIRMED_STAGES.includes(o.stage)) {
-        if (isCurrent) st.unconfirmedCurrent += 1; else st.unconfirmedOther += 1;
-      }
-      statusMap.set(key, st);
-
-
-      // Carrinho aberto: apenas do evento atual
-      if (isCurrent && o.stage !== "cancelled" && !isPaid && OPEN_STAGES.includes(o.stage)) {
-        const existing = map.get(key);
-        if (!existing || total > existing.total) {
-          map.set(key, {
-            handle: key,
-            customerId: cust.id,
-            orderId: o.id,
-            productCount: products.length,
-            total,
-            whatsapp,
-            createdAt: o.created_at || null,
-            productNames: products.map((p: any) =>
-              [p.title, p.variant].filter(Boolean).join(" · ")
-            ).filter(Boolean),
-          });
-        }
-      }
-    });
-
-    setCartByHandle(map);
-    setStatusByHandle(statusMap);
+    const channel = supabase
+      .channel(`presenter-selfservice-accesses-${eventId}`)
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "live_selfservice_accesses", filter: `event_id=eq.${eventId}` }, (payload) => apply(payload.new as PresenterSelfServiceAccess))
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "live_selfservice_accesses", filter: `event_id=eq.${eventId}` }, (payload) => apply(payload.new as PresenterSelfServiceAccess))
+      .on("postgres_changes", { event: "DELETE", schema: "public", table: "live_selfservice_accesses", filter: `event_id=eq.${eventId}` }, (payload) => {
+        const id = (payload.old as any)?.id;
+        if (!id) return;
+        setAccesses((previous) => {
+          const next = new Map(previous);
+          next.delete(id);
+          return next;
+        });
+      })
+      .subscribe();
+    return () => { active = false; void supabase.removeChannel(channel); };
   }, [eventId]);
 
-
-
-
   useEffect(() => {
-    loadComments();
-  }, [loadComments]);
-
-  // Recarrega os status sempre que surgirem novos @ nos comentários
-  const handlesKey = useMemo(
-    () => [...new Set(comments.map(c => cleanHandle(c.username)).filter(Boolean))].sort().join(","),
-    [comments]
-  );
-
-  // Agrupa recargas: no máximo 1 a cada 5 s, mesmo com muitos comentários/pedidos chegando.
-  const cartsTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const scheduleLoadCarts = useCallback(() => {
-    if (cartsTimerRef.current) return;
-    cartsTimerRef.current = setTimeout(() => {
-      cartsTimerRef.current = null;
-      void loadCarts();
-    }, 5000);
-  }, [loadCarts]);
-  useEffect(() => () => { if (cartsTimerRef.current) clearTimeout(cartsTimerRef.current); }, []);
-
-  const firstCartsLoadRef = useRef(true);
-  useEffect(() => {
-    commentsRef.current = comments;
-    if (firstCartsLoadRef.current) { firstCartsLoadRef.current = false; void loadCarts(); }
-    else scheduleLoadCarts();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [handlesKey, loadCarts]);
-
-
-  useEffect(() => {
-    if (!eventId) return;
     const channel = supabase
       .channel(`live-comments-${eventId}-${Date.now()}`)
-      .on("postgres_changes", {
-        event: "INSERT",
-        schema: "public",
-        table: "live_comments",
-        filter: `event_id=eq.${eventId}`,
-      }, (payload) => {
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "live_comments", filter: `event_id=eq.${eventId}` }, (payload) => {
         const newComment = payload.new as LiveComment;
-        setComments(prev => {
-          if (prev.some(c => c.id === newComment.id || c.comment_id === newComment.comment_id)) return prev;
-          return [newComment, ...prev].slice(0, 600);
+        setComments((previous) => {
+          if (previous.some((comment) => comment.id === newComment.id || comment.comment_id === newComment.comment_id)) return previous;
+          return [newComment, ...previous].slice(0, 600);
         });
-
-        const handle = cleanHandle(newComment.username);
-        if (cartByHandleRef.current.has(handle)) {
+        if (dataRef.current.get(cleanPresenterHandle(newComment.username))?.cart) {
           playBeep();
-          setRecentlyHighlighted(prev => new Set(prev).add(newComment.id));
+          setRecentlyHighlighted((previous) => new Set(previous).add(newComment.id));
           setTimeout(() => {
-            setRecentlyHighlighted(prev => {
-              const next = new Set(prev);
+            setRecentlyHighlighted((previous) => {
+              const next = new Set(previous);
               next.delete(newComment.id);
               return next;
             });
           }, 3000);
         }
       })
-      .on("postgres_changes", {
-        event: "UPDATE",
-        schema: "public",
-        table: "live_comments",
-        filter: `event_id=eq.${eventId}`,
-      }, (payload) => {
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "live_comments", filter: `event_id=eq.${eventId}` }, (payload) => {
         const updated = payload.new as LiveComment;
-        setComments(prev => prev.map(c => c.id === updated.id ? { ...c, ...updated } : c));
+        setComments((previous) => previous.map((comment) => comment.id === updated.id ? { ...comment, ...updated } : comment));
       })
       .subscribe((status) => {
-        console.log(`[LiveComments] Realtime status: ${status}`);
+        realtimeStatusRef.current = status;
+        if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED") void loadComments();
       });
 
-    // Polling fallback a cada 30s (pausa com a aba oculta) — caso o realtime caia
     const pollInterval = setInterval(() => {
-      if (!document.hidden) loadComments();
+      if (!document.hidden && realtimeStatusRef.current !== "SUBSCRIBED") void loadComments();
     }, 30000);
-
     return () => {
       clearInterval(pollInterval);
-      supabase.removeChannel(channel);
+      void supabase.removeChannel(channel);
     };
   }, [eventId, playBeep, loadComments]);
 
-  useEffect(() => {
-    if (!eventId) return;
-    const channel = supabase
-      .channel(`live-comments-orders-${eventId}`)
-      .on("postgres_changes", {
-        event: "*",
-        schema: "public",
-        table: "orders",
-        filter: `event_id=eq.${eventId}`,
-      }, () => {
-        scheduleLoadCarts();
-      })
-      .subscribe();
-    return () => { supabase.removeChannel(channel); };
-  }, [eventId, scheduleLoadCarts]);
+  const accessRows = useMemo(() => [...accesses.values()], [accesses]);
+  dataRef.current = useMemo(
+    () => buildPresenterHandleData(eventId, currentEventName, handles, currentOrders, historyByHandle, accessRows, dataRef.current),
+    [eventId, currentEventName, handles, currentOrders, historyByHandle, accessRows],
+  );
 
-  // Busca é feita sobre os comentários já carregados (máx. 600): nenhuma consulta nova ao banco.
   const searchNorm = useMemo(() => normalizeSearch(search), [search]);
   const searched = useMemo(
-    () => (searchNorm ? comments.filter(c => matchesSearch(c, searchNorm)) : comments),
-    [comments, searchNorm]
+    () => (searchNorm ? comments.filter((comment) => matchesSearch(comment, searchNorm)) : comments),
+    [comments, searchNorm],
   );
-
   const filtered = useMemo(() => {
     if (filter === "all") return searched;
-    if (filter === "orders") return searched.filter(c => c.is_order);
-    if (filter === "carts") return searched.filter(c => cartByHandle.has(cleanHandle(c.username)));
-    return searched;
-  }, [searched, filter, cartByHandle]);
-
+    if (filter === "orders") return searched.filter((comment) => comment.is_order);
+    return searched.filter((comment) => !!dataRef.current.get(cleanPresenterHandle(comment.username))?.cart);
+  }, [searched, filter, dataRef.current]);
   const cartMatchCount = useMemo(
-    () => searched.filter(c => cartByHandle.has(cleanHandle(c.username))).length,
-    [searched, cartByHandle]
+    () => searched.filter((comment) => !!dataRef.current.get(cleanPresenterHandle(comment.username))?.cart).length,
+    [searched, dataRef.current],
   );
-  const orderCount = useMemo(() => searched.filter(c => c.is_order).length, [searched]);
-
-  const formatTime = (iso: string) => {
-    const d = new Date(iso);
-    return d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
-  };
-
-  const formatCartAge = (iso: string | null) => {
-    if (!iso) return null;
-    const mins = Math.max(0, Math.floor((nowTick - new Date(iso).getTime()) / 60000));
-    if (mins < 1) return "agora";
-    if (mins < 60) return `${mins} min`;
-    const h = Math.floor(mins / 60);
-    const m = mins % 60;
-    return m ? `${h}h ${m}min` : `${h}h`;
-  };
+  const orderCount = useMemo(() => searched.filter((comment) => comment.is_order).length, [searched]);
 
   return (
     <div className="flex flex-col h-full">
@@ -502,27 +529,13 @@ export function LiveInstagramComments({ eventId, onOpenOrder }: LiveInstagramCom
             size="sm"
             onClick={toggleLiveActive}
             disabled={togglingLive}
-            className={`h-8 text-xs gap-1.5 ${
-              isLiveActive
-                ? "bg-red-600 hover:bg-red-700 text-white border-red-700 animate-pulse"
-                : "border-dashed"
-            }`}
-            title={
-              isLiveActive
-                ? `Ativa até ${liveActiveUntil?.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}`
-                : "Marcar este evento como a Live que está rodando agora"
-            }
+            className={`h-8 text-xs gap-1.5 ${isLiveActive ? "bg-red-600 hover:bg-red-700 text-white border-red-700 animate-pulse" : "border-dashed"}`}
+            title={isLiveActive ? `Ativa até ${liveActiveUntil?.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}` : "Marcar este evento como a Live que está rodando agora"}
           >
             <Radio className="h-3.5 w-3.5" />
             {isLiveActive ? "AO VIVO" : "Ativar Live"}
           </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => setSoundEnabled(!soundEnabled)}
-            className="text-foreground hover:bg-muted h-8 w-8"
-            title={soundEnabled ? "Desativar som" : "Ativar som"}
-          >
+          <Button variant="ghost" size="icon" onClick={() => setSoundEnabled(!soundEnabled)} className="h-8 w-8 text-foreground hover:bg-muted" title={soundEnabled ? "Desativar som" : "Ativar som"}>
             {soundEnabled ? <Volume2 className="h-4 w-4" /> : <VolumeX className="h-4 w-4" />}
           </Button>
         </div>
@@ -530,51 +543,18 @@ export function LiveInstagramComments({ eventId, onOpenOrder }: LiveInstagramCom
 
       <div className="relative mb-3">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
-        <Input
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Pesquisar por @ ou pelo que a cliente escreveu"
-          className="h-9 pl-9 pr-9 text-sm bg-background"
-          aria-label="Pesquisar comentários"
-        />
+        <Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Pesquisar por @ ou pelo que a cliente escreveu" className="h-9 pl-9 pr-9 text-sm bg-background" aria-label="Pesquisar comentários" />
         {search && (
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => setSearch("")}
-            className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7 text-muted-foreground hover:text-foreground"
-            title="Limpar busca"
-          >
+          <Button variant="ghost" size="icon" onClick={() => setSearch("")} className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7 text-muted-foreground hover:text-foreground" title="Limpar busca">
             <X className="h-3.5 w-3.5" />
           </Button>
         )}
       </div>
 
       <div className="flex items-center gap-2 mb-3 flex-wrap">
-        <Button
-          variant={filter === "all" ? "default" : "ghost"}
-          size="sm"
-          onClick={() => setFilter("all")}
-          className="h-7 text-xs"
-        >
-          Todos ({searched.length})
-        </Button>
-        <Button
-          variant={filter === "orders" ? "default" : "ghost"}
-          size="sm"
-          onClick={() => setFilter("orders")}
-          className="h-7 text-xs"
-        >
-          🛒 Pedidos ({orderCount})
-        </Button>
-        <Button
-          variant={filter === "carts" ? "default" : "ghost"}
-          size="sm"
-          onClick={() => setFilter("carts")}
-          className={`h-7 text-xs ${cartMatchCount > 0 ? "ring-1 ring-orange-400/50" : ""}`}
-        >
-          🔥 Com carrinho ({cartMatchCount})
-        </Button>
+        <Button variant={filter === "all" ? "default" : "ghost"} size="sm" onClick={() => setFilter("all")} className="h-7 text-xs">Todos ({searched.length})</Button>
+        <Button variant={filter === "orders" ? "default" : "ghost"} size="sm" onClick={() => setFilter("orders")} className="h-7 text-xs">🛒 Pedidos ({orderCount})</Button>
+        <Button variant={filter === "carts" ? "default" : "ghost"} size="sm" onClick={() => setFilter("carts")} className={`h-7 text-xs ${cartMatchCount > 0 ? "ring-1 ring-orange-400/50" : ""}`}>🔥 Com carrinho ({cartMatchCount})</Button>
       </div>
 
       <ScrollArea className="flex-1 min-h-[420px] h-[60vh]" ref={scrollRef as any}>
@@ -582,179 +562,23 @@ export function LiveInstagramComments({ eventId, onOpenOrder }: LiveInstagramCom
           {filtered.length === 0 && (
             <Card className="bg-muted-foreground/10 border-muted-foreground/20">
               <CardContent className="p-6 text-center text-muted-foreground text-sm">
-                {comments.length === 0
-                  ? "Aguardando comentários do Instagram. Verifique se a extensão Livete está ativa no navegador da live 📲"
-                  : searchNorm
-                  ? `Nenhum comentário encontrado para "${search.trim()}".`
-                  : "Nenhum comentário neste filtro."}
+                {comments.length === 0 ? "Aguardando comentários do Instagram. Verifique se a extensão Livete está ativa no navegador da live 📲" : searchNorm ? `Nenhum comentário encontrado para "${search.trim()}".` : "Nenhum comentário neste filtro."}
               </CardContent>
             </Card>
           )}
-          {filtered.map(comment => {
-            const handle = cleanHandle(comment.username);
-            const cart = cartByHandle.get(handle);
-            const hasCart = !!cart;
-            const status = statusByHandle.get(handle);
-            const isHighlighted = recentlyHighlighted.has(comment.id);
-            const classKey = comment.ai_classification || "comment";
-            const config = classificationConfig[classKey] || classificationConfig.comment;
-            const Icon = config.icon;
-            const hasAnyOrder = !!status && status.hasAnyOrder;
-            const missingWhatsapp = hasAnyOrder && !status!.hasWhatsapp;
-
-            return (
-              <Card
-                key={comment.id}
-                className={`border transition-all ${
-                  isHighlighted
-                    ? "bg-orange-500/20 border-orange-400 shadow-lg shadow-orange-500/30 animate-pulse"
-                    : hasCart
-                    ? "bg-orange-500/10 border-orange-500/40"
-                    : "bg-card border-border"
-                }`}
-              >
-                <CardContent className="p-4">
-                  <div className="flex items-start gap-3">
-                    {comment.profile_pic_url ? (
-                      <img
-                        src={comment.profile_pic_url}
-                        alt={comment.username}
-                        className="w-12 h-12 rounded-full object-cover border border-border"
-                        onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
-                      />
-                    ) : (
-                      <div className="w-12 h-12 rounded-full bg-gradient-to-br from-pink-500 to-purple-600 flex items-center justify-center text-base font-bold text-white">
-                        {comment.username.charAt(0).toUpperCase()}
-                      </div>
-                    )}
-
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap mb-1">
-                        <span className="font-bold text-base text-pink-500 dark:text-pink-300">@{handle}</span>
-                        <span className="text-xs text-muted-foreground">{formatTime(comment.created_at)}</span>
-                        <Badge variant="outline" className={`text-[11px] py-0 ${config.color}`}>
-                          <Icon className="h-3 w-3 mr-1" />
-                          {config.label}
-                        </Badge>
-
-                        {status && status.unconfirmedCurrent > 0 && (
-                          <span
-                            className="rounded-full bg-orange-600 px-2 py-0.5 text-[11px] font-bold uppercase text-white"
-                            title="Carrinho montado, mas a cliente ainda não confirmou o pedido"
-                          >
-                            ⚠️ Pedido não confirmado · esta live{status.unconfirmedCurrent > 1 ? ` (${status.unconfirmedCurrent})` : ""}
-                          </span>
-                        )}
-                        {status && status.unconfirmedOther > 0 && (
-                          <span className="rounded-full bg-orange-800 px-2 py-0.5 text-[11px] font-bold uppercase text-white">
-                            ⚠️ Pedido não confirmado · outros eventos ({status.unconfirmedOther})
-                          </span>
-                        )}
-                        {status && status.openCurrent > 0 && (
-                          <span className="rounded-full bg-neutral-900 px-2 py-0.5 text-[11px] font-bold uppercase text-white">
-                            Pedido aberto · esta live{status.openCurrent > 1 ? ` (${status.openCurrent})` : ""}
-                          </span>
-                        )}
-
-                        {status && status.openOther > 0 && (
-                          <span className="rounded-full bg-neutral-600 px-2 py-0.5 text-[11px] font-bold uppercase text-white">
-                            Pedido aberto · outros eventos ({status.openOther})
-                          </span>
-                        )}
-                        {status && status.paidCurrent > 0 && (
-                          <span className="rounded-full bg-green-600 px-2 py-0.5 text-[11px] font-bold uppercase text-white">
-                            Concluído · esta live{status.paidCurrent > 1 ? ` (${status.paidCurrent})` : ""}
-                          </span>
-                        )}
-                        {status && status.paidOther > 0 && (
-                          <span
-                            className="rounded-full bg-emerald-700 px-2 py-0.5 text-[11px] font-bold uppercase text-white"
-                            title={status.paidOtherEvents.join(" • ")}
-                          >
-                            Concluído ({status.paidOther}) ·{" "}
-                            {status.paidOtherEvents.slice(0, 2).join(" • ") || "outros eventos"}
-                            {status.paidOtherEvents.length > 2
-                              ? ` +${status.paidOtherEvents.length - 2}`
-                              : ""}
-                          </span>
-                        )}
-                        {status && status.cancelledCurrent > 0 && (
-                          <span className="rounded-full bg-red-600 px-2 py-0.5 text-[11px] font-bold uppercase text-white">
-                            Cancelado · esta live{status.cancelledCurrent > 1 ? ` (${status.cancelledCurrent})` : ""}
-                          </span>
-                        )}
-                        {status && status.cancelledOther > 0 && (
-                          <span
-                            className="rounded-full bg-red-800 px-2 py-0.5 text-[11px] font-bold uppercase text-white"
-                            title={status.cancelledOtherEvents.join(" • ")}
-                          >
-                            Cancelado ({status.cancelledOther}) ·{" "}
-                            {status.cancelledOtherEvents.slice(0, 2).join(" • ") || "outros eventos"}
-                            {status.cancelledOtherEvents.length > 2
-                              ? ` +${status.cancelledOtherEvents.length - 2}`
-                              : ""}
-                          </span>
-                        )}
-
-
-                        {missingWhatsapp && (
-                          <span
-                            className="rounded-full bg-amber-500 px-2 py-0.5 text-[11px] font-bold uppercase text-black"
-                            title="Cliente com pedido sem WhatsApp cadastrado"
-                          >
-                            📱 Sem WhatsApp
-                          </span>
-                        )}
-                      </div>
-
-                      <p className="text-lg leading-snug font-medium text-foreground mb-1 break-words">{comment.comment_text}</p>
-
-                      {hasCart && cart && (
-                        <div className="mt-2 gap-2 p-2.5 rounded bg-orange-600 dark:bg-orange-500/15 border border-orange-700 dark:border-orange-500/30">
-                          <div className="flex items-center justify-between gap-2">
-                            <div className="flex items-center gap-2 text-sm flex-1 min-w-0 flex-wrap">
-                              <ShoppingCart className="h-4 w-4 text-white dark:text-orange-300 shrink-0" />
-                              <span className="text-white dark:text-orange-200 font-medium">
-                                <strong>{cart.productCount} item(s)</strong> · R$ {cart.total.toFixed(2)}
-                              </span>
-                              {cart.createdAt && (
-                                <span className="rounded-full bg-black/30 dark:bg-orange-500/20 px-2 py-0.5 text-[11px] font-bold text-white dark:text-orange-200">
-                                  ⏱ aberto há {formatCartAge(cart.createdAt)}
-                                </span>
-                              )}
-                            </div>
-                            {onOpenOrder && (
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="h-7 text-xs text-white dark:text-orange-200 hover:bg-orange-700 dark:hover:bg-orange-500/30 px-2 gap-1 font-semibold shrink-0"
-                                onClick={() => onOpenOrder(cart.orderId)}
-                              >
-                                Ver pedido <ExternalLink className="h-3.5 w-3.5" />
-                              </Button>
-                            )}
-                          </div>
-                          {cart.productNames.length > 0 && (
-                            <ul className="mt-1.5 space-y-0.5 text-[13px] text-white/90 dark:text-orange-100/90">
-                              {cart.productNames.slice(0, 4).map((name, i) => (
-                                <li key={i} className="truncate">• {name}</li>
-                              ))}
-                              {cart.productNames.length > 4 && (
-                                <li className="opacity-80">+{cart.productNames.length - 4} produto(s)</li>
-                              )}
-                            </ul>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            );
-          })}
+          {filtered.map((comment) => (
+            <CommentCard
+              key={comment.id}
+              comment={comment}
+              data={dataRef.current.get(cleanPresenterHandle(comment.username))}
+              isHighlighted={recentlyHighlighted.has(comment.id)}
+              nowTick={nowTick}
+              onOpenOrder={onOpenOrder}
+              onOpenWhatsApp={onOpenWhatsApp}
+            />
+          ))}
         </div>
       </ScrollArea>
-
     </div>
   );
 }

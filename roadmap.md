@@ -270,3 +270,11 @@
 - [x] Listar 15 suportes recuperados sem resposta da loja e o vínculo com ficha/vendas pelo @ ou ID do Instagram.
 - [x] Apagar a função temporária de recuperação e conferir zero chamadas de IA e zero respostas na fila durante a rotina.
 - [x] Confirmar Directs novos chegando ao vivo: 3 mensagens em 14/11, com evento bruto sem erro.
+
+# Painel da apresentadora mais leve (14/11)
+- [x] Substituir o histórico pesado por resumo em lotes de 300, com cache e compras anteriores.
+- [x] Derivar carrinhos desta live dos pedidos já mantidos pelo painel, sem assinatura duplicada.
+- [x] Mostrar alertas de cadastro em tempo real pelos acessos, quantidades somadas e todos os itens.
+- [x] Abrir o WhatsApp pelo @, reutilizando o modal e o modo sem pedido quando necessário.
+- [x] Condicionar o polling à queda do realtime, compartilhar o timer dos selos e memorizar os cards.
+- [x] RPC medida com os 389 @ em 95,5 ms; 8 testes e painel real conferidos, expansão sem consulta e nenhum envio/alteração de pedido.

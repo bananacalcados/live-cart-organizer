@@ -73,3 +73,32 @@ export const useSelfServiceFunnelStore = create<FunnelState>((set, get) => ({
     }
   },
 }));
+
+let autoRefreshUsers = 0;
+let autoRefreshEventId: string | null = null;
+let autoRefreshTimer: ReturnType<typeof setInterval> | null = null;
+
+/** Um único relógio para todos os selos visíveis; a carga continua deduplicada pelo store. */
+export function retainSelfServiceFunnelAutoRefresh(eventId: string) {
+  autoRefreshUsers += 1;
+  autoRefreshEventId = eventId;
+  void useSelfServiceFunnelStore.getState().load(eventId);
+  if (!autoRefreshTimer) {
+    autoRefreshTimer = setInterval(() => {
+      if (!document.hidden && autoRefreshEventId) {
+        void useSelfServiceFunnelStore.getState().load(autoRefreshEventId);
+      }
+    }, 60_000);
+  }
+  let released = false;
+  return () => {
+    if (released) return;
+    released = true;
+    autoRefreshUsers = Math.max(0, autoRefreshUsers - 1);
+    if (autoRefreshUsers === 0 && autoRefreshTimer) {
+      clearInterval(autoRefreshTimer);
+      autoRefreshTimer = null;
+      autoRefreshEventId = null;
+    }
+  };
+}

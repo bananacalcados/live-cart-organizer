@@ -24,6 +24,7 @@ import { isRevenuePaid, orderNetValue } from "@/lib/eventRevenue";
 import { LiveLaneSection } from "@/components/events/LiveLaneSection";
 import { LiveOrderIntentCards, useLiveOrderIntents } from "@/components/events/LiveOrderIntentLane";
 import { isPresenterMessage } from "@/lib/presenterAlerts";
+import { cleanPresenterHandle, type PresenterCommentOrder } from "@/lib/presenterCommentSummaries";
 
 const PRESENTER_ORDER_COLUMNS =
   "id, event_id, customer_id, products, stage, stage_atendimento, is_paid, paid_externally, paid_at, registered_at, free_shipping, shipping_cost, discount_type, discount_value, created_at, last_customer_message_at, last_sent_message_at";
@@ -40,21 +41,23 @@ interface PresenterAlert {
   created_at: string;
 }
 
-interface OrderSummary {
-  id: string;
+interface OrderSummary extends PresenterCommentOrder {
   customer_name: string;
-  products: any[];
   total: number;
-  stage: string;
   stage_atendimento: string;
-  created_at: string;
-  whatsapp: string | null;
   customerReplied: boolean;
   lastSentAt: string | null;
   lastCustomerAt: string | null;
-  registered_at: string | null;
-  is_paid: boolean;
 }
+
+const sameOrderSummary = (a: OrderSummary, b: OrderSummary) =>
+  a.id === b.id && a.event_id === b.event_id && a.customer_id === b.customer_id
+  && a.customer_name === b.customer_name && a.handle === b.handle && a.whatsapp === b.whatsapp
+  && a.products === b.products && a.total === b.total && a.stage === b.stage
+  && a.stage_atendimento === b.stage_atendimento && a.created_at === b.created_at
+  && a.customerReplied === b.customerReplied && a.lastSentAt === b.lastSentAt
+  && a.lastCustomerAt === b.lastCustomerAt && a.registered_at === b.registered_at
+  && a.is_paid === b.is_paid && a.paid_externally === b.paid_externally && a.paid_at === b.paid_at;
 
 const alertTypeConfig: Record<string, { label: string; color: string; icon: typeof Bell }> = {
   show_product_again: { label: "Mostrar Produto", color: "bg-blue-500/20 text-blue-400 border-blue-500/30", icon: Eye },
@@ -76,6 +79,7 @@ export default function PresenterDashboard() {
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [eventName, setEventName] = useState("");
   const [chatOrder, setChatOrder] = useState<OrderSummary | null>(null);
+  const [chatOrderless, setChatOrderless] = useState(false);
   const [noClickLeads, setNoClickLeads] = useState<{ id: string; name: string | null; instagram: string | null; phone: string | null; created_at: string }[]>([]);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
@@ -171,7 +175,10 @@ export default function PresenterDashboard() {
       const lastCustomer = o.last_customer_message_at as string | null;
       return {
         id: o.id,
+        event_id: o.event_id,
+        customer_id: o.customer_id || null,
         customer_name: cust?.name || "Cliente",
+        handle: cleanPresenterHandle(cust?.name),
         whatsapp: cust?.whatsapp || null,
         products,
         total: subtotal,
@@ -183,10 +190,19 @@ export default function PresenterDashboard() {
         lastCustomerAt: lastCustomer,
         registered_at: o.registered_at || null,
         is_paid: !!o.is_paid || !!o.paid_externally,
+        paid_externally: !!o.paid_externally,
+        paid_at: o.paid_at || null,
       };
     });
 
-    setOrders(mapped);
+    setOrders((previous) => {
+      const previousById = new Map(previous.map((order) => [order.id, order]));
+      const next = mapped.map((order) => {
+        const old = previousById.get(order.id);
+        return old && sameOrderSummary(old, order) ? old : order;
+      });
+      return next.length === previous.length && next.every((order, index) => order === previous[index]) ? previous : next;
+    });
 
     // Metrics (padronizado: cancelados fora, desconto aplicado, mesmo critério de pago)
     const paidOrders = ordersData.filter((o) => isRevenuePaid(o as any));
@@ -448,6 +464,41 @@ export default function PresenterDashboard() {
     return map[stage] || stage;
   };
 
+  const openCommentWhatsApp = useCallback(({ handle, whatsapp, orderId }: { handle: string; whatsapp: string; orderId?: string }) => {
+    const linked = orderId ? orders.find((order) => order.id === orderId) : null;
+    const latestCurrent = orders
+      .filter((order) => cleanPresenterHandle(order.handle) === cleanPresenterHandle(handle))
+      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0];
+    const selected = linked || latestCurrent;
+    if (selected) {
+      setChatOrderless(false);
+      setChatOrder(selected);
+      return;
+    }
+    const now = new Date().toISOString();
+    setChatOrderless(!orderId);
+    setChatOrder({
+      id: orderId || `instagram-${handle}`,
+      event_id: eventId || "",
+      customer_id: null,
+      customer_name: handle,
+      handle: cleanPresenterHandle(handle),
+      whatsapp,
+      products: [],
+      total: 0,
+      stage: orderId ? "paid" : "pre_sale",
+      stage_atendimento: "",
+      created_at: now,
+      customerReplied: false,
+      lastSentAt: null,
+      lastCustomerAt: null,
+      registered_at: null,
+      is_paid: !!orderId,
+      paid_externally: false,
+      paid_at: orderId ? now : null,
+    });
+  }, [orders, eventId]);
+
   return (
     <div className="presenter-no-blink min-h-screen bg-muted/40 dark:bg-background text-foreground flex">
       {/* Main content */}
@@ -626,10 +677,16 @@ export default function PresenterDashboard() {
         <CardContent className="p-4">
           <LiveInstagramComments
             eventId={eventId!}
+            currentEventName={eventName}
+            currentOrders={orders}
             onOpenOrder={(orderId) => {
               const order = orders.find(o => o.id === orderId);
-              if (order) setChatOrder(order);
+              if (order) {
+                setChatOrderless(false);
+                setChatOrder(order);
+              }
             }}
+            onOpenWhatsApp={openCommentWhatsApp}
           />
         </CardContent>
       </Card>
@@ -795,7 +852,7 @@ export default function PresenterDashboard() {
                               variant="ghost"
                               size="sm"
                               className="h-7 text-[10px] text-green-400 hover:bg-green-500/20 gap-1 px-2"
-                              onClick={() => setChatOrder(order)}
+                              onClick={() => { setChatOrderless(false); setChatOrder(order); }}
                             >
                               <MessageCircle className="h-3.5 w-3.5" />
                               Ver conversa
@@ -861,6 +918,8 @@ export default function PresenterDashboard() {
         <DialogContent className="max-w-md h-[600px] p-0 overflow-hidden gap-0 border-0 bg-transparent shadow-2xl">
           {chatOrder?.whatsapp && (
             <WhatsAppChat
+              key={chatOrder.id}
+              orderless={chatOrderless}
               order={{
                 id: chatOrder.id,
                 instagramHandle: chatOrder.customer_name,

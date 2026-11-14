@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import { Badge } from "@/components/ui/badge";
 import { selfServiceStage, SELF_SERVICE_STAGE_LABEL } from "@/lib/liveModes";
-import { phoneKeyOf, useSelfServiceFunnelStore } from "@/stores/selfServiceFunnelStore";
+import { phoneKeyOf, retainSelfServiceFunnelAutoRefresh, useSelfServiceFunnelStore } from "@/stores/selfServiceFunnelStore";
 
 /** Selo do estágio do autoatendimento. Só aparece em lives "WhatsApp + Cadastro online". */
 export function SelfServiceStageBadge({
@@ -20,12 +20,7 @@ export function SelfServiceStageBadge({
   const st = useSelfServiceFunnelStore();
   useEffect(() => {
     if (!eventId) return;
-    void useSelfServiceFunnelStore.getState().load(eventId);
-    // Atualiza com a aba visível, no máximo a cada 60 s (sem polling rápido).
-    const t = setInterval(() => {
-      if (!document.hidden) void useSelfServiceFunnelStore.getState().load(eventId);
-    }, 60_000);
-    return () => clearInterval(t);
+    return retainSelfServiceFunnelAutoRefresh(eventId);
   }, [eventId]);
 
   if (!eventId || st.eventId !== eventId || !st.isSelfService) return null;

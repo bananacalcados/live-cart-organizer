@@ -32043,6 +32043,21 @@ export type Database = {
         Args: { p_limit?: number; p_number_ids?: string[] }
         Returns: Json
       }
+      get_ig_handle_summaries: {
+        Args: { _event_id: string; _handles: string[] }
+        Returns: {
+          cancelled_other: number
+          cancelled_other_events: string[]
+          customer_id: string
+          handle: string
+          open_other: number
+          paid_other: number
+          paid_other_events: string[]
+          purchases: Json
+          unconfirmed_other: number
+          whatsapp: string
+        }[]
+      }
       get_inventory_summary: {
         Args: never
         Returns: {
