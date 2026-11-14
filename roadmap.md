@@ -258,7 +258,7 @@
 
 # Corte do Instagram Direct entre 08/11 e 09/11 (14/11)
 - [x] Comparar commits, webhook, assinatura e logs: último DM 08/11 18:47; eventos sempre 200; commits de 19:02 não alteram DM comum; faltava assinatura Instagram/messages no aplicativo da Meta.
-- [ ] Confirmar um Direct real novo, sem enviar resposta manual de teste — depende da mensagem de teste solicitada ao dono.
+- [x] Confirmar Directs reais novos chegando ao vivo, conforme 3 mensagens confirmadas pelo dono em 14/11.
 - [x] Recuperar pela API as 4 mensagens disponíveis e ausentes, em 2 conversas de 09–10/11, sem IA, fila ou efeitos laterais; API não expôs todo o histórico antigo.
 - [x] Verificar suporte recuperado: nenhum caso de rastreio/troca/devolução; conversas estão no chat com @, e as regras novas de Direct/comentários continuam ativas.
 
@@ -266,5 +266,7 @@
 - [x] Causa: commit bb8433df7 (08/11 19:02 UTC) mandava origem nula em todo Direct comum; banco recusava salvar. Corrigido e implantado.
 - [x] Eventos brutos do Instagram gravados para diagnóstico.
 - [x] Recuperadas 83 mensagens de 39 conversas (sem automações).
-- [ ] Recuperar o restante (~165 conversas) — aguardando liberar o limite de consultas da Meta.
-- [ ] Confirmar um Direct novo chegando ao vivo.
+- [x] Varrer as 205 conversas do período em páginas pequenas; 291 mensagens recuperadas em 120 conversas (204 novas), sem limite da Meta e sem regravar as 87 anteriores.
+- [x] Listar 15 suportes recuperados sem resposta da loja e o vínculo com ficha/vendas pelo @ ou ID do Instagram.
+- [x] Apagar a função temporária de recuperação e conferir zero chamadas de IA e zero respostas na fila durante a rotina.
+- [x] Confirmar Directs novos chegando ao vivo: 3 mensagens em 14/11, com evento bruto sem erro.
