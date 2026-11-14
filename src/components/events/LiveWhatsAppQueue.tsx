@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { resolveChatContacts } from "@/lib/chatContactsCache";
 import { useWaMessageBroadcast } from "@/hooks/useWaMessageBroadcast";
+import { CONVERSATION_LIST_REFRESH_WINDOW_MS, shouldRefreshConversationList } from "@/lib/chat/conversationListRefresh";
 import { useWhatsAppNumberStore } from "@/stores/whatsappNumberStore";
 import { cn } from "@/lib/utils";
 import { format, isToday } from "date-fns";
@@ -315,7 +316,10 @@ export function LiveWhatsAppQueue({
   useWaMessageBroadcast(() => {
     load();
     loadZapMatches();
-  }, { debounceMs: 1200 });
+  }, {
+    debounceMs: CONVERSATION_LIST_REFRESH_WINDOW_MS,
+    filter: shouldRefreshConversationList,
+  });
 
   // Fallback quando o broadcast em tempo real não chega (ex.: websocket
   // bloqueado no preview): polling leve a cada 20s + refresh ao voltar à aba.

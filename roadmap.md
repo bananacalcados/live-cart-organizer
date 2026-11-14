@@ -302,3 +302,8 @@
 - [x] Criar controles, presets e prévia no editor; aplicar somente pelo fluxo existente, sem salvar a live ao vivo nos testes.
 - [x] Recarregar por nonce e detectar nova versão por HTML a cada 5 minutos, apenas sem aviso, relógio ou roleta visível.
 - [x] Testar normalização/nonce, regressões, compilação e overlay da live a5c0b75b somente em leitura; não publicar.
+
+# Lentidão do chat durante disparo em massa (14/11)
+- [x] Confirmar a supressão dos avisos de campanha sem tocar em envio, gravação, SQL ou triggers.
+- [x] Agrupar recargas das listas em uma janela de 4 segundos em todas as telas.
+- [x] Testar regras, compilar e medir o chat real antes/depois: 26 → 11 chamadas em 65 s; disparo terminou entre as medições; não publicar.

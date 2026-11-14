@@ -25,6 +25,7 @@ import { resolveChatContacts, invalidateChatContactsCache } from "@/lib/chatCont
 import { useWaMessageBroadcast } from "@/hooks/useWaMessageBroadcast";
 import { fetchConversationRows } from "@/lib/chat/fetchConversations";
 import { mergeConversationRows } from "@/lib/chat/conversationSync";
+import { CONVERSATION_LIST_REFRESH_WINDOW_MS, shouldRefreshConversationList } from "@/lib/chat/conversationListRefresh";
 
 const LIST_FULL_RESYNC_MS = 10 * 60_000;
 import { useWhatsAppNumberStore } from "@/stores/whatsappNumberStore";
@@ -1458,10 +1459,10 @@ export function POSWhatsApp({ storeId, initialFilter, initialPhone, initialWhats
   const storeNumberIdsRef = useRef<string[]>(storeNumberIds);
   storeNumberIdsRef.current = storeNumberIds;
   const listDirtyWhileHiddenRef = useRef(false);
-  // Throttle das recargas por broadcast: no máximo 1 a cada 5 s (com disparo
+  // Throttle das recargas por broadcast: no máximo 1 a cada 4 s (com disparo
   // final garantido). Em horário de pico chegam várias mensagens por segundo
   // nas instâncias da loja; sem isso a lista recarregava quase continuamente.
-  const BROADCAST_RELOAD_MIN_MS = 5000;
+  const BROADCAST_RELOAD_MIN_MS = CONVERSATION_LIST_REFRESH_WINDOW_MS;
   const lastBroadcastReloadRef = useRef(0);
   const broadcastReloadTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const requestListReload = useCallback(() => {
@@ -1499,13 +1500,13 @@ export function POSWhatsApp({ storeId, initialFilter, initialPhone, initialWhats
   //  - mensagem de instância de OUTRA loja é ignorada (antes, qualquer mensagem
   //    do sistema inteiro recarregava a lista de todas as lojas).
   //  - aba oculta: não recarrega; marca como "sujo" e recarrega ao voltar.
-  //  - no máximo 1 recarga a cada 5 s (throttle acima).
+  //  - no máximo 1 recarga a cada 4 s (throttle acima).
   useWaMessageBroadcast(() => {
     requestListReload();
   }, {
-    debounceMs: 800,
+    debounceMs: CONVERSATION_LIST_REFRESH_WINDOW_MS,
     filter: (p) => {
-      if (p.event === 'wa_msg_update') return false;
+      if (!shouldRefreshConversationList(p)) return false;
       const ids = storeNumberIdsRef.current;
       if (ids.length === 0) return true; // loja sem instâncias configuradas vê tudo
       if (!p.whatsapp_number_id) return true; // sem instância (IG/legado): decide no filtro da lista

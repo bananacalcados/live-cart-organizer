@@ -16,6 +16,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { resolveChatContacts, invalidateChatContactsCache } from "@/lib/chatContactsCache";
 import { useWaMessageBroadcast } from "@/hooks/useWaMessageBroadcast";
 import { useConversationRowsSync, conversationRowKey, isSameOpenPhone } from "@/lib/chat/conversationSync";
+import { CONVERSATION_LIST_REFRESH_WINDOW_MS, shouldRefreshConversationList } from "@/lib/chat/conversationListRefresh";
 import { useDbOrderStore } from "@/stores/dbOrderStore";
 import { useCustomerStore } from "@/stores/customerStore";
 import { useWhatsAppNumberStore } from "@/stores/whatsappNumberStore";
@@ -390,7 +391,10 @@ export default function ChatPage() {
   }, { filter: (p) => isSameOpenPhone(p?.phone, activeConversationRef.current.phone) });
   useWaMessageBroadcast(() => {
     loadConversations();
-  }, { debounceMs: 800 });
+  }, {
+    debounceMs: CONVERSATION_LIST_REFRESH_WINDOW_MS,
+    filter: shouldRefreshConversationList,
+  });
 
   // Status updates (✓✓ azul) no longer broadcast — lightweight refetch
   // of the OPEN conversation every 15s keeps the ticks reasonably fresh.

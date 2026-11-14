@@ -12,6 +12,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { resolveChatContacts } from "@/lib/chatContactsCache";
 import { useWaMessageBroadcast } from "@/hooks/useWaMessageBroadcast";
 import { useConversationRowsSync, isSameOpenPhone } from "@/lib/chat/conversationSync";
+import { CONVERSATION_LIST_REFRESH_WINDOW_MS, shouldRefreshConversationList } from "@/lib/chat/conversationListRefresh";
 import { useDbOrderStore } from "@/stores/dbOrderStore";
 import { useCustomerStore } from "@/stores/customerStore";
 import { useEventStore } from "@/stores/eventStore";
@@ -245,7 +246,10 @@ export function DashboardChatPanel() {
   }, { filter: (p) => isSameOpenPhone(p?.phone, selectedPhone) });
   useWaMessageBroadcast(() => {
     loadConversations();
-  }, { debounceMs: 800 });
+  }, {
+    debounceMs: CONVERSATION_LIST_REFRESH_WINDOW_MS,
+    filter: shouldRefreshConversationList,
+  });
 
   // Status (✓✓) refresh: lightweight refetch every 15s on the open chat.
   useEffect(() => {

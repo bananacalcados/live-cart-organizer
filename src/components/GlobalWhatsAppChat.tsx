@@ -6,6 +6,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { resolveChatContacts } from "@/lib/chatContactsCache";
 import { useWaMessageBroadcast } from "@/hooks/useWaMessageBroadcast";
 import { useConversationRowsSync } from "@/lib/chat/conversationSync";
+import { CONVERSATION_LIST_REFRESH_WINDOW_MS, shouldRefreshConversationList } from "@/lib/chat/conversationListRefresh";
 import { useDbOrderStore } from "@/stores/dbOrderStore";
 import { useCustomerStore } from "@/stores/customerStore";
 import { useEventStore } from "@/stores/eventStore";
@@ -149,7 +150,10 @@ export function GlobalWhatsAppChat() {
   // whatsapp_messages was removed to cut DB CPU).
   useWaMessageBroadcast(() => {
     if (isOpen) setWaMsgTick((t) => t + 1);
-  }, { debounceMs: 800 });
+  }, {
+    debounceMs: CONVERSATION_LIST_REFRESH_WINDOW_MS,
+    filter: shouldRefreshConversationList,
+  });
 
   const loadMessages = async (phone: string, numberId?: string | null) => {
     // Load ALL messages for this phone across all instances so full history is visible
