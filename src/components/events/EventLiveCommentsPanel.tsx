@@ -7,6 +7,7 @@ import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { Radio, Search, Ban, ShoppingBag, Instagram, MessageCircle, CheckCircle2, AlertTriangle, Sparkles, Tag, RefreshCw, XCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { OrderDialogDb } from "@/components/OrderDialogDb";
+import { IgWhatsAppLinkDialog } from "@/components/events/IgWhatsAppLinkDialog";
 import { CustomerChargebackBadge } from "@/components/pos/CustomerChargebackBadge";
 import { useChargebackRegistry } from "@/hooks/useChargebackRegistry";
 import type { ChargebackRecord } from "@/hooks/useCustomerChargebacks";
@@ -145,6 +146,7 @@ interface CommentRowProps {
   onOpenOrder: (username: string) => void;
   onOpenInstagram: (username: string) => void;
   onOpenWhatsapp: (username: string) => void;
+  onLinkWhatsapp: (handle: string) => void;
 }
 
 const CommentRow = memo(function CommentRow({
@@ -161,6 +163,7 @@ const CommentRow = memo(function CommentRow({
   onOpenOrder,
   onOpenInstagram,
   onOpenWhatsapp,
+  onLinkWhatsapp,
 }: CommentRowProps) {
   const handle = cleanHandle(c.username);
 
@@ -336,6 +339,13 @@ const CommentRow = memo(function CommentRow({
               WhatsApp
             </button>
           )}
+          <button
+            onClick={() => onLinkWhatsapp(handle)}
+            title={hasWhatsapp ? "Trocar o WhatsApp vinculado a este @" : "Vincular WhatsApp a este @ sem criar pedido"}
+            className="inline-flex items-center gap-1 rounded-md bg-muted px-2 py-1 text-[11px] font-medium text-foreground hover:bg-muted/70"
+          >
+            {hasWhatsapp ? "✏️" : "🔗 Vincular WhatsApp"}
+          </button>
         </div>
       </div>
     </div>
@@ -391,6 +401,16 @@ export function EventLiveCommentsPanel({ eventId }: Props) {
 
   // Mapa handle(limpo) -> whatsapp cadastrado (para o botão de WhatsApp)
   const [whatsappByHandle, setWhatsappByHandle] = useState<Map<string, string>>(new Map());
+  const [linkHandle, setLinkHandle] = useState<string | null>(null);
+  // Depois de vincular: reconsulta só aquele @ e mostra o botão de WhatsApp.
+  const onHandleLinked = useCallback(async (h: string) => {
+    const key = cleanHandle(h);
+    const { data } = await supabase.rpc("resolve_ig_handles", { _handles: [key] });
+    const r = (data || [])[0] as any;
+    if (!r?.whatsapp) return;
+    igHandleCache.set(key, { customerId: r.customer_id || null, whatsapp: r.whatsapp, checkedAt: Date.now() });
+    setWhatsappByHandle((prev) => { const m = new Map(prev); m.set(key, r.whatsapp); return m; });
+  }, []);
 
   // Mapa handle(limpo) -> estatísticas de pedidos (concluídos/abertos no histórico)
   const [orderStatsByHandle, setOrderStatsByHandle] = useState<Map<string, HandleOrderStats>>(new Map());
@@ -1086,6 +1106,7 @@ export function EventLiveCommentsPanel({ eventId }: Props) {
                   onOpenOrder={openForHandle}
                   onOpenInstagram={openInstagramChat}
                   onOpenWhatsapp={openWhatsappChat}
+                  onLinkWhatsapp={setLinkHandle}
                 />
               );
             })}
@@ -1105,6 +1126,12 @@ export function EventLiveCommentsPanel({ eventId }: Props) {
           prefillInstagram={prefillHandle || undefined}
         />
       )}
+
+      <IgWhatsAppLinkDialog
+        handle={linkHandle}
+        onClose={() => setLinkHandle(null)}
+        onLinked={onHandleLinked}
+      />
 
       {igChatHandle && (
         <InstagramDMChat
