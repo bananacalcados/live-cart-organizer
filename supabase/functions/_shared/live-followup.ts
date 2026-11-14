@@ -2,6 +2,7 @@ import { DEFAULT_FOLLOWUP_CONFIG, scheduleStep, renderFollowup, stopReason, cros
 import { internalCallHeaders } from './requireAuth.ts';
 import { instagramFollowupMode } from './instagram-window.ts';
 import { followupFAllowed } from './register-dm-rules.ts';
+import { cancelScope } from './live-followup-cancel-scope.ts';
 type Client = any;
 const MAX_SCHEDULE_BASE_AGE_MIN = 60;
 export async function followupConfig(sb: Client): Promise<FollowupConfig> {
@@ -227,8 +228,8 @@ export async function processGlobalFollowups(sb: Client) {
       }
       if(reason==='instance_disconnected' && job.whatsapp_number_id) await sb.from('live_followup_instances').update({paused:true,reason}).eq('whatsapp_number_id',job.whatsapp_number_id);
       const scope=sb.from('live_followup_jobs').update({status:'cancelled',reason}).eq('customer_key',job.customer_key).eq('event_id',job.event_id).in('status',['pending','processing']);
-      if (job.order_id) scope.eq('order_id',job.order_id);
-      else scope.eq('sequence_key',job.sequence_key);
+      const cancellation=cancelScope(reason,job);
+      scope.eq(cancellation.column,cancellation.value);
       await scope;
     }
   }

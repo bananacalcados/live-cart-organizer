@@ -13,3 +13,4 @@
 - Cancel-before-ship refunds: refund-fiscal cancelBeforeShipStep, enforced again by guard_refund_return_fiscal.
 - pos_sales.shipped_at: set only by DB triggers (expedition concluído / first carrier event); Central and agent envio+7 read it, none → human.
 - Live follow-up: staff manual messages postpone (never cancel) via RPC live_followup_postpone just before send, shifting later steps by the same delta; cancel human_attendance only past 3h from original_scheduled_at.
+- Live follow-up cancellation scope lives in live-followup-cancel-scope.ts: cart_already_contacted cancels only its B/C job so payment reminders survive; every other reason retains order/sequence scope.

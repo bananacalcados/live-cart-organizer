@@ -312,3 +312,9 @@
 - [x] Registrar definição atual em docs/database, igual à produção por MD5 a2e862cc82106fce40b093bc36d1e426; histórico gerenciado bloqueado, nenhuma migração executada ou registrada no journal.
 - [x] Testar apresentar → parar → reapresentar e current do overlay em PostgreSQL 17 local descartável: passou, rollback confirmou remoção de todas as estruturas fictícias.
 - [x] Regra: reapresentar sempre limpa stopped_at; nenhuma mudança de tela, dados reais, deploy ou publicação.
+
+# Cancelamento B/C sem interromper cobranças D (14/11)
+- [x] Limitar cart_already_contacted ao próprio B/C, preservando os demais motivos e o agendamento; nenhuma consulta adicional.
+- [x] 52 testes passaram: decisão pura e contexto/reserva recusada para B/C preservam os três D, sem chamadas externas; build OK.
+- [x] SQL conferido em produção somente em leitura: reserve não cancela, failure só afeta o próprio job; postpone cancela por pedido após 3h de atendimento, triggers por pagamento/fechamento/interruptores e registro A preservados.
+- [x] Implantados somente event-followup-dispatcher, event-followup-scheduler e live-followup-admin; sem reativar cancelados, enviar testes ou mudar/publicar front.
