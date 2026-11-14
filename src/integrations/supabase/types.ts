@@ -32446,8 +32446,13 @@ export type Database = {
         }
         Returns: boolean
       }
+      ig_handle_link_lookup: {
+        Args: { _handle: string; _phone: string }
+        Returns: Json
+      }
       ig_handle_loose: { Args: { _h: string }; Returns: string }
       ig_handle_norm: { Args: { _h: string }; Returns: string }
+      ig_link_norm_phone: { Args: { _p: string }; Returns: string }
       ig_moderation_claim: {
         Args: { p_limit?: number }
         Returns: {
@@ -32661,6 +32666,15 @@ export type Database = {
           total_stock: number
           variant_count: number
         }[]
+      }
+      link_ig_handle_whatsapp: {
+        Args: {
+          _force?: boolean
+          _handle: string
+          _name?: string
+          _phone: string
+        }
+        Returns: Json
       }
       list_campaign_audience: {
         Args: { p_filtro: Json; p_limit?: number; p_offset?: number }

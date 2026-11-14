@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Instagram, ShoppingCart, HelpCircle, MessageSquare, Sparkles, Volume2, VolumeX, ExternalLink, Radio, Search, X, MessageCircle } from "lucide-react";
 import { toast } from "sonner";
 import { matchesSearch, normalizeSearch } from "@/lib/liveCommentSearch";
+import { IgWhatsAppLinkDialog } from "./IgWhatsAppLinkDialog";
 import { useSelfServiceFunnelStore } from "@/stores/selfServiceFunnelStore";
 import {
   buildPresenterHandleData,
@@ -114,6 +115,7 @@ interface CommentCardProps {
   isHighlighted: boolean;
   onOpenOrder?: (orderId: string) => void;
   onOpenWhatsApp?: (target: WhatsAppTarget) => void;
+  onLinkWhatsApp?: (handle: string) => void;
 }
 
 const CommentCard = memo(function CommentCard({
@@ -122,6 +124,7 @@ const CommentCard = memo(function CommentCard({
   isHighlighted,
   onOpenOrder,
   onOpenWhatsApp,
+  onLinkWhatsApp,
 }: CommentCardProps) {
   const [showAllPurchases, setShowAllPurchases] = useState(false);
   const handle = cleanPresenterHandle(comment.username);
@@ -170,6 +173,17 @@ const CommentCard = memo(function CommentCard({
                   onClick={() => onOpenWhatsApp({ handle, whatsapp: data.whatsapp!, orderId: data.latestOrderId || undefined })}
                 >
                   <MessageCircle className="h-3 w-3" /> WhatsApp
+                </Button>
+              )}
+              {onLinkWhatsApp && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-6 px-2 text-[10px] font-bold"
+                  title={data?.whatsapp ? "Trocar o WhatsApp ligado a este @" : "Ligar um WhatsApp a este @ sem criar pedido"}
+                  onClick={() => onLinkWhatsApp(handle)}
+                >
+                  {data?.whatsapp ? "✏️" : "🔗 Vincular WhatsApp"}
                 </Button>
               )}
               <span className="text-xs text-muted-foreground">{formatTime(comment.created_at)}</span>
@@ -316,6 +330,15 @@ export function LiveInstagramComments({ eventId, currentEventName = "Esta live",
   const [liveActiveUntil, setLiveActiveUntil] = useState<Date | null>(null);
   const [togglingLive, setTogglingLive] = useState(false);
   const [visibleCount, setVisibleCount] = useState(50);
+  const [linkHandle, setLinkHandle] = useState<string | null>(null);
+  const closeLink = useCallback(() => setLinkHandle(null), []);
+  const refreshHandle = useCallback(async (handle: string) => {
+    const { data } = await supabase.rpc("get_ig_handle_summaries", { _event_id: eventId, _handles: [handle] });
+    const row = ((data || []) as any[])[0];
+    const summary = normalizeSummary(row || { handle });
+    presenterHandleCache.set(`${eventId}:${handle}`, { summary, checkedAt: Date.now() });
+    setHistoryByHandle((previous) => new Map(previous).set(handle, summary));
+  }, [eventId]);
   const scrollRef = useRef<HTMLDivElement>(null);
   const loadMoreRef = useRef<HTMLDivElement>(null);
   const realtimeStatusRef = useRef("IDLE");
@@ -620,6 +643,7 @@ export function LiveInstagramComments({ eventId, currentEventName = "Esta live",
                 isHighlighted={recentlyHighlighted.has(comment.id)}
                 onOpenOrder={onOpenOrder}
                 onOpenWhatsApp={onOpenWhatsApp}
+                onLinkWhatsApp={setLinkHandle}
               />
             );
           })}
@@ -630,6 +654,7 @@ export function LiveInstagramComments({ eventId, currentEventName = "Esta live",
           )}
         </div>
       </ScrollArea>
+      <IgWhatsAppLinkDialog handle={linkHandle} onClose={closeLink} onLinked={refreshHandle} />
     </div>
   );
 }
