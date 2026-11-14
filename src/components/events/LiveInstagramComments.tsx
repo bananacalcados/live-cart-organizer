@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Instagram, ShoppingCart, HelpCircle, MessageSquare, Sparkles, Volume2, VolumeX, ExternalLink, Radio, Search, X, MessageCircle } from "lucide-react";
 import { toast } from "sonner";
 import { matchesSearch, normalizeSearch } from "@/lib/liveCommentSearch";
+import { useSelfServiceFunnelStore } from "@/stores/selfServiceFunnelStore";
 import {
   buildPresenterHandleData,
   cleanPresenterHandle,
@@ -304,6 +305,7 @@ const CommentCard = memo(function CommentCard({
 });
 
 export function LiveInstagramComments({ eventId, currentEventName = "Esta live", currentOrders, onOpenOrder, onOpenWhatsApp }: LiveInstagramCommentsProps) {
+  const isSelfService = useSelfServiceFunnelStore((st) => st.eventId === eventId && st.isSelfService);
   const [comments, setComments] = useState<LiveComment[]>([]);
   const [historyByHandle, setHistoryByHandle] = useState<Map<string, IgHandleSummary>>(new Map());
   const [accesses, setAccesses] = useState<Map<string, PresenterSelfServiceAccess>>(new Map());
@@ -518,8 +520,8 @@ export function LiveInstagramComments({ eventId, currentEventName = "Esta live",
 
   const accessRows = useMemo(() => [...accesses.values()], [accesses]);
   dataRef.current = useMemo(
-    () => buildPresenterHandleData(eventId, currentEventName, handles, currentOrders, historyByHandle, accessRows, dataRef.current),
-    [eventId, currentEventName, handles, currentOrders, historyByHandle, accessRows],
+    () => buildPresenterHandleData(eventId, currentEventName, handles, currentOrders, historyByHandle, accessRows, dataRef.current, isSelfService),
+    [eventId, currentEventName, handles, currentOrders, historyByHandle, accessRows, isSelfService],
   );
 
   const searchNorm = useMemo(() => normalizeSearch(search), [search]);

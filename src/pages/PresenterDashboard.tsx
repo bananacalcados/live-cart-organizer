@@ -24,7 +24,7 @@ import { isRevenuePaid, orderNetValue } from "@/lib/eventRevenue";
 import { LiveLaneSection } from "@/components/events/LiveLaneSection";
 import { LiveOrderIntentCards, useLiveOrderIntents } from "@/components/events/LiveOrderIntentLane";
 import { isPresenterMessage } from "@/lib/presenterAlerts";
-import { cleanPresenterHandle, type PresenterCommentOrder } from "@/lib/presenterCommentSummaries";
+import { cleanPresenterHandle, selectPresenterCurrentOrder, type PresenterCommentOrder } from "@/lib/presenterCommentSummaries";
 
 const PRESENTER_ORDER_COLUMNS =
   "id, event_id, customer_id, products, stage, stage_atendimento, is_paid, paid_externally, paid_at, registered_at, free_shipping, shipping_cost, discount_type, discount_value, created_at, last_customer_message_at, last_sent_message_at";
@@ -74,6 +74,8 @@ export default function PresenterDashboard() {
   const navigate = useNavigate();
   const [alerts, setAlerts] = useState<PresenterAlert[]>([]);
   const [orders, setOrders] = useState<OrderSummary[]>([]);
+  const ordersRef = useRef(orders);
+  ordersRef.current = orders;
   const [metrics, setMetrics] = useState({ totalPaid: 0, totalRevenue: 0, avgTicket: 0, pendingCount: 0 });
   const [teamMessage, setTeamMessage] = useState<PresenterAlert | null>(null);
   const [soundEnabled, setSoundEnabled] = useState(true);
@@ -465,28 +467,24 @@ export default function PresenterDashboard() {
   };
 
   const openCommentOrder = useCallback((orderId: string) => {
-    const order = orders.find((item) => item.id === orderId);
+    const order = selectPresenterCurrentOrder(ordersRef.current, eventId, "", orderId);
     if (order) {
       setChatOrderless(false);
       setChatOrder(order);
     }
-  }, [orders]);
+  }, [eventId]);
 
   const openCommentWhatsApp = useCallback(({ handle, whatsapp, orderId }: { handle: string; whatsapp: string; orderId?: string }) => {
-    const linked = orderId ? orders.find((order) => order.id === orderId) : null;
-    const latestCurrent = orders
-      .filter((order) => cleanPresenterHandle(order.handle) === cleanPresenterHandle(handle))
-      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0];
-    const selected = linked || latestCurrent;
+    const selected = selectPresenterCurrentOrder(ordersRef.current, eventId, handle, orderId);
     if (selected) {
       setChatOrderless(false);
       setChatOrder(selected);
       return;
     }
     const now = new Date().toISOString();
-    setChatOrderless(!orderId);
+    setChatOrderless(true);
     setChatOrder({
-      id: orderId || `instagram-${handle}`,
+      id: `instagram-${handle}`,
       event_id: eventId || "",
       customer_id: null,
       customer_name: handle,
@@ -494,18 +492,18 @@ export default function PresenterDashboard() {
       whatsapp,
       products: [],
       total: 0,
-      stage: orderId ? "paid" : "pre_sale",
+      stage: "pre_sale",
       stage_atendimento: "",
       created_at: now,
       customerReplied: false,
       lastSentAt: null,
       lastCustomerAt: null,
       registered_at: null,
-      is_paid: !!orderId,
+      is_paid: false,
       paid_externally: false,
-      paid_at: orderId ? now : null,
+      paid_at: null,
     });
-  }, [orders, eventId]);
+  }, [eventId]);
 
   return (
     <div className="presenter-no-blink min-h-screen bg-muted/40 dark:bg-background text-foreground flex">

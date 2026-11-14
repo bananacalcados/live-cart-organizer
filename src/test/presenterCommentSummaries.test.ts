@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildPresenterHandleData,
   getRegistrationAlert,
+  selectPresenterCurrentOrder,
   type IgHandleSummary,
   type PresenterCommentOrder,
   type PresenterSelfServiceAccess,
@@ -45,6 +46,26 @@ const build = (
 ) => buildPresenterHandleData("live-atual", "Live de hoje", ["cliente"], orders, new Map([["cliente", history]]), accesses, previous);
 
 describe("presenterCommentSummaries", () => {
+  it("não permite selecionar pedido de outra live nem substituir seu ID por pedido atual", () => {
+    const current = order();
+    const old = order({ id: "antigo", event_id: "outra-live" });
+    expect(selectPresenterCurrentOrder([current], "live-atual", "cliente", "antigo")).toBeUndefined();
+    expect(selectPresenterCurrentOrder([old], "live-atual", "cliente", "antigo")).toBeUndefined();
+    expect(selectPresenterCurrentOrder([current], "live-atual", "cliente", "order-1")).toBe(current);
+  });
+
+  it("omite alertas em outros modos e restaura no autoatendimento sem perder o carrinho", () => {
+    const current = order();
+    const args: [string, string, string[], PresenterCommentOrder[], Map<string, IgHandleSummary>, PresenterSelfServiceAccess[]] = ["live-atual", "Live de hoje", ["cliente"], [current], new Map([["cliente", emptyHistory()]]), []];
+    const enabled = buildPresenterHandleData(...args, new Map(), true);
+    const disabled = buildPresenterHandleData(...args, enabled, false);
+    expect(enabled.get("cliente")?.registrationAlert).toBe("not_opened");
+    expect(disabled.get("cliente")?.registrationAlert).toBe("none");
+    expect(disabled.get("cliente")?.cart?.productCount).toBe(2);
+    const restored = buildPresenterHandleData(...args, disabled, true);
+    expect(restored.get("cliente")?.registrationAlert).toBe("not_opened");
+  });
+
   it("soma as quantidades e mantém todos os itens do carrinho", () => {
     const data = build([order({
       products: [

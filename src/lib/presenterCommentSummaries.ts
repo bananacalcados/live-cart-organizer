@@ -101,6 +101,16 @@ export interface PresenterHandleData {
 export const cleanPresenterHandle = (value?: string | null) =>
   (value || "").replace(/^@+/, "").trim().toLowerCase();
 
+/** Historical IDs must never become editable orders in the current presenter. */
+export function selectPresenterCurrentOrder<T extends PresenterCommentOrder>(
+  orders: T[], eventId: string | undefined, handle: string, orderId?: string,
+): T | undefined {
+  if (orderId) return orders.find((order) => order.id === orderId && order.event_id === eventId);
+  return orders
+    .filter((order) => order.event_id === eventId && cleanPresenterHandle(order.handle) === cleanPresenterHandle(handle))
+    .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0];
+}
+
 const phoneSuffix8 = (value?: string | null) => {
   const digits = (value || "").replace(/\D/g, "");
   return digits.length >= 8 ? digits.slice(-8) : "";
@@ -197,6 +207,7 @@ export function buildPresenterHandleData(
   histories: Map<string, IgHandleSummary>,
   accesses: PresenterSelfServiceAccess[],
   previous: Map<string, PresenterHandleData> = new Map(),
+  isSelfService = true,
 ) {
   const next = new Map<string, PresenterHandleData>();
   for (const rawHandle of handles) {
@@ -209,12 +220,14 @@ export function buildPresenterHandleData(
     const selectedCart = buildCart(orders, tentativeWhatsapp);
     const cartOrder = orders.find((order) => order.id === selectedCart?.orderId) || null;
     const registration = getRegistrationAlert(cartOrder, selectedCart?.whatsapp || tentativeWhatsapp, accesses);
+    const registrationAlert = isSelfService ? registration.alert : "none";
     if (
       old
       && old.sourceEventId === eventId
       && old.sourceEventName === eventName
       && old.sourceHistory === history
       && old.sourceAccess === registration.access
+      && old.registrationAlert === registrationAlert
       && sameOrderSources(old.sourceOrders, orders)
     ) {
       next.set(handle, old);
@@ -261,7 +274,7 @@ export function buildPresenterHandleData(
       hasAnyOrder: orders.length > 0 || openOther + unconfirmedOther + paidOther + cancelledOther > 0 || purchases.length > 0,
       hasWhatsapp: !!whatsapp,
       cart,
-      registrationAlert: registration.alert,
+      registrationAlert,
       purchases,
       sourceOrders: orders,
       sourceHistory: history,

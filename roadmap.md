@@ -284,3 +284,8 @@
 - [x] Manter dados e callbacks estáveis; o relógio não redesenha mais nenhum card.
 - [x] Renderizar 50 comentários por vez com sentinela no viewport; rolagem real avançou de 50 em 50 até 600 e filtro/busca voltam ao topo.
 - [x] Ligar o ganho do bipe; compilação limpa, 21 testes, filtros/busca/alertas/compras/WhatsApp conferidos na live real, zero consultas na rolagem e sem publicar.
+
+# Revisão final da apresentadora (14/11)
+- [x] Restringir chat editável aos pedidos desta live e estabilizar callbacks com referência dos pedidos.
+- [x] Condicionar alertas de cadastro ao modo de autoatendimento já carregado.
+- [x] 21 testes passaram e compilação limpa; live real confirmou chat histórico com ID sintético/orderless=true, pedido atual com orderless=false e alerta de cadastro presente; sem envio ou publicação.
