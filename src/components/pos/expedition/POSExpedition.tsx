@@ -141,6 +141,11 @@ export function POSExpedition({ storeId, storeName, focusSaleId }: Props) {
   const [counts, setCounts] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  const [serverSearch, setServerSearch] = useState("");
+  useEffect(() => {
+    const t = setTimeout(() => setServerSearch(search.trim().length >= 3 ? search.trim() : ""), 500);
+    return () => clearTimeout(t);
+  }, [search]);
   const [productSearch, setProductSearch] = useState("");
 
   const [expanded, setExpanded] = useState<string | null>(focusSaleId || null);
@@ -284,7 +289,7 @@ export function POSExpedition({ storeId, storeName, focusSaleId }: Props) {
     if (!storeId || showExchanges) return;
     setLoading(true);
     try {
-      const rows = await fetchExpeditionOrders(effectiveStore, stage, finishedRange, filterGateway);
+      const rows = await fetchExpeditionOrders(effectiveStore, stage, finishedRange, filterGateway, stage === "concluido" ? serverSearch : undefined);
       setOrders(rows);
       const visibleIds = rows.slice(0, 100).map((row) => row.id);
       if (visibleIds.length) {
@@ -327,7 +332,7 @@ export function POSExpedition({ storeId, storeName, focusSaleId }: Props) {
   useEffect(() => {
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [storeId, allStores, stage, finishedRange, filterGateway, showExchanges]);
+  }, [storeId, allStores, stage, finishedRange, filterGateway, showExchanges, stage === "concluido" ? serverSearch : ""]);
 
   // Mantém o pedido aberto na conferência sincronizado com a lista recarregada
   // (edições de cliente/itens/endereço refletem imediatamente na NF-e e na conferência).
@@ -359,7 +364,8 @@ export function POSExpedition({ storeId, storeName, focusSaleId }: Props) {
   }, [storeId, allStores, stage, finishedRange, filterGateway, showExchanges]);
 
   const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
+    const fold = (v: string) => v.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+    const q = fold(search.trim());
     const pq = productSearch.trim().toLowerCase();
     return orders.filter((o) => {
       if (filterTest === "hide" && o.is_test) return false;
@@ -463,7 +469,7 @@ export function POSExpedition({ storeId, storeName, focusSaleId }: Props) {
       }
       if (!q) return true;
       return (
-        (o.customer_name || "").toLowerCase().includes(q) ||
+        fold(o.customer_name || "").includes(q) ||
         (o.customer_phone || "").includes(q) ||
         (o.tracking_code || "").toLowerCase().includes(q) ||
         o.items.some((i) => (i.product_name || "").toLowerCase().includes(q) || (i.sku || "").toLowerCase().includes(q))

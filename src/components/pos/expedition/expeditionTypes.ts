@@ -270,6 +270,7 @@ export async function fetchExpeditionOrders(
   stage: ExpStage,
   finishedRange?: { from?: string; to?: string },
   gateway = "all",
+  search?: string,
 ): Promise<ExpOrder[]> {
   const allStores = storeId === "all";
   const SALE_COLS =
@@ -293,6 +294,17 @@ export async function fetchExpeditionOrders(
     // pedidos ainda não concluídos (expedition_finished_at = null).
     if (finishedRange?.from) q = q.gte("expedition_finished_at", finishedRange.from);
     if (finishedRange?.to) q = q.lte("expedition_finished_at", finishedRange.to);
+    // Busca no servidor (Concluídos): procura em TODOS os pedidos, não só nos carregados.
+    const term = (search || "").trim().replace(/[,()*%\\]/g, " ").trim();
+    if (term.length >= 3) {
+      const digits = term.replace(/\D/g, "");
+      // Vogais/ç viram curinga de 1 letra: "marcia" acha "Márcia".
+      const loose = term.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[aeiouc]/gi, "_");
+      const parts = [`customer_name.ilike.*${loose}*`, `customer_email.ilike.*${term}*`];
+      if (digits.length >= 4) parts.push(`customer_phone.ilike.*${digits}*`, `customer_cpf.ilike.*${digits}*`);
+      if (/^[0-9a-f-]{8,36}$/i.test(term) && term.length === 36) parts.push(`id.eq.${term}`);
+      q = q.or(parts.join(","));
+    }
     // PostgREST's generated select type is too deep for a recursive generic constraint.
     return filterExpeditionGateway(q as any, gateway);
   };
