@@ -307,3 +307,8 @@
 - [x] Confirmar a supressão dos avisos de campanha sem tocar em envio, gravação, SQL ou triggers.
 - [x] Agrupar recargas das listas em uma janela de 4 segundos em todas as telas.
 - [x] Testar regras, compilar e medir o chat real antes/depois: 26 → 11 chamadas em 65 s; disparo terminou entre as medições; não publicar.
+
+# Registro da reapresentação no overlay (14/11)
+- [x] Registrar definição atual em docs/database, igual à produção por MD5 a2e862cc82106fce40b093bc36d1e426; histórico gerenciado bloqueado, nenhuma migração executada ou registrada no journal.
+- [x] Testar apresentar → parar → reapresentar e current do overlay em PostgreSQL 17 local descartável: passou, rollback confirmou remoção de todas as estruturas fictícias.
+- [x] Regra: reapresentar sempre limpa stopped_at; nenhuma mudança de tela, dados reais, deploy ou publicação.
