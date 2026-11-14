@@ -464,6 +464,14 @@ export default function PresenterDashboard() {
     return map[stage] || stage;
   };
 
+  const openCommentOrder = useCallback((orderId: string) => {
+    const order = orders.find((item) => item.id === orderId);
+    if (order) {
+      setChatOrderless(false);
+      setChatOrder(order);
+    }
+  }, [orders]);
+
   const openCommentWhatsApp = useCallback(({ handle, whatsapp, orderId }: { handle: string; whatsapp: string; orderId?: string }) => {
     const linked = orderId ? orders.find((order) => order.id === orderId) : null;
     const latestCurrent = orders
@@ -679,13 +687,7 @@ export default function PresenterDashboard() {
             eventId={eventId!}
             currentEventName={eventName}
             currentOrders={orders}
-            onOpenOrder={(orderId) => {
-              const order = orders.find(o => o.id === orderId);
-              if (order) {
-                setChatOrderless(false);
-                setChatOrder(order);
-              }
-            }}
+            onOpenOrder={openCommentOrder}
             onOpenWhatsApp={openCommentWhatsApp}
           />
         </CardContent>

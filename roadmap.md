@@ -278,3 +278,9 @@
 - [x] Abrir o WhatsApp pelo @, reutilizando o modal e o modo sem pedido quando necessário.
 - [x] Condicionar o polling à queda do realtime, compartilhar o timer dos selos e memorizar os cards.
 - [x] RPC medida com os 389 @ em 95,5 ms; 8 testes e painel real conferidos, expansão sem consulta e nenhum envio/alteração de pedido.
+
+# Ajuste de renderização dos comentários (14/11)
+- [x] Medir os renders no tick de 30 s: 600 antes, 0 cards depois; somente a idade do carrinho assina o relógio compartilhado.
+- [x] Manter dados e callbacks estáveis; o relógio não redesenha mais nenhum card.
+- [x] Renderizar 50 comentários por vez com sentinela no viewport; rolagem real avançou de 50 em 50 até 600 e filtro/busca voltam ao topo.
+- [x] Ligar o ganho do bipe; compilação limpa, 21 testes, filtros/busca/alertas/compras/WhatsApp conferidos na live real, zero consultas na rolagem e sem publicar.

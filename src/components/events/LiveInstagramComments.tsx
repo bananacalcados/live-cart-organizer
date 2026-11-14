@@ -1,4 +1,4 @@
-import { memo, useEffect, useState, useCallback, useRef, useMemo } from "react";
+import { memo, useEffect, useState, useCallback, useRef, useMemo, useSyncExternalStore } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -66,6 +66,32 @@ const formatCartAge = (iso: string | null, now: number) => {
   return m ? `${h}h ${m}min` : `${h}h`;
 };
 
+let cartAgeNow = Date.now();
+let cartAgeTimer: ReturnType<typeof setInterval> | null = null;
+const cartAgeListeners = new Set<() => void>();
+const subscribeCartAge = (listener: () => void) => {
+  cartAgeListeners.add(listener);
+  if (!cartAgeTimer) {
+    cartAgeTimer = setInterval(() => {
+      cartAgeNow = Date.now();
+      cartAgeListeners.forEach((notify) => notify());
+    }, 30000);
+  }
+  return () => {
+    cartAgeListeners.delete(listener);
+    if (!cartAgeListeners.size && cartAgeTimer) {
+      clearInterval(cartAgeTimer);
+      cartAgeTimer = null;
+    }
+  };
+};
+const getCartAgeNow = () => cartAgeNow;
+
+function CartAge({ createdAt }: { createdAt: string }) {
+  const now = useSyncExternalStore(subscribeCartAge, getCartAgeNow, getCartAgeNow);
+  return <>⏱ aberto há {formatCartAge(createdAt, now)}</>;
+}
+
 function normalizeSummary(row: any): IgHandleSummary {
   return {
     handle: cleanPresenterHandle(row.handle),
@@ -85,7 +111,6 @@ interface CommentCardProps {
   comment: LiveComment;
   data?: PresenterHandleData;
   isHighlighted: boolean;
-  nowTick: number;
   onOpenOrder?: (orderId: string) => void;
   onOpenWhatsApp?: (target: WhatsAppTarget) => void;
 }
@@ -94,7 +119,6 @@ const CommentCard = memo(function CommentCard({
   comment,
   data,
   isHighlighted,
-  nowTick,
   onOpenOrder,
   onOpenWhatsApp,
 }: CommentCardProps) {
@@ -111,6 +135,7 @@ const CommentCard = memo(function CommentCard({
 
   return (
     <Card
+      data-comment-card={comment.id}
       className={`border transition-all ${
         isHighlighted
           ? "bg-orange-500/20 border-orange-400 shadow-lg shadow-orange-500/30 animate-pulse"
@@ -229,7 +254,7 @@ const CommentCard = memo(function CommentCard({
                     </span>
                     {cart.createdAt && (
                       <span className="rounded-full bg-black/30 px-2 py-0.5 text-[11px] font-bold text-white dark:bg-orange-500/20 dark:text-orange-200">
-                        ⏱ aberto há {formatCartAge(cart.createdAt, nowTick)}
+                        <CartAge createdAt={cart.createdAt} />
                       </span>
                     )}
                   </div>
@@ -288,15 +313,11 @@ export function LiveInstagramComments({ eventId, currentEventName = "Esta live",
   const [recentlyHighlighted, setRecentlyHighlighted] = useState<Set<string>>(new Set());
   const [liveActiveUntil, setLiveActiveUntil] = useState<Date | null>(null);
   const [togglingLive, setTogglingLive] = useState(false);
-  const [nowTick, setNowTick] = useState(() => Date.now());
+  const [visibleCount, setVisibleCount] = useState(50);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const loadMoreRef = useRef<HTMLDivElement>(null);
   const realtimeStatusRef = useRef("IDLE");
   const dataRef = useRef<Map<string, PresenterHandleData>>(new Map());
-
-  useEffect(() => {
-    const timer = setInterval(() => setNowTick(Date.now()), 30000);
-    return () => clearInterval(timer);
-  }, []);
 
   const isLiveActive = !!liveActiveUntil && liveActiveUntil.getTime() > Date.now();
   const refreshLiveStatus = useCallback(async () => {
@@ -339,7 +360,9 @@ export function LiveInstagramComments({ eventId, currentEventName = "Esta live",
       const ctx = new AudioContext();
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
-      osc.connect(ctx.destination);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.type = "sine";
       osc.frequency.value = 1100;
       gain.gain.setValueAtTime(0.25, ctx.currentTime);
       gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.4);
@@ -514,6 +537,25 @@ export function LiveInstagramComments({ eventId, currentEventName = "Esta live",
     [searched, dataRef.current],
   );
   const orderCount = useMemo(() => searched.filter((comment) => comment.is_order).length, [searched]);
+  const visibleItems = useMemo(() => filtered.slice(0, visibleCount), [filtered, visibleCount]);
+
+  useEffect(() => {
+    setVisibleCount(50);
+    scrollRef.current?.querySelector<HTMLElement>("[data-radix-scroll-area-viewport]")?.scrollTo({ top: 0 });
+  }, [eventId, filter, searchNorm]);
+
+  useEffect(() => {
+    const sentinel = loadMoreRef.current;
+    const root = scrollRef.current?.querySelector<HTMLElement>("[data-radix-scroll-area-viewport]");
+    if (!sentinel || !root || visibleCount >= filtered.length) return;
+    const observer = new IntersectionObserver((entries) => {
+      if (entries.some((entry) => entry.isIntersecting)) {
+        setVisibleCount((current) => Math.min(current + 50, filtered.length));
+      }
+    }, { root, rootMargin: "250px 0px" });
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [filtered.length, visibleCount]);
 
   return (
     <div className="flex flex-col h-full">
@@ -557,7 +599,7 @@ export function LiveInstagramComments({ eventId, currentEventName = "Esta live",
         <Button variant={filter === "carts" ? "default" : "ghost"} size="sm" onClick={() => setFilter("carts")} className={`h-7 text-xs ${cartMatchCount > 0 ? "ring-1 ring-orange-400/50" : ""}`}>🔥 Com carrinho ({cartMatchCount})</Button>
       </div>
 
-      <ScrollArea className="flex-1 min-h-[420px] h-[60vh]" ref={scrollRef as any}>
+      <ScrollArea className="flex-none min-h-[420px] h-[60vh]" ref={scrollRef as any} data-visible-count={visibleCount}>
         <div className="space-y-3 pr-2">
           {filtered.length === 0 && (
             <Card className="bg-muted-foreground/10 border-muted-foreground/20">
@@ -566,17 +608,24 @@ export function LiveInstagramComments({ eventId, currentEventName = "Esta live",
               </CardContent>
             </Card>
           )}
-          {filtered.map((comment) => (
-            <CommentCard
-              key={comment.id}
-              comment={comment}
-              data={dataRef.current.get(cleanPresenterHandle(comment.username))}
-              isHighlighted={recentlyHighlighted.has(comment.id)}
-              nowTick={nowTick}
-              onOpenOrder={onOpenOrder}
-              onOpenWhatsApp={onOpenWhatsApp}
-            />
-          ))}
+          {visibleItems.map((comment) => {
+            const data = dataRef.current.get(cleanPresenterHandle(comment.username));
+            return (
+              <CommentCard
+                key={comment.id}
+                comment={comment}
+                data={data}
+                isHighlighted={recentlyHighlighted.has(comment.id)}
+                onOpenOrder={onOpenOrder}
+                onOpenWhatsApp={onOpenWhatsApp}
+              />
+            );
+          })}
+          {visibleCount < filtered.length && (
+            <div ref={loadMoreRef} className="h-8 text-center text-xs text-muted-foreground" aria-live="polite">
+              Carregando mais comentários…
+            </div>
+          )}
         </div>
       </ScrollArea>
     </div>
