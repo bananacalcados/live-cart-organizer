@@ -11328,6 +11328,7 @@ export type Database = {
           id: string
           ig_user_id: string
           last_seen_at: string
+          previous_ig_user_ids: string[]
           source: string
           username: string
         }
@@ -11336,6 +11337,7 @@ export type Database = {
           id?: string
           ig_user_id: string
           last_seen_at?: string
+          previous_ig_user_ids?: string[]
           source?: string
           username: string
         }
@@ -11344,6 +11346,7 @@ export type Database = {
           id?: string
           ig_user_id?: string
           last_seen_at?: string
+          previous_ig_user_ids?: string[]
           source?: string
           username?: string
         }

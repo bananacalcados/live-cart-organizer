@@ -9,6 +9,7 @@ import { resolveIgAccountByAccountId, globalIgToken } from "../_shared/instagram
 import { rhVagaInboxSource } from "../_shared/rh-vaga-automation.ts";
 import {instagramInteractionPayload,followupButtonJob} from '../_shared/instagram-interaction.ts';
 import {handleLiveFollowupButton} from '../_shared/live-followup-button.ts';
+import { rememberInstagramIdentity } from '../_shared/instagram-identity.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -489,10 +490,11 @@ serve(withAccessLog("meta-messenger-webhook", async (req) => {
           if (channel === 'instagram') {
             const username = normalizeIgUsername(senderName);
             if (username) {
-              const { error: linkError } = await supabase.from('instagram_user_links').upsert({
-                username, ig_user_id: senderId, source: 'webhook_dm', last_seen_at: new Date().toISOString(),
-              }, { onConflict: 'username', ignoreDuplicates: false });
-              if (linkError) console.error('[ig-dm] identity link failed:', linkError.message);
+              try {
+                await rememberInstagramIdentity(supabase, { username, igUserId: senderId, source: 'webhook_dm', seenAt: new Date().toISOString() });
+              } catch (linkError) {
+                console.error('[ig-dm] identity link failed:', linkError instanceof Error ? linkError.message : linkError);
+              }
             }
           }
         }

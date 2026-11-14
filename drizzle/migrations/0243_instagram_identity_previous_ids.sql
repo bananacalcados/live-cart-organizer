@@ -1,0 +1,1 @@
+ALTER TABLE public.instagram_user_links ADD COLUMN IF NOT EXISTS previous_ig_user_ids text[] NOT NULL DEFAULT '{}';

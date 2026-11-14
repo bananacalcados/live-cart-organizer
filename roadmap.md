@@ -255,3 +255,9 @@
 - [x] Ativar regras próprias do agente para Instagram DM, janela de 24h e encaminhamento ao WhatsApp, preservando o automático do WhatsApp.
 - [x] Direcionar comentários públicos de suporte para resposta privada com convite ao WhatsApp, respeitando live/post/reel.
 - [ ] Confirmar um Direct/resposta a story novo chegando ao PDV — depende de uma mensagem nova de cliente ou de teste do dono; eventos antigos não são reenviados pela Meta.
+
+# Corte do Instagram Direct entre 08/11 e 09/11 (14/11)
+- [x] Comparar commits, webhook, assinatura e logs: último DM 08/11 18:47; eventos sempre 200; commits de 19:02 não alteram DM comum; faltava assinatura Instagram/messages no aplicativo da Meta.
+- [ ] Confirmar um Direct real novo, sem enviar resposta manual de teste — depende da mensagem de teste solicitada ao dono.
+- [x] Recuperar pela API as 4 mensagens disponíveis e ausentes, em 2 conversas de 09–10/11, sem IA, fila ou efeitos laterais; API não expôs todo o histórico antigo.
+- [x] Verificar suporte recuperado: nenhum caso de rastreio/troca/devolução; conversas estão no chat com @, e as regras novas de Direct/comentários continuam ativas.
