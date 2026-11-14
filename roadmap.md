@@ -261,3 +261,10 @@
 - [ ] Confirmar um Direct real novo, sem enviar resposta manual de teste — depende da mensagem de teste solicitada ao dono.
 - [x] Recuperar pela API as 4 mensagens disponíveis e ausentes, em 2 conversas de 09–10/11, sem IA, fila ou efeitos laterais; API não expôs todo o histórico antigo.
 - [x] Verificar suporte recuperado: nenhum caso de rastreio/troca/devolução; conversas estão no chat com @, e as regras novas de Direct/comentários continuam ativas.
+
+## Instagram Direct — causa real (14/11)
+- [x] Causa: commit bb8433df7 (08/11 19:02 UTC) mandava origem nula em todo Direct comum; banco recusava salvar. Corrigido e implantado.
+- [x] Eventos brutos do Instagram gravados para diagnóstico.
+- [x] Recuperadas 83 mensagens de 39 conversas (sem automações).
+- [ ] Recuperar o restante (~165 conversas) — aguardando liberar o limite de consultas da Meta.
+- [ ] Confirmar um Direct novo chegando ao vivo.
