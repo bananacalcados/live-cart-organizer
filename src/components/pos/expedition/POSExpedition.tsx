@@ -1,5 +1,5 @@
 import { syncWaitingProductsFlag } from "./waitingFlag";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -285,11 +285,16 @@ export function POSExpedition({ storeId, storeName, focusSaleId }: Props) {
     finally { setPrintingBatch(false); }
   };
 
+  // Só a resposta da carga MAIS RECENTE pode trocar a lista: uma carga antiga
+  // (sem a busca, ou de outro filtro) que termina depois não apaga o resultado.
+  const loadSeq = useRef(0);
   const load = async () => {
     if (!storeId || showExchanges) return;
+    const seq = ++loadSeq.current;
     setLoading(true);
     try {
       const rows = await fetchExpeditionOrders(effectiveStore, stage, finishedRange, filterGateway, stage === "concluido" ? serverSearch : undefined);
+      if (seq !== loadSeq.current) return;
       setOrders(rows);
       const visibleIds = rows.slice(0, 100).map((row) => row.id);
       if (visibleIds.length) {
@@ -325,9 +330,12 @@ export function POSExpedition({ storeId, storeName, focusSaleId }: Props) {
     } catch (e: any) {
       toast.error(e.message || "Erro ao carregar expedição");
     } finally {
-      setLoading(false);
+      if (seq === loadSeq.current) setLoading(false);
     }
   };
+  // Atualizações em tempo real usam sempre a carga atual (com a busca digitada).
+  const loadRef = useRef(load);
+  loadRef.current = load;
 
   useEffect(() => {
     load();
@@ -354,7 +362,7 @@ export function POSExpedition({ storeId, storeName, focusSaleId }: Props) {
         allStores
           ? { event: "*", schema: "public", table: "pos_sales" }
           : { event: "*", schema: "public", table: "pos_sales", filter: `store_id=eq.${storeId}` },
-        () => load(),
+        () => loadRef.current(),
       )
       .subscribe();
     return () => {

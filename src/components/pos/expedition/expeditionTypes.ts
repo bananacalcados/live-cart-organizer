@@ -260,6 +260,24 @@ export const brl = (v: number | null | undefined) =>
   (Number(v) || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
 /**
+ * Regex sem diferença de acento para a busca de nome no servidor:
+ * "marcia" vira m[aáàâãä]rc[iíìîï][aáàâãä] e acha só "Márcia"/"Marcia".
+ * Palavras separadas podem ter qualquer coisa entre elas ("marcia silva").
+ */
+export function accentInsensitiveRegex(term: string): string {
+  const groups: Record<string, string> = {
+    a: "[aáàâãä]", e: "[eéèêë]", i: "[iíìîï]", o: "[oóòôõö]", u: "[uúùûü]", c: "[cç]", n: "[nñ]",
+  };
+  const words = term
+    .normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase()
+    .replace(/[^a-z0-9@._\s-]/g, " ")
+    .split(/\s+/).filter(Boolean);
+  return words
+    .map((w) => w.replace(/[.]/g, "\\.").split("").map((ch) => groups[ch] || ch).join(""))
+    .join(".*");
+}
+
+/**
  * Carrega os pedidos da Expedição.
  * `storeId = "all"` traz os pedidos de TODAS as lojas (expedir tudo de um lugar só).
  * A loja de origem de cada venda nunca é alterada: as ações continuam gravando
@@ -295,12 +313,10 @@ export async function fetchExpeditionOrders(
     if (finishedRange?.from) q = q.gte("expedition_finished_at", finishedRange.from);
     if (finishedRange?.to) q = q.lte("expedition_finished_at", finishedRange.to);
     // Busca no servidor (Concluídos): procura em TODOS os pedidos, não só nos carregados.
-    const term = (search || "").trim().replace(/[,()*%\\]/g, " ").trim();
+    const term = (search || "").trim().replace(/[,()*%\\"]/g, " ").trim();
     if (term.length >= 3) {
       const digits = term.replace(/\D/g, "");
-      // Vogais/ç viram curinga de 1 letra: "marcia" acha "Márcia".
-      const loose = term.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[aeiouc]/gi, "_");
-      const parts = [`customer_name.ilike.*${loose}*`, `customer_email.ilike.*${term}*`];
+      const parts = [`customer_name.imatch.${accentInsensitiveRegex(term)}`, `customer_email.ilike.*${term}*`];
       if (digits.length >= 4) parts.push(`customer_phone.ilike.*${digits}*`, `customer_cpf.ilike.*${digits}*`);
       if (/^[0-9a-f-]{8,36}$/i.test(term) && term.length === 36) parts.push(`id.eq.${term}`);
       q = q.or(parts.join(","));
