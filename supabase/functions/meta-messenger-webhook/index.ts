@@ -108,7 +108,29 @@ serve(withAccessLog("meta-messenger-webhook", async (req) => {
     const body = JSON.parse(rawBody || '{}');
     console.log('Messenger webhook payload:', JSON.stringify(body).slice(0, 1000));
 
+    // Evento bruto (diagnóstico): todo POST com assinatura aceita fica registrado.
+    let rawEventId: string | null = null;
+    try {
+      const owner = (body.entry || []).map((e: any) => e?.id).filter(Boolean).join(',') || null;
+      const kinds = new Set<string>();
+      for (const e of body.entry || []) {
+        if (Array.isArray(e?.messaging) && e.messaging.length) kinds.add('messaging');
+        for (const c of e?.changes || []) kinds.add(`changes:${c?.field ?? '?'}`);
+      }
+      const { data: rawRow } = await supabase.from('webhook_events_raw')
+        .insert({ provider: 'meta_messenger', event_type: `${body?.object ?? 'null'}:${[...kinds].join('+') || 'empty'}`, owner, payload: body })
+        .select('id').maybeSingle();
+      rawEventId = (rawRow as { id?: string } | null)?.id ?? null;
+    } catch (e) {
+      console.error('[meta-messenger] raw log falhou:', (e as Error).message);
+    }
+    const markRaw = async (reason: string) => {
+      if (!rawEventId) return;
+      try { await supabase.from('webhook_events_raw').update({ skip_reason: reason.slice(0, 300) }).eq('id', rawEventId); } catch { /* só diagnóstico */ }
+    };
+
     if (body.object !== 'page' && body.object !== 'instagram') {
+      await markRaw(`object_ignored:${body?.object ?? 'null'}`);
       return new Response(JSON.stringify({ success: true }), {
         status: 200,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -457,7 +479,9 @@ serve(withAccessLog("meta-messenger-webhook", async (req) => {
           message: messageText,
           direction: 'incoming',
           message_id: event.message?.mid || null,
-          source: interactionPayload ? 'ig_interaction' : null,
+          // NUNCA null: a coluna é NOT NULL (default 'manual'). Mandar null fez todo
+          // Direct comum falhar ao salvar de 08/11 19:02 até 14/11.
+          source: interactionPayload ? 'ig_interaction' : 'manual',
           status: 'received',
           media_type: mediaType,
           media_url: mediaUrl,
@@ -475,6 +499,7 @@ serve(withAccessLog("meta-messenger-webhook", async (req) => {
             continue;
           }
           console.error('Error saving message:', error);
+          await markRaw(`save_error:${(error as any).code ?? '?'}:${(error as any).message ?? ''}`);
         } else {
           console.log(`Saved ${channel} DM from ${senderId} (${senderName || 'unknown'}): ${messageText.slice(0, 80)}`);
         }
