@@ -1,3 +1,9 @@
+# Ampliação autorizada das colunas do extrato — Varejo
+- [x] Salvar a configuração original completa dos relatórios da Varejo, sem tocar na PF
+- [x] Ampliar somente as colunas, preservando agendamento, envio, notificações e separadores
+- [x] Gerar outubro, comparar identificação dos payouts, boletos e transferências internas e gravar nova auditoria
+- [x] Manter porque 100% dos payouts ganharam conta de destino; documentar configuração e apagar a função temporária
+
 # Teste de extrato Mercado Pago — julho a outubro
 - [x] Baixar 8 Liberações + 4 Dinheiro em conta; Varejo sem configuração alterada, PF recebeu padrão automático ao gerar (sem chamada de configuração)
 - [x] Gravar 14.177 registros somente na auditoria restrita, conferir 8 saldos e separar evidência/reservas
