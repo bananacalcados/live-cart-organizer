@@ -1,0 +1,12 @@
+CREATE TABLE public.audit_gateway_refunds_tmp (gateway text NOT NULL, account text NOT NULL DEFAULT '', payment_id text NOT NULL, external_reference text, status text NOT NULL, status_detail text, payment_method text, payment_type text, transaction_amount numeric(16,2), refunded_amount numeric(16,2), date_created timestamptz, date_approved timestamptz, refund_date timestamptz, payer_name text, payer_email text, payer_doc text, description text, raw jsonb NOT NULL DEFAULT '{}', audited_at timestamptz NOT NULL DEFAULT now(), PRIMARY KEY(gateway,account,payment_id));
+GRANT ALL ON public.audit_gateway_refunds_tmp TO service_role;
+REVOKE ALL ON public.audit_gateway_refunds_tmp FROM anon, authenticated;
+ALTER TABLE public.audit_gateway_refunds_tmp ENABLE ROW LEVEL SECURITY;
+CREATE TABLE public.audit_frenet_shipments_tmp (shipment_id text PRIMARY KEY, date_created timestamptz, direction text, service text, carrier text, charged_amount numeric(16,2), tracking_code text, recipient text, sender text, order_reference text, raw jsonb NOT NULL DEFAULT '{}', audited_at timestamptz NOT NULL DEFAULT now());
+GRANT ALL ON public.audit_frenet_shipments_tmp TO service_role;
+REVOKE ALL ON public.audit_frenet_shipments_tmp FROM anon, authenticated;
+ALTER TABLE public.audit_frenet_shipments_tmp ENABLE ROW LEVEL SECURITY;
+CREATE TABLE public.audit_reverse_costs_tmp (audit_key text PRIMARY KEY, reverse_shipment_id uuid, shipment_id uuid, sale_id uuid, date_created timestamptz, direction text NOT NULL, service text, amount numeric(16,2), value_source text, used boolean, tracking_code text, raw jsonb NOT NULL DEFAULT '{}', audited_at timestamptz NOT NULL DEFAULT now());
+GRANT ALL ON public.audit_reverse_costs_tmp TO service_role;
+REVOKE ALL ON public.audit_reverse_costs_tmp FROM anon, authenticated;
+ALTER TABLE public.audit_reverse_costs_tmp ENABLE ROW LEVEL SECURITY;

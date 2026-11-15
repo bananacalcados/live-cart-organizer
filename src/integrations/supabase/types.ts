@@ -1242,6 +1242,117 @@ export type Database = {
         }
         Relationships: []
       }
+      audit_frenet_shipments_tmp: {
+        Row: {
+          audited_at: string
+          carrier: string | null
+          charged_amount: number | null
+          date_created: string | null
+          direction: string | null
+          order_reference: string | null
+          raw: Json
+          recipient: string | null
+          sender: string | null
+          service: string | null
+          shipment_id: string
+          tracking_code: string | null
+        }
+        Insert: {
+          audited_at?: string
+          carrier?: string | null
+          charged_amount?: number | null
+          date_created?: string | null
+          direction?: string | null
+          order_reference?: string | null
+          raw?: Json
+          recipient?: string | null
+          sender?: string | null
+          service?: string | null
+          shipment_id: string
+          tracking_code?: string | null
+        }
+        Update: {
+          audited_at?: string
+          carrier?: string | null
+          charged_amount?: number | null
+          date_created?: string | null
+          direction?: string | null
+          order_reference?: string | null
+          raw?: Json
+          recipient?: string | null
+          sender?: string | null
+          service?: string | null
+          shipment_id?: string
+          tracking_code?: string | null
+        }
+        Relationships: []
+      }
+      audit_gateway_refunds_tmp: {
+        Row: {
+          account: string
+          audited_at: string
+          date_approved: string | null
+          date_created: string | null
+          description: string | null
+          external_reference: string | null
+          gateway: string
+          payer_doc: string | null
+          payer_email: string | null
+          payer_name: string | null
+          payment_id: string
+          payment_method: string | null
+          payment_type: string | null
+          raw: Json
+          refund_date: string | null
+          refunded_amount: number | null
+          status: string
+          status_detail: string | null
+          transaction_amount: number | null
+        }
+        Insert: {
+          account?: string
+          audited_at?: string
+          date_approved?: string | null
+          date_created?: string | null
+          description?: string | null
+          external_reference?: string | null
+          gateway: string
+          payer_doc?: string | null
+          payer_email?: string | null
+          payer_name?: string | null
+          payment_id: string
+          payment_method?: string | null
+          payment_type?: string | null
+          raw?: Json
+          refund_date?: string | null
+          refunded_amount?: number | null
+          status: string
+          status_detail?: string | null
+          transaction_amount?: number | null
+        }
+        Update: {
+          account?: string
+          audited_at?: string
+          date_approved?: string | null
+          date_created?: string | null
+          description?: string | null
+          external_reference?: string | null
+          gateway?: string
+          payer_doc?: string | null
+          payer_email?: string | null
+          payer_name?: string | null
+          payment_id?: string
+          payment_method?: string | null
+          payment_type?: string | null
+          raw?: Json
+          refund_date?: string | null
+          refunded_amount?: number | null
+          status?: string
+          status_detail?: string | null
+          transaction_amount?: number | null
+        }
+        Relationships: []
+      }
       audit_link: {
         Row: {
           ck: string | null
@@ -1344,6 +1455,54 @@ export type Database = {
           synced_at?: string | null
           taken?: boolean | null
           variant_title?: string | null
+        }
+        Relationships: []
+      }
+      audit_reverse_costs_tmp: {
+        Row: {
+          amount: number | null
+          audit_key: string
+          audited_at: string
+          date_created: string | null
+          direction: string
+          raw: Json
+          reverse_shipment_id: string | null
+          sale_id: string | null
+          service: string | null
+          shipment_id: string | null
+          tracking_code: string | null
+          used: boolean | null
+          value_source: string | null
+        }
+        Insert: {
+          amount?: number | null
+          audit_key: string
+          audited_at?: string
+          date_created?: string | null
+          direction: string
+          raw?: Json
+          reverse_shipment_id?: string | null
+          sale_id?: string | null
+          service?: string | null
+          shipment_id?: string | null
+          tracking_code?: string | null
+          used?: boolean | null
+          value_source?: string | null
+        }
+        Update: {
+          amount?: number | null
+          audit_key?: string
+          audited_at?: string
+          date_created?: string | null
+          direction?: string
+          raw?: Json
+          reverse_shipment_id?: string | null
+          sale_id?: string | null
+          service?: string | null
+          shipment_id?: string | null
+          tracking_code?: string | null
+          used?: boolean | null
+          value_source?: string | null
         }
         Relationships: []
       }

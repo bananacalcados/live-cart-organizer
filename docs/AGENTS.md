@@ -1,0 +1,2 @@
+# Audit records
+- Gateway audit snapshots are service-only, deduplicated by provider/account/payment, and keep refunds, chargebacks and quotes separate; this prevents unpaid cancellations or estimates from inflating financial loss.

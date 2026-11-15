@@ -1,3 +1,9 @@
+# Auditoria de estornos e custos — 15/11
+- [x] Criar tabelas de auditoria restritas ao serviço
+- [x] Consultar ambas contas Mercado Pago, Appmax antiga, AustPay e Pagar.me; limitações Appmax nova/Vindi documentadas
+- [x] Conferir extrato Frenet (401 sem parceiro) e 81 reversas Correios: 79 cotadas, 2 CEP inválido; reposição sem dados de cotação
+- [x] Validar totais e seis testes; documentar limitações; função temporária apagada no servidor e no projeto
+
 # Condições da vaga de vendedor(a) — RH (13/11)
 - [x] Montar a pergunta a partir do resumo atual da vaga, sem alterar pontuação ou avaliação
 - [x] Gravar a versão somente nos novos envios; antigos permanecem nulos e identificados como condição anterior
