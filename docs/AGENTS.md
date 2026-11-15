@@ -1,2 +1,3 @@
 # Audit records
 - Gateway audit snapshots are service-only, deduplicated by provider/account/payment, and keep refunds, chargebacks and quotes separate; this prevents unpaid cancellations or estimates from inflating financial loss.
+- Mercado Pago movement audits keep opening/closing balances and reserve movements distinct, use Releases as the single balance ledger, and attach Settlement evidence without adding it again; generic payout labels never identify beneficiaries or expense categories.

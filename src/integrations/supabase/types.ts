@@ -1458,6 +1458,63 @@ export type Database = {
         }
         Relationships: []
       }
+      audit_mp_movements_tmp: {
+        Row: {
+          account: string
+          audit_key: string
+          audited_at: string
+          balance: number | null
+          date: string | null
+          description: string | null
+          detail: Json
+          external_reference: string | null
+          fee_amount: number | null
+          gross_amount: number | null
+          net_credit: number | null
+          net_debit: number | null
+          payment_method: string | null
+          raw: Json
+          record_type: string | null
+          source_id: string | null
+        }
+        Insert: {
+          account: string
+          audit_key: string
+          audited_at?: string
+          balance?: number | null
+          date?: string | null
+          description?: string | null
+          detail?: Json
+          external_reference?: string | null
+          fee_amount?: number | null
+          gross_amount?: number | null
+          net_credit?: number | null
+          net_debit?: number | null
+          payment_method?: string | null
+          raw?: Json
+          record_type?: string | null
+          source_id?: string | null
+        }
+        Update: {
+          account?: string
+          audit_key?: string
+          audited_at?: string
+          balance?: number | null
+          date?: string | null
+          description?: string | null
+          detail?: Json
+          external_reference?: string | null
+          fee_amount?: number | null
+          gross_amount?: number | null
+          net_credit?: number | null
+          net_debit?: number | null
+          payment_method?: string | null
+          raw?: Json
+          record_type?: string | null
+          source_id?: string | null
+        }
+        Relationships: []
+      }
       audit_reverse_costs_tmp: {
         Row: {
           amount: number | null

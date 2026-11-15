@@ -1,3 +1,9 @@
+# Teste de extrato Mercado Pago — julho a outubro
+- [x] Baixar 8 Liberações + 4 Dinheiro em conta; Varejo sem configuração alterada, PF recebeu padrão automático ao gerar (sem chamada de configuração)
+- [x] Gravar 14.177 registros somente na auditoria restrita, conferir 8 saldos e separar evidência/reservas
+- [x] 822 saídas externas: 271 com descrição, 551 sem; ranking de descrições, exemplos e taxas agregadas documentados; favorecido e componentes não garantidos
+- [x] 12 testes; função temporária removida, sem lançamentos no financeiro ou telas
+
 # Auditoria de estornos e custos — 15/11
 - [x] Criar tabelas de auditoria restritas ao serviço
 - [x] Consultar ambas contas Mercado Pago, Appmax antiga, AustPay e Pagar.me; limitações Appmax nova/Vindi documentadas
