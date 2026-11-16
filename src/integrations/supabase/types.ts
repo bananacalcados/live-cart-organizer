@@ -16981,6 +16981,51 @@ export type Database = {
           },
         ]
       }
+      orders_deleted_log: {
+        Row: {
+          customer_id: string | null
+          deleted_at: string
+          deleted_by: string | null
+          event_id: string | null
+          gateway_amount: number | null
+          had_pending_charge: boolean | null
+          id: string
+          is_paid: boolean | null
+          mercadopago_payment_id: string | null
+          order_id: string
+          snapshot: Json | null
+          stage: string | null
+        }
+        Insert: {
+          customer_id?: string | null
+          deleted_at?: string
+          deleted_by?: string | null
+          event_id?: string | null
+          gateway_amount?: number | null
+          had_pending_charge?: boolean | null
+          id?: string
+          is_paid?: boolean | null
+          mercadopago_payment_id?: string | null
+          order_id: string
+          snapshot?: Json | null
+          stage?: string | null
+        }
+        Update: {
+          customer_id?: string | null
+          deleted_at?: string
+          deleted_by?: string | null
+          event_id?: string | null
+          gateway_amount?: number | null
+          had_pending_charge?: boolean | null
+          id?: string
+          is_paid?: boolean | null
+          mercadopago_payment_id?: string | null
+          order_id?: string
+          snapshot?: Json | null
+          stage?: string | null
+        }
+        Relationships: []
+      }
       otp_template_settings: {
         Row: {
           code_variable_index: number
@@ -34181,6 +34226,11 @@ export type Database = {
         Args: { p_order_id: string }
         Returns: string
       }
+      selfservice_autolink_last4: {
+        Args: { p_dry_run?: boolean; p_event_id: string; p_last4: string }
+        Returns: Json
+      }
+      selfservice_autolink_sweep: { Args: never; Returns: number }
       selfservice_br_phone: { Args: { p: string }; Returns: string }
       selfservice_capture_initial: {
         Args: {
