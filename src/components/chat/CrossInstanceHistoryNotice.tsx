@@ -15,21 +15,20 @@ type Props = {
 export function CrossInstanceHistoryNotice({ phone, currentNumberId, currentMessageCount, loading, instances, onView }: Props) {
   const [counts, setCounts] = useState<InstanceMessageCount[]>([]);
   const requestedKeyRef = useRef("");
+  const latestKeyRef = useRef("");
 
   useEffect(() => {
-    let cancelled = false;
     const requestKey = `${phone}|${currentNumberId || "none"}`;
+    latestKeyRef.current = requestKey;
     if (requestedKeyRef.current !== requestKey) setCounts([]);
     if (loading || currentMessageCount > FEW_MESSAGES_LIMIT || !phone || requestedKeyRef.current === requestKey) return;
     requestedKeyRef.current = requestKey;
     (async () => {
       const { data, error } = await (supabase.rpc as any)("chat_cross_instance_message_counts", { p_phone: phone });
-      if (!cancelled) {
-        if (error) console.warn("[chat] não foi possível contar o histórico das outras instâncias:", error.message);
-        else setCounts((data || []) as InstanceMessageCount[]);
-      }
+      if (latestKeyRef.current !== requestKey) return;
+      if (error) console.warn("[chat] não foi possível contar o histórico das outras instâncias:", error.message);
+      else setCounts((data || []) as InstanceMessageCount[]);
     })();
-    return () => { cancelled = true; };
   }, [phone, currentNumberId, currentMessageCount, loading]);
 
   const other = otherInstanceHistory(counts, currentNumberId, currentMessageCount, instances);
