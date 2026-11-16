@@ -87,6 +87,9 @@ export interface DbOrder {
   mercadopago_payment_id?: string | null;
   appmax_order_id?: string | null;
   vindi_transaction_id?: string | null;
+  austpay_transaction_id?: string | null;
+  gateway_snapshot?: unknown;
+  phone_last4?: string | null;
   pos_sale_id?: string | null;
   // Payment details
   payment_method_label?: string | null;

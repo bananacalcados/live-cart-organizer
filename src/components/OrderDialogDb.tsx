@@ -48,6 +48,8 @@ import {
 import { EmbeddedDialog, EmbeddedDialogContent } from "@/components/chat/EmbeddedDialog";
 import { conditionsSummary, type LiveConditions } from "@/lib/liveCodeOrder";
 import { useCartBuildingTracker } from "@/hooks/events/useCartBuildingPresence";
+import { findDuplicateLiveOrder } from "@/lib/liveDuplicateOrder";
+import { getOrderFinalValue } from "@/lib/orderTotal";
 
 /** @ normalizado (sem arroba, minúsculo) para comparar dono do telefone. */
 const normHandle = (v?: string | null) =>
@@ -122,6 +124,7 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId, prefi
   const [banReason, setBanReason] = useState("");
   const [chargebackConfirmed, setChargebackConfirmed] = useState(false);
   const [showChargebackConfirm, setShowChargebackConfirm] = useState(false);
+  const [duplicateOrder, setDuplicateOrder] = useState<DbOrder | null>(null);
 
   const [lookupLoading, setLookupLoading] = useState(false);
   const [lookup, setLookup] = useState<any | null>(null);
@@ -642,7 +645,7 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId, prefi
     return out;
   };
 
-  const handleSubmit = async (forceChargeback = false) => {
+  const handleSubmit = async (forceChargeback = false, duplicateAction: "add" | "new" | null = null) => {
     if (isSubmitting) return;
     const nameWords = fullName.trim().split(/\s+/).filter(Boolean);
     const hasValidFullName = nameWords.length >= 2;
@@ -670,6 +673,22 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId, prefi
     if (orderChargebacks.length > 0 && !forceChargeback && !chargebackConfirmed) {
       setShowChargebackConfirm(true);
       return;
+    }
+
+    if (!editingOrder && !duplicateAction) {
+      setIsSubmitting(true);
+      try {
+        const duplicate = await findDuplicateLiveOrder(eventId, { whatsapp, instagramHandle: effectiveHandle, phoneLast4 });
+        if (duplicate) {
+          setDuplicateOrder(duplicate);
+          setIsSubmitting(false);
+          return;
+        }
+      } catch (error) {
+        // O aviso nunca pode impedir uma venda: se a consulta falhar, segue o fluxo atual.
+        console.warn("[OrderDialog] duplicate check failed", error);
+      }
+      setIsSubmitting(false);
     }
 
     setIsSubmitting(true);
@@ -771,8 +790,13 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId, prefi
         }
 
         // Check for existing active order in this event
-        let activeOrder = findActiveOrderByCustomer(eventId, newCustomer.id);
-        if (!activeOrder) {
+        let activeOrder = duplicateAction === "new" ? null : findActiveOrderByCustomer(eventId, newCustomer.id);
+        if (duplicateAction === "add" && duplicateOrder) {
+          await useDbOrderStore.getState().fetchOrdersByEvent(eventId);
+          activeOrder = useDbOrderStore.getState().orders.find((order) => order.id === duplicateOrder.id) || null;
+          if (!activeOrder) throw new Error("O pedido existente não pôde ser carregado. Tente novamente.");
+        }
+        if (!activeOrder && duplicateAction !== "new") {
           // A lista da tela pode estar desatualizada: confere no banco antes de criar outro pedido.
           const { data: dbActive } = await supabase
             .from("orders")
@@ -810,7 +834,7 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId, prefi
           toast.success("Produtos adicionados ao pedido existente!");
           onCreated?.(activeOrder.id);
         } else {
-          const newOrder = await createOrder(eventId, newCustomer, localProducts);
+          const newOrder = await createOrder(eventId, newCustomer, localProducts, { forceNew: duplicateAction === "new" });
           
           // Apply discount, shipping, and extras if set during creation
           if (newOrder) {
@@ -875,6 +899,7 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId, prefi
         }
       }
 
+      setDuplicateOrder(null);
       onOpenChange(false);
       resetForm();
     } catch (error) {
@@ -1688,6 +1713,27 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId, prefi
               }}
             >
               Prosseguir mesmo assim
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={!!duplicateOrder} onOpenChange={(open) => { if (!open) setDuplicateOrder(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Pedido aberto para esta cliente</AlertDialogTitle>
+            <AlertDialogDescription>
+              Esta cliente já tem um pedido aberto nesta live{duplicateOrder?.customer?.instagram_handle ? ` (@${duplicateOrder.customer.instagram_handle.replace(/^@+/, "")})` : ""}
+              {duplicateOrder ? ` — ${getOrderFinalValue(duplicateOrder).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}` : ""}.
+              Adicionar os itens a ele?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => { setDuplicateOrder(null); setTimeout(() => handleSubmit(true, "new"), 0); }}>
+              Criar outro mesmo assim
+            </AlertDialogCancel>
+            <AlertDialogAction onClick={() => setTimeout(() => handleSubmit(true, "add"), 0)}>
+              Adicionar ao pedido existente
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

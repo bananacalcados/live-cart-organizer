@@ -17026,6 +17026,60 @@ export type Database = {
         }
         Relationships: []
       }
+      orphan_payments: {
+        Row: {
+          amount: number
+          created_at: string
+          deleted_order_snapshot: Json | null
+          event_id: string | null
+          external_reference: string | null
+          gateway: string
+          id: string
+          payer_email: string | null
+          payer_name: string | null
+          payer_phone: string | null
+          payment_id: string
+          resolved_at: string | null
+          resolved_by: string | null
+          resolved_order_id: string | null
+          status: string
+        }
+        Insert: {
+          amount: number
+          created_at?: string
+          deleted_order_snapshot?: Json | null
+          event_id?: string | null
+          external_reference?: string | null
+          gateway: string
+          id?: string
+          payer_email?: string | null
+          payer_name?: string | null
+          payer_phone?: string | null
+          payment_id: string
+          resolved_at?: string | null
+          resolved_by?: string | null
+          resolved_order_id?: string | null
+          status?: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          deleted_order_snapshot?: Json | null
+          event_id?: string | null
+          external_reference?: string | null
+          gateway?: string
+          id?: string
+          payer_email?: string | null
+          payer_name?: string | null
+          payer_phone?: string | null
+          payment_id?: string
+          resolved_at?: string | null
+          resolved_by?: string | null
+          resolved_order_id?: string | null
+          status?: string
+        }
+        Relationships: []
+      }
       otp_template_settings: {
         Row: {
           code_variable_index: number

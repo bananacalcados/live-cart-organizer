@@ -65,11 +65,12 @@ import { Textarea } from "@/components/ui/textarea";
 import { Link2Off, RefreshCw, Trash, Radio, Shuffle } from "lucide-react";
 import { useEventStore } from "@/stores/eventStore";
 import { SelfServiceStageBadge } from "@/components/events/SelfServiceStageBadge";
+import { getOrderDeletionBlock, PENDING_CHARGE_DELETE_MESSAGE } from "@/lib/liveOrderDeletion";
 
 interface OrderCardDbProps {
   order: DbOrder;
   onEdit: (order: DbOrder) => void;
-  onDelete: (orderId: string) => void;
+  onDelete: (orderId: string) => Promise<boolean>;
   isDragging?: boolean;
 }
 
@@ -116,6 +117,8 @@ function OrderCardDbComponent({ order, onEdit, onDelete, isDragging }: OrderCard
   const [showUnlinkDialog, setShowUnlinkDialog] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [showDeleteOrderDialog, setShowDeleteOrderDialog] = useState(false);
+  const [deleteBlock, setDeleteBlock] = useState<string | null>(null);
+  const [checkingDelete, setCheckingDelete] = useState(false);
   const [showUndoPaidDialog, setShowUndoPaidDialog] = useState(false);
   const [undoingPaid, setUndoingPaid] = useState(false);
   const [showUpdateDialog, setShowUpdateDialog] = useState(false);
@@ -536,6 +539,19 @@ function OrderCardDbComponent({ order, onEdit, onDelete, isDragging }: OrderCard
       toast.success('Pedido movido para Aguardando Mototaxista');
     } catch {
       toast.error('Erro ao mover pedido');
+    }
+  };
+
+  const requestDeleteOrder = async () => {
+    if (checkingDelete) return;
+    setCheckingDelete(true);
+    try {
+      setDeleteBlock(await getOrderDeletionBlock(order.id));
+      setShowDeleteOrderDialog(true);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Não foi possível verificar a cobrança");
+    } finally {
+      setCheckingDelete(false);
     }
   };
 
@@ -1387,12 +1403,13 @@ function OrderCardDbComponent({ order, onEdit, onDelete, isDragging }: OrderCard
           variant="outline"
           size="sm"
           className="flex-1 text-xs gap-1 text-destructive hover:bg-destructive/10 border-destructive/30"
+          disabled={checkingDelete}
           onClick={(e) => {
             e.stopPropagation();
-            setShowDeleteOrderDialog(true);
+            void requestDeleteOrder();
           }}
         >
-          <Trash2 className="h-3.5 w-3.5" />
+          {checkingDelete ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
           Excluir
         </Button>
       </div>
@@ -1552,22 +1569,39 @@ function OrderCardDbComponent({ order, onEdit, onDelete, isDragging }: OrderCard
       <AlertDialog open={showDeleteOrderDialog} onOpenChange={setShowDeleteOrderDialog}>
         <AlertDialogContent onClick={(e) => e.stopPropagation()}>
           <AlertDialogHeader>
-            <AlertDialogTitle>Excluir pedido definitivamente?</AlertDialogTitle>
+            <AlertDialogTitle className={deleteBlock ? "flex items-center gap-2" : ""}>
+              {deleteBlock && <AlertTriangle className="h-5 w-5 text-amber-600" />}
+              {deleteBlock ? "Pedido com cobrança em aberto" : "Excluir pedido definitivamente?"}
+            </AlertDialogTitle>
             <AlertDialogDescription>
-              Esta ação apaga o pedido de forma permanente e <strong>não pode ser desfeita</strong>.
-              O link de pagamento já enviado ao cliente vai parar de funcionar
-              (aparecerá "Pedido não encontrado"). Só exclua se tiver certeza de que
-              o cliente não vai mais pagar por este link.
+              {deleteBlock || <>
+                Esta ação apaga o pedido de forma permanente e <strong>não pode ser desfeita</strong>.
+                O link de pagamento já enviado ao cliente vai parar de funcionar. Só exclua se tiver certeza.
+              </>}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              onClick={() => onDelete(order.id)}
-            >
-              Excluir mesmo assim
-            </AlertDialogAction>
+            <AlertDialogCancel>Voltar</AlertDialogCancel>
+            {deleteBlock ? (
+              <AlertDialogAction
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                onClick={() => { void storeMove(order.id, "cancelled"); setDeleteBlock(null); }}
+              >
+                Cancelar pedido
+              </AlertDialogAction>
+            ) : (
+              <AlertDialogAction
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                onClick={async (event) => {
+                  event.preventDefault();
+                  const deleted = await onDelete(order.id);
+                  if (deleted) setShowDeleteOrderDialog(false);
+                  else setDeleteBlock(PENDING_CHARGE_DELETE_MESSAGE);
+                }}
+              >
+                Excluir mesmo assim
+              </AlertDialogAction>
+            )}
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

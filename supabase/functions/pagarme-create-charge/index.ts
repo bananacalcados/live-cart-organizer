@@ -14,6 +14,7 @@ import { resolveAndReservePrize } from "../_shared/prize-discount.ts";
 import { assertNoChargebackBlock } from "../_shared/chargeback-guard.ts";
 import { resolveCardOrder, type CardGateway } from "../_shared/gateway-split.ts";
 import { cachedPaymentResponse } from "../_shared/payment-proof.ts";
+import { categorizeAppmaxTokenizeError, categorizeDecline, friendlyCardFailure, hasGatewayFallback, normalizeFailureCode, type DeclineCategory } from "../_shared/card-failure.ts";
 
 function maskCard(card: any) {
   if (!card) return card;
@@ -54,8 +55,6 @@ function getCorsHeaders(req: Request) {
   };
 }
 
-type DeclineCategory = "risk" | "card_data" | "minimum_amount" | "issuer" | "customer_data" | "unknown";
-
 /**
  * Valida os dígitos verificadores do CPF.
  * CPF errado faz o Pagar.me responder "validation_error | customer | Invalid CPF"
@@ -87,10 +86,6 @@ interface ChargeResult {
   declineCategory?: DeclineCategory;
   /** URL de autenticação 3DS (débito). Cliente precisa concluir o desafio do banco. */
   threeDsUrl?: string;
-}
-
-function normalizeFailureCode(value: unknown) {
-  return String(value || "").trim().toLowerCase();
 }
 
 function getClientIp(req: Request): string | null {
@@ -128,43 +123,6 @@ function humanizeMpError(codeOrMessage: string) {
     default:
       return codeOrMessage || "Cobrança recusada";
   }
-}
-
-function categorizeDecline(codeOrMessage: string): { stopCascade: boolean; declineCategory: DeclineCategory } {
-  const normalized = normalizeFailureCode(codeOrMessage);
-
-  if (!normalized) {
-    return { stopCascade: false, declineCategory: "unknown" };
-  }
-
-  // Dados do cartão genuinamente inválidos → não adianta tentar outro gateway (PARA)
-  if (
-    normalized.includes("bad_filled") ||
-    normalized.includes("código de segurança inválido") || normalized.includes("codigo de seguranca invalido") ||
-    normalized.includes("cartão inválido") || normalized.includes("cartao invalido") ||
-    normalized.includes("número do cartão") || normalized.includes("numero do cartao") ||
-    normalized.includes("data de validade") || normalized.includes("invalid_installments")
-  ) {
-    return { stopCascade: true, declineCategory: "card_data" };
-  }
-
-  // Valor mínimo — erro determinístico (PARA)
-  if (normalized.includes("valor inferior a r$ 5,00") || normalized.includes("parcela 1 possui o valor inferior a r$ 5,00")) {
-    return { stopCascade: true, declineCategory: "minimum_amount" };
-  }
-
-  // Recusa por RISCO/ANTIFRAUDE → a cascata DEVE CONTINUAR.
-  // O antifraude do AppMax é mais flexível; muitos cartões (ex.: virtuais legítimos)
-  // são barrados no MP/Pagar.me mas aprovados no próximo gateway.
-  if (
-    normalized.startsWith("cc_rejected_") ||
-    normalized.includes("análise de segurança") || normalized.includes("analise de seguranca") ||
-    normalized.includes("high_risk") || normalized.includes("antifraud") || normalized.includes("recusado_por_risco")
-  ) {
-    return { stopCascade: false, declineCategory: "risk" };
-  }
-
-  return { stopCascade: false, declineCategory: "unknown" };
 }
 
 async function notifyPaymentConfirmedLocal(orderId: string, gateway: string, transactionId: string) {
@@ -1144,7 +1102,7 @@ async function chargeAppmaxV2(
         success: false,
         gateway: "appmax",
         error: `AppMax v2 tokenize error: ${JSON.stringify(tokData).substring(0, 200)}`,
-        ...categorizeDecline("dados do cartão inválidos"),
+        ...categorizeAppmaxTokenizeError(tokData),
       };
     }
 
@@ -1775,6 +1733,7 @@ serve(withAccessLog("pagarme-create-charge", async (req) => {
     console.log(`[CASCATA] ordem=${split.order.join(" → ")} divisão=${split.splitOn ? `ligada (início: ${split.start})` : "desligada"}`);
 
     result = { success: false, gateway: split.order[0] };
+    let technicalCheckoutError: string | null = null;
     let attempted = 0;
     const gatewaysTried: string[] = [];
     for (const gw of split.order) {
@@ -1895,25 +1854,14 @@ serve(withAccessLog("pagarme-create-charge", async (req) => {
     }
 
     if (!result.success) {
-      if (result.error && !fallbackErrors.some((entry) => entry.includes(result.gateway))) {
+      if (result.error && !hasGatewayFallback(fallbackErrors, result.gateway || "")) {
         fallbackErrors.push(`${result.gateway}: ${result.error}`);
       }
-      // Log detailed errors for debugging, but show a message que reflita o motivo REAL
       console.log(`[ALL-GATEWAYS-FAILED] Errors: ${fallbackErrors.join(" | ")}`);
-      if (!(result.stopCascade && result.error)) {
-        const cause = normalizeFailureCode(mpDeclineRaw || "");
-        if (cause.includes("insufficient_amount") || cause.includes("sem limite")) {
-          result.error = "Seu banco recusou por limite insuficiente para este valor. Tente um número maior de parcelas, outro cartão ou pague no Pix (5% de desconto).";
-        } else if (cause.includes("bad_filled") || cause.includes("código de segurança") || cause.includes("codigo de seguranca") || cause.includes("número do cartão") || cause.includes("numero do cartao") || cause.includes("data de validade")) {
-          result.error = "Confira os dados do cartão (número, validade e código de segurança) e tente de novo.";
-        } else if (cause.includes("high_risk") || cause.includes("risco") || cause.includes("blacklist") || cause.includes("antifraud")) {
-          result.error = "Seu banco não autorizou esta compra por segurança. Ligue para o banco autorizando a compra, use outro cartão ou pague no Pix (5% de desconto).";
-        } else if (cause.includes("call_for_auth") || cause.includes("card_disabled") || cause.includes("cc_rejected_other_reason") || cause.includes("duplicated")) {
-          result.error = "Seu banco não autorizou esta compra. Não é erro de digitação: fale com o banco, use outro cartão ou pague no Pix (5% de desconto).";
-        } else {
-          result.error = "Não conseguimos aprovar o pagamento com este cartão. Tente outro cartão ou pague no Pix (5% de desconto).";
-        }
-      }
+      technicalCheckoutError = result.error || fallbackErrors.join(" | ") || "Todos os gateways recusaram";
+      result.error = friendlyCardFailure(result, mpDeclineRaw);
+      // O detalhe técnico fica somente em pos_checkout_attempts; nunca volta no JSON da cliente.
+      delete result.fallback_errors;
     }
 
     // ── Update processing record with final status ──
@@ -1925,7 +1873,7 @@ serve(withAccessLog("pagarme-create-charge", async (req) => {
         .update({
           status: finalAttemptStatus,
           gateway: result.gateway || null,
-          error_message: result.error || null,
+          error_message: technicalCheckoutError || fallbackErrors.join(" | ") || result.error || null,
           split_start_gateway: split.splitOn ? split.start : null,
           gateways_tried: gatewaysTried.length ? gatewaysTried : null,
           // Motivo da recusa de cada gateway que falhou antes do final (observabilidade da cascata).

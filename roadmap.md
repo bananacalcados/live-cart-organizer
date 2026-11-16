@@ -1,3 +1,10 @@
+# Cinco correções de pagamento/pedido da live (16/11)
+- [ ] Bloquear exclusão de pedido aberto com cobrança e preservar o log existente
+- [ ] Conciliar pagamento de pedido excluído/mesclado ou registrar órfão com resolução segura
+- [ ] Avisar pedido aberto duplicado na mesma live antes de salvar
+- [ ] Deixar erro genérico da AppMax seguir a cascata e remover duplicidade de fallback
+- [ ] Mostrar somente mensagem amigável à cliente; testar sem cobrança real
+
 # Ampliação autorizada das colunas do extrato — Varejo
 - [x] Salvar a configuração original completa dos relatórios da Varejo, sem tocar na PF
 - [x] Ampliar somente as colunas, preservando agendamento, envio, notificações e separadores

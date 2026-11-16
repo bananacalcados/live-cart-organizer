@@ -7,6 +7,7 @@ import { isOrderMarkedPaid, isPaidOrderStage } from '@/lib/orderPaymentStages';
 import { toast } from 'sonner';
 import { Json } from '@/integrations/supabase/types';
 import { changedOrderIds, fetchChangedEventOrders, fetchEventOrderVersions, fetchDbOrderById, mapDbOrder, mergeDbOrder } from './dbOrderRealtime';
+import { getOrderDeletionBlock } from '@/lib/liveOrderDeletion';
 
 // Helper to convert products array to Json type
 const productsToJson = (products: DbOrderProduct[]): Json => {
@@ -43,9 +44,9 @@ interface DbOrderStore {
   orders: DbOrder[];
   isLoading: boolean;
   fetchOrdersByEvent: (eventId: string) => Promise<void>;
-  createOrder: (eventId: string, customer: DbCustomer, products?: DbOrderProduct[]) => Promise<DbOrder | null>;
+  createOrder: (eventId: string, customer: DbCustomer, products?: DbOrderProduct[], options?: { forceNew?: boolean }) => Promise<DbOrder | null>;
   updateOrder: (orderId: string, updates: Partial<DbOrder>) => Promise<void>;
-  deleteOrder: (orderId: string) => Promise<void>;
+  deleteOrder: (orderId: string) => Promise<boolean>;
   moveOrder: (orderId: string, newStage: OrderStage) => void;
   addProductToOrder: (orderId: string, product: DbOrderProduct) => Promise<void>;
   removeProductFromOrder: (orderId: string, productId: string) => Promise<void>;
@@ -107,7 +108,7 @@ export const useDbOrderStore = create<DbOrderStore>()((set, get) => ({
     }
   },
 
-  createOrder: async (eventId, customer, products = []) => {
+  createOrder: async (eventId, customer, products = [], options) => {
     try {
       // If no products, try to auto-fill from event's active product
       if (products.length === 0) {
@@ -161,7 +162,7 @@ export const useDbOrderStore = create<DbOrderStore>()((set, get) => ({
       }
 
       // Unpaid order of the same customer in this event → add items to it (one card per customer)
-      try {
+      if (!options?.forceNew) try {
         const { data: open } = await supabase
           .from('orders')
           .select(`*, customer:customers(*)`)
@@ -349,6 +350,11 @@ export const useDbOrderStore = create<DbOrderStore>()((set, get) => ({
 
   deleteOrder: async (orderId) => {
     try {
+      const block = await getOrderDeletionBlock(orderId);
+      if (block) {
+        toast.error(block);
+        return false;
+      }
       // Find order to get customer phone before deleting
       const order = get().orders.find((o) => o.id === orderId);
       
@@ -380,9 +386,11 @@ export const useDbOrderStore = create<DbOrderStore>()((set, get) => ({
       }));
       
       toast.success('Pedido excluído!');
+      return true;
     } catch (error) {
       console.error('Error deleting order:', error);
-      toast.error('Erro ao excluir pedido');
+      toast.error(error instanceof Error ? error.message : 'Erro ao excluir pedido');
+      return false;
     }
   },
 

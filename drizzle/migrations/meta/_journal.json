@@ -1744,6 +1744,13 @@
       "when": 1794863694714,
       "tag": "0248_support_send_failure_shadow_only",
       "breakpoints": true
+    },
+    {
+      "idx": 249,
+      "version": "7",
+      "when": 1794868554692,
+      "tag": "0249_live_order_delete_guard_and_orphan_payments",
+      "breakpoints": true
     }
   ]
 }

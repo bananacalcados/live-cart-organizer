@@ -6,6 +6,8 @@ import { notifyPaymentConfirmed } from "../_shared/payment-confirmed.ts";
 import { normalizeGatewayPaymentLabel, syncOrderPaymentToPosSale } from "../_shared/payment-method-sync.ts";
 import { mpGetPayment } from "../_shared/mp-http.ts";
 import { type Decision, exactAmountOk, posAmountOk, expectedOrderAmounts, flagReview, isStrictMode, logVerification, observeSignature, orderAmountOk, requestIp, securityEvent } from "../_shared/webhook-verification.ts";
+import { applyMercadoPagoOrderPayment } from "../_shared/mercadopago-order-payment.ts";
+import { processDeletedMercadoPagoPayment } from "../_shared/orphan-payment.ts";
 
 // REGRA DE NEGÓCIO (NÃO REATIVAR SEM AUTORIZAÇÃO DO USUÁRIO):
 // Criação automática de pedidos na Shopify está DESABILITADA em TODAS as situações.
@@ -355,14 +357,25 @@ async function handleMercadoPago(req: Request, supabase: any, supabaseUrl: strin
   if (!order && mpPayment?.external_reference) {
     const externalRef = String(mpPayment.external_reference);
     console.log(`[mercadopago] No order by mp_id. Trying external_reference=${externalRef}`);
+    let mergedFromId: string | null = null;
     const { data: refOrder, error: refOrderErr } = await supabase
       .from("orders")
-      .select("id, is_paid, pickup_store_id, products, discount_type, discount_value, shipping_cost, free_shipping")
+      .select("id, is_paid, pickup_store_id, products, discount_type, discount_value, shipping_cost, free_shipping, merged_into_order_id")
       .eq("id", externalRef)
       .maybeSingle();
 
     if (refOrderErr) console.error("[mercadopago] external_reference order search error:", refOrderErr);
-    if (refOrder) {
+    if (refOrder?.merged_into_order_id) {
+      const { data: mergedTarget } = await supabase.from("orders")
+        .select("id, is_paid, pickup_store_id, products, discount_type, discount_value, shipping_cost, free_shipping")
+        .eq("id", refOrder.merged_into_order_id).maybeSingle();
+      if (mergedTarget) {
+        mergedFromId = refOrder.id;
+        order = mergedTarget;
+        await supabase.from("orders").update({ mercadopago_payment_id: mpIdStr }).eq("id", mergedTarget.id);
+        console.log(`[mercadopago] Reconciled merged order ${refOrder.id} -> ${mergedTarget.id} for mp_id=${mpIdStr}`);
+      }
+    } else if (refOrder) {
       order = refOrder;
       await supabase
         .from("orders")
@@ -394,7 +407,7 @@ async function handleMercadoPago(req: Request, supabase: any, supabaseUrl: strin
     const mpAmount = Number(mpPayment.transaction_amount || 0);
     const extRef = String(mpPayment.external_reference || "");
     const amountOk = expected > 0 && Math.abs(mpAmount - expected) < 0.01;
-    const refOk = extRef === order.id;
+    const refOk = extRef === order.id || (!!mergedFromId && extRef === mergedFromId);
 
     // Regra nova: valor (tolerância do pedido) E referência/ID.
     const idOk = refOk || foundByMpId;
@@ -436,115 +449,8 @@ async function handleMercadoPago(req: Request, supabase: any, supabaseUrl: strin
     }
 
 
-    const mpTypeId = String(mpPayment.payment_type_id || "");
-    const mpMethodId = String(mpPayment.payment_method_id || "");
-    const inst = Number(mpPayment.installments || 1);
-    const payLabel = normalizeGatewayPaymentLabel({
-      gateway: "mercadopago",
-      paymentTypeId: mpTypeId,
-      paymentMethodId: mpMethodId,
-      installments: inst,
-    }) || "PIX";
-    const paidAt = new Date().toISOString();
-
-    const { error } = await supabase
-      .from("orders")
-      .update({
-        is_paid: true, payment_confirmed_source: 'gateway_webhook',
-        paid_at: paidAt,
-        stage: "paid",
-        payment_method_label: payLabel,
-        installments: inst,
-        notes: `🔔 Webhook MercadoPago: PIX aprovado (${mpIdStr})`,
-      })
-      .eq("id", order.id);
-
-    if (error) {
-      console.error("Error updating order:", error);
-    } else {
-      console.log(`[mercadopago] Order ${order.id} marked as paid via webhook`);
-      updated = true;
-
-      await syncOrderPaymentToPosSale(supabase, {
-        orderId: order.id,
-        paymentMethodLabel: payLabel,
-        installments: inst,
-        paymentGateway: "mercadopago",
-        transactionField: "mercadopago_payment_id",
-        transactionValue: mpIdStr,
-        paidAt,
-      });
-
-      // Deactivate AI session and send payment confirmation to customer
-      try {
-        const { data: sessions } = await supabase
-          .from('automation_ai_sessions')
-          .select('phone, whatsapp_number_id')
-          .eq('is_active', true)
-          .like('prompt', `livete_checkout:${order.id}`);
-
-        if (sessions && sessions.length > 0) {
-          const sess = sessions[0];
-          // Deactivate session
-          await supabase
-            .from('automation_ai_sessions')
-            .update({ is_active: false, updated_at: new Date().toISOString() })
-            .eq('is_active', true)
-            .like('prompt', `livete_checkout:${order.id}`);
-
-          // Send payment confirmed message
-          if (sess.phone && sess.whatsapp_number_id) {
-            const confirmMsg = `✅ *Pagamento confirmado!* 🎉\n\nRecebemos seu pagamento com sucesso! Seu pedido já está sendo preparado.\n\nMuito obrigada pela compra! 💛🍌`;
-            
-            const { data: wnData } = await supabase
-              .from('whatsapp_numbers')
-              .select('provider, phone_number_id')
-              .eq('id', sess.whatsapp_number_id)
-              .single();
-
-            if (wnData?.provider === 'meta' && wnData?.phone_number_id) {
-              await fetch(`${supabaseUrl}/functions/v1/meta-whatsapp-send`, {
-                method: 'POST',
-                headers: { 'Authorization': `Bearer ${supabaseKey}`, 'Content-Type': 'application/json' },
-                body: JSON.stringify({ phone: sess.phone, message: confirmMsg, whatsappNumberId: sess.whatsapp_number_id }),
-              });
-            } else {
-              await fetch(`${supabaseUrl}/functions/v1/zapi-send-message`, {
-                method: 'POST',
-                headers: { 'Authorization': `Bearer ${supabaseKey}`, 'Content-Type': 'application/json' },
-                body: JSON.stringify({ phone: sess.phone, message: confirmMsg, whatsapp_number_id: sess.whatsapp_number_id }),
-              });
-            }
-
-            await supabase.from('whatsapp_messages').insert({
-              phone: sess.phone, message: confirmMsg, direction: 'outgoing', status: 'sent',
-              whatsapp_number_id: sess.whatsapp_number_id,
-            });
-
-            console.log(`[mercadopago] Payment confirmation sent to ${sess.phone}`);
-          }
-        }
-      } catch (aiErr) {
-        console.error('[mercadopago] AI session cleanup error (non-blocking):', aiErr);
-      }
-
-      // Notify payment confirmed
-      let lojaName = "centro";
-      if (order.pickup_store_id) {
-        const { data: storeData } = await supabase
-          .from("pos_stores")
-          .select("name")
-          .eq("id", order.pickup_store_id)
-          .single();
-        if (storeData?.name) lojaName = storeData.name.toLowerCase();
-      }
-      await notifyPaymentConfirmed({
-        pedido_id: order.id,
-        loja: lojaName,
-        gateway: "mercadopago",
-        transaction_id: mpIdStr,
-        source: "mercadopago-webhook",
-      });
+    const applied = await applyMercadoPagoOrderPayment(supabase, supabaseUrl, supabaseKey, order, mpPayment);
+    updated = applied.updated;
 
       // Auto-create Shopify order DISABLED — user wants manual control
       // await autoCreateShopifyOrder(supabase, order.id, "orders", supabaseUrl, supabaseKey);
@@ -623,7 +529,15 @@ async function handleMercadoPago(req: Request, supabase: any, supabaseUrl: strin
         // Tiny order creation is now MANUAL ONLY (via the "Enviar/Reenviar ao Tiny" button).
       }
     } else {
-      console.log(`[mercadopago] No order found for mercadopago_payment_id=${mpIdStr}`);
+      const recovered = await processDeletedMercadoPagoPayment(supabase, supabaseUrl, supabaseKey, mpPayment);
+      if (recovered.reconciled && recovered.orderId) {
+        orderId = recovered.orderId;
+        order = { id: recovered.orderId, is_paid: true, pickup_store_id: null };
+        updated = true;
+        console.log(`[mercadopago] Deleted/merged payment reconciled to order ${orderId}`);
+      } else {
+        console.warn(`[mercadopago] Payment kept for manual reconciliation: mp_id=${mpIdStr} orphan=${recovered.orphanId || "unknown"} reason=${recovered.reason || "resolved"}`);
+      }
     }
   }
 
