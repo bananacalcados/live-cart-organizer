@@ -112,7 +112,7 @@ export function codeIntentDirectConfirmBlocked(
  * (kind='add' ou carrinho aberto encontrado) ou cria um pedido novo. Recalcula
  * preço, frete e cashback pelo compute com TODOS os itens do carrinho resultante.
  */
-export async function confirmCodeIntentOrder(eventId: string, intent: CodeIntentLike, newProducts: DbOrderProduct[], by: string): Promise<string> {
+export async function confirmCodeIntentOrder(eventId: string, intent: CodeIntentLike, newProducts: DbOrderProduct[], by: string, options: { forceNew?: boolean; targetOrderId?: string } = {}): Promise<string> {
   const username = intent.username.replace(/^@/, "");
   const phone = intent.phone || null;
 
@@ -136,11 +136,12 @@ export async function confirmCodeIntentOrder(eventId: string, intent: CodeIntent
 
   // R1: nunca um segundo carrinho para quem já tem carrinho não pago nesta live.
   let targetId: string | null = null;
-  if (intent.target_order_id) {
-    const { data: t } = await db.from("orders").select("id,is_paid,stage,merged_into_order_id").eq("id", intent.target_order_id).maybeSingle();
+  const requestedTargetId = options.targetOrderId || (!options.forceNew ? intent.target_order_id : null);
+  if (requestedTargetId) {
+    const { data: t } = await db.from("orders").select("id,is_paid,stage,merged_into_order_id").eq("id", requestedTargetId).maybeSingle();
     if (t && !t.is_paid && !["cancelled", "paid", "shipped", "completed"].includes(t.stage) && !t.merged_into_order_id) targetId = t.id;
   }
-  if (!targetId) targetId = pre.cond.open_order_id || null;
+  if (!targetId && !options.forceNew) targetId = pre.cond.open_order_id || null;
 
   let orderId: string;
   if (targetId) {
@@ -163,7 +164,7 @@ export async function confirmCodeIntentOrder(eventId: string, intent: CodeIntent
     const wa = phone ? normalizeBRPhone(phone) : undefined;
     const customer = await useCustomerStore.getState().createOrUpdateCustomer(username, wa);
     if (!customer) throw new Error("Não foi possível criar o cliente");
-    const created = await useDbOrderStore.getState().createOrder(eventId, customer, pre.products);
+    const created = await useDbOrderStore.getState().createOrder(eventId, customer, pre.products, { forceNew: options.forceNew });
     if (!created) throw new Error("Não foi possível criar o pedido");
     const patch: Record<string, unknown> = {
       free_shipping: pre.cond.free_shipping,

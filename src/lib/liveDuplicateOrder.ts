@@ -3,7 +3,9 @@ import type { DbOrder } from "@/types/database";
 
 export function livePhoneKey(value?: string | null): string {
   const digits = String(value || "").replace(/\D/g, "");
-  return digits.length >= 10 ? digits.slice(-10) : "";
+  const withoutCountry = digits.startsWith("55") && (digits.length === 12 || digits.length === 13) ? digits.slice(2) : digits;
+  const local = withoutCountry.slice(-11);
+  return local.length >= 10 ? `${local.slice(0, 2)}${local.slice(-8)}` : "";
 }
 
 export function liveHandleKey(value?: string | null): string {
@@ -36,7 +38,7 @@ export async function findDuplicateLiveOrder(eventId: string, input: DuplicateId
   if (!livePhoneKey(input.whatsapp) && !(liveHandleKey(input.instagramHandle) && String(input.phoneLast4 || "").length === 4)) return null;
   const { data, error } = await supabase
     .from("orders")
-    .select("*,customer:customers(*)")
+    .select("id,event_id,customer_id,stage,products,is_paid,paid_externally,merged_into_order_id,discount_type,discount_value,free_shipping,shipping_cost,created_at,updated_at,phone_last4,customer:customers(id,instagram_handle,whatsapp)")
     .eq("event_id", eventId)
     .eq("is_paid", false)
     .is("merged_into_order_id", null)

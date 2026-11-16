@@ -1861,7 +1861,6 @@ serve(withAccessLog("pagarme-create-charge", async (req) => {
       technicalCheckoutError = result.error || fallbackErrors.join(" | ") || "Todos os gateways recusaram";
       result.error = friendlyCardFailure(result, mpDeclineRaw);
       // O detalhe técnico fica somente em pos_checkout_attempts; nunca volta no JSON da cliente.
-      delete result.fallback_errors;
     }
 
     // ── Update processing record with final status ──

@@ -65,7 +65,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Link2Off, RefreshCw, Trash, Radio, Shuffle } from "lucide-react";
 import { useEventStore } from "@/stores/eventStore";
 import { SelfServiceStageBadge } from "@/components/events/SelfServiceStageBadge";
-import { getOrderDeletionBlock, PENDING_CHARGE_DELETE_MESSAGE } from "@/lib/liveOrderDeletion";
+import { getOrderDeletionBlock } from "@/lib/liveOrderDeletion";
 
 interface OrderCardDbProps {
   order: DbOrder;
@@ -1596,7 +1596,7 @@ function OrderCardDbComponent({ order, onEdit, onDelete, isDragging }: OrderCard
                   event.preventDefault();
                   const deleted = await onDelete(order.id);
                   if (deleted) setShowDeleteOrderDialog(false);
-                  else setDeleteBlock(PENDING_CHARGE_DELETE_MESSAGE);
+                  else setShowDeleteOrderDialog(false);
                 }}
               >
                 Excluir mesmo assim

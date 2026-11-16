@@ -5,7 +5,9 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-
 const digits = (value: unknown) => String(value || "").replace(/\D/g, "");
 export const orphanPhoneKey = (value: unknown) => {
   const d = digits(value);
-  return d.length >= 10 ? d.slice(-10) : "";
+  const withoutCountry = d.startsWith("55") && (d.length === 12 || d.length === 13) ? d.slice(2) : d;
+  const local = withoutCountry.slice(-11);
+  return local.length >= 10 ? `${local.slice(0, 2)}${local.slice(-8)}` : "";
 };
 const last4 = (value: unknown) => digits(value).slice(-4);
 const handle = (value: unknown) => String(value || "").trim().replace(/^@+/, "").toLowerCase();
@@ -86,10 +88,14 @@ export async function processDeletedMercadoPagoPayment(
   let candidates: OrphanCandidate[] = [];
   let expected: { base: number; min: number } | null = null;
   if (deleted) {
-    const { data: oldCustomer } = await supabase.from("customers").select("instagram_handle,whatsapp").eq("id", deleted.customer_id).maybeSingle();
+    let oldCustomer: any = null;
+    if (deleted.customer_id) {
+      const { data } = await supabase.from("customers").select("instagram_handle,whatsapp").eq("id", deleted.customer_id).maybeSingle();
+      oldCustomer = data || null;
+    }
     const snapshot = { ...((deleted.snapshot || {}) as Record<string, unknown>), customer_id: deleted.customer_id, event_id: deleted.event_id };
     const { data: openOrders } = await supabase.from("orders")
-      .select("*,customer:customers(instagram_handle,whatsapp)")
+      .select("id,event_id,customer_id,is_paid,stage,merged_into_order_id,phone_last4,pickup_store_id,customer:customers(instagram_handle,whatsapp)")
       .eq("event_id", deleted.event_id).eq("is_paid", false).is("merged_into_order_id", null)
       .neq("stage", "cancelled").order("created_at", { ascending: false }).limit(200);
     candidates = deletedPaymentCandidates((openOrders || []) as OrphanCandidate[], snapshot, oldCustomer);
@@ -147,7 +153,7 @@ export async function resolveOrphanPaymentForStaff(
   }
   if (orphan.gateway !== "mercadopago") throw new Error("Este gateway ainda não permite vinculação pela tela");
 
-  const { data: order, error: orderError } = await supabase.from("orders").select("*,customer:customers(instagram_handle,whatsapp)").eq("id", orderId).single();
+  const { data: order, error: orderError } = await supabase.from("orders").select("id,event_id,customer_id,is_paid,stage,merged_into_order_id,pickup_store_id,customer:customers(instagram_handle,whatsapp)").eq("id", orderId).single();
   if (orderError || !order) throw new Error("Pedido não encontrado");
   if (order.is_paid || order.stage === "cancelled" || order.merged_into_order_id) throw new Error("Escolha um pedido aberto e não pago");
   if (orphan.event_id && order.event_id !== orphan.event_id) throw new Error("O pedido precisa ser da mesma live");

@@ -341,6 +341,7 @@ async function handleMercadoPago(req: Request, supabase: any, supabaseUrl: strin
   // so paid event orders never stay stuck in "contacted".
   let updated = false;
   let orderId: string | null = null;
+  let mergedFromId: string | null = null;
 
   // Try orders first — use .filter() with raw SQL-like syntax to avoid PostgREST cache quirks
   console.log(`[mercadopago] Searching for order with mercadopago_payment_id=${mpIdStr}`);
@@ -357,7 +358,6 @@ async function handleMercadoPago(req: Request, supabase: any, supabaseUrl: strin
   if (!order && mpPayment?.external_reference) {
     const externalRef = String(mpPayment.external_reference);
     console.log(`[mercadopago] No order by mp_id. Trying external_reference=${externalRef}`);
-    let mergedFromId: string | null = null;
     const { data: refOrder, error: refOrderErr } = await supabase
       .from("orders")
       .select("id, is_paid, pickup_store_id, products, discount_type, discount_value, shipping_cost, free_shipping, merged_into_order_id")
@@ -452,9 +452,8 @@ async function handleMercadoPago(req: Request, supabase: any, supabaseUrl: strin
     const applied = await applyMercadoPagoOrderPayment(supabase, supabaseUrl, supabaseKey, order, mpPayment);
     updated = applied.updated;
 
-      // Auto-create Shopify order DISABLED — user wants manual control
-      // await autoCreateShopifyOrder(supabase, order.id, "orders", supabaseUrl, supabaseKey);
-    }
+    // Auto-create Shopify order DISABLED — user wants manual control
+    // await autoCreateShopifyOrder(supabase, order.id, "orders", supabaseUrl, supabaseKey);
   }
   let sale: any = null;
   if (!order) {

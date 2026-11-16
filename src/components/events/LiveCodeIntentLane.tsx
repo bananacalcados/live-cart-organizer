@@ -3,7 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
 import { Instagram, Plus, Hash, X, Check, Loader2 } from "lucide-react";
 import { format } from "date-fns";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -14,6 +14,8 @@ import { fetchProducts, getVariantImage } from "@/lib/shopify";
 import type { DbOrder } from "@/types/database";
 import { useDbOrderStore } from "@/stores/dbOrderStore";
 import { codeIntentDirectConfirmBlocked, computeLiveConditions, conditionsSummary, confirmCodeIntentOrder, mergeProducts, type LiveConditions } from "@/lib/liveCodeOrder";
+import { findDuplicateLiveOrder } from "@/lib/liveDuplicateOrder";
+import { getOrderFinalValue } from "@/lib/orderTotal";
 
 const db = supabase as any;
 const brl = (v?: number | null) => (v == null ? "" : Number(v).toLocaleString("pt-BR", { style: "currency", currency: "BRL" }));
@@ -227,7 +229,8 @@ export function LiveCodeIntentCards({ eventId }: { eventId: string }) {
   }, [active?.id, orderOpen, catalog, shopifyHits]);
 
   const [confirming, setConfirming] = useState<string | null>(null);
-  const confirmDirect = async (r: CodeIntent) => {
+  const [duplicateConfirm, setDuplicateConfirm] = useState<{ intent: CodeIntent; products: DbOrderProduct[]; order: DbOrder } | null>(null);
+  const confirmDirect = async (r: CodeIntent, resolvedProducts?: DbOrderProduct[], duplicateAction: "add" | "new" | null = null, duplicateTarget: DbOrder | null = null) => {
     if (confirming) return;
     setConfirming(r.id);
     try {
@@ -236,15 +239,26 @@ export function LiveCodeIntentCards({ eventId }: { eventId: string }) {
         const { data } = await db.from("event_catalog_products").select("shopify_product_id,title,image_url,offer_price,original_price,variants").eq("event_id", eventId).limit(200);
         cat = (data || []) as CatalogRow[]; setCatalog(cat);
       }
-      const hits = await lookupShopifyHits(r, cat);
-      const { products, missing } = resolveIntent(r, cat, hits);
+      const hits = resolvedProducts ? {} : await lookupShopifyHits(r, cat);
+      const { products: foundProducts, missing } = resolveIntent(r, cat, hits);
+      const products = resolvedProducts || foundProducts;
       if (missing.length > 0 || products.length === 0) {
         toast.warning("Algum item não foi localizado — confira no carrinho.");
         setOpenId(r.id); setOrderOpen(true);
         return;
       }
-      const orderId = await confirmCodeIntentOrder(eventId, r, products, await currentUserName());
-      toast.success(r.kind === "add" ? `Itens adicionados ao carrinho #${orderId.slice(-4)}` : "Pedido criado");
+      if (!duplicateAction && r.kind !== "add" && !r.target_order_id) {
+        const duplicate = await findDuplicateLiveOrder(eventId, { whatsapp: r.phone, phoneLast4: r.phone_last4, instagramHandle: r.username });
+        if (duplicate) {
+          setDuplicateConfirm({ intent: r, products, order: duplicate });
+          return;
+        }
+      }
+      const orderId = await confirmCodeIntentOrder(eventId, r, products, await currentUserName(), {
+        forceNew: duplicateAction === "new",
+        targetOrderId: duplicateAction === "add" ? duplicateTarget?.id : undefined,
+      });
+      toast.success(r.kind === "add" || duplicateAction === "add" ? `Itens adicionados ao carrinho #${orderId.slice(-4)}` : "Pedido criado");
       load();
     } catch (e: any) {
       toast.error(`Não foi possível confirmar: ${e?.message || e}`);
@@ -340,7 +354,7 @@ export function LiveCodeIntentCards({ eventId }: { eventId: string }) {
               className="h-7 gap-1 text-xs"
               disabled={r.status !== "ready" || confirming === r.id || shopifyBlocked(r)}
               title={shopifyBlocked(r) ? "Item fora da Shopify: abra o card e resolva manualmente" : undefined}
-              onClick={(e) => { e.stopPropagation(); confirmDirect(r); }}
+              onClick={(e) => { e.stopPropagation(); void confirmDirect(r); }}
             >
               {confirming === r.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <Check className="h-3 w-3" />} Confirmar
             </Button>
@@ -422,6 +436,31 @@ export function LiveCodeIntentCards({ eventId }: { eventId: string }) {
               )}
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!duplicateConfirm} onOpenChange={(open) => { if (!open) setDuplicateConfirm(null); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Pedido aberto para esta cliente</DialogTitle>
+            <DialogDescription>
+              Esta cliente já tem um pedido aberto nesta live (@{duplicateConfirm?.order.customer?.instagram_handle?.replace(/^@+/, "") || duplicateConfirm?.intent.username} — {duplicateConfirm ? getOrderFinalValue(duplicateConfirm.order).toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) : ""}). Adicionar os itens a ele?
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={async () => {
+              if (!duplicateConfirm) return;
+              const current = duplicateConfirm;
+              setDuplicateConfirm(null);
+              await confirmDirect(current.intent, current.products, "new");
+            }}>Criar outro mesmo assim</Button>
+            <Button onClick={async () => {
+              if (!duplicateConfirm) return;
+              const current = duplicateConfirm;
+              setDuplicateConfirm(null);
+              await confirmDirect(current.intent, current.products, "add", current.order);
+            }}>Adicionar ao pedido existente</Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </>

@@ -645,7 +645,7 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId, prefi
     return out;
   };
 
-  const handleSubmit = async (forceChargeback = false, duplicateAction: "add" | "new" | null = null) => {
+  const handleSubmit = async (forceChargeback = false, duplicateAction: "add" | "new" | null = null, duplicateTarget: DbOrder | null = duplicateOrder) => {
     if (isSubmitting) return;
     const nameWords = fullName.trim().split(/\s+/).filter(Boolean);
     const hasValidFullName = nameWords.length >= 2;
@@ -791,10 +791,12 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId, prefi
 
         // Check for existing active order in this event
         let activeOrder = duplicateAction === "new" ? null : findActiveOrderByCustomer(eventId, newCustomer.id);
-        if (duplicateAction === "add" && duplicateOrder) {
+        if (duplicateAction === "add" && duplicateTarget) {
           await useDbOrderStore.getState().fetchOrdersByEvent(eventId);
-          activeOrder = useDbOrderStore.getState().orders.find((order) => order.id === duplicateOrder.id) || null;
-          if (!activeOrder) throw new Error("O pedido existente não pôde ser carregado. Tente novamente.");
+          activeOrder = useDbOrderStore.getState().orders.find((order) => order.id === duplicateTarget.id) || null;
+          if (!activeOrder || activeOrder.is_paid || activeOrder.stage === "cancelled" || activeOrder.merged_into_order_id) {
+            throw new Error("O pedido existente não está mais aberto. Tente novamente.");
+          }
         }
         if (!activeOrder && duplicateAction !== "new") {
           // A lista da tela pode estar desatualizada: confere no banco antes de criar outro pedido.
@@ -1732,7 +1734,7 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId, prefi
             <AlertDialogCancel onClick={() => { setDuplicateOrder(null); setTimeout(() => handleSubmit(true, "new"), 0); }}>
               Criar outro mesmo assim
             </AlertDialogCancel>
-            <AlertDialogAction onClick={() => setTimeout(() => handleSubmit(true, "add"), 0)}>
+            <AlertDialogAction onClick={() => setTimeout(() => handleSubmit(true, "add", duplicateOrder), 0)}>
               Adicionar ao pedido existente
             </AlertDialogAction>
           </AlertDialogFooter>

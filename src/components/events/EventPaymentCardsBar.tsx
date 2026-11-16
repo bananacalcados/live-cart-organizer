@@ -58,6 +58,18 @@ interface SplitInfo {
 
 const brl = (n: number) => n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
+interface OrphanPayment {
+  id: string;
+  payment_id: string;
+  external_reference: string | null;
+  amount: number;
+  payer_name: string | null;
+  payer_email: string | null;
+  payer_phone: string | null;
+  created_at: string;
+  status: "open" | "resolved";
+}
+
 interface FailedAttempt {
   id: string;
   sale_id: string;
@@ -156,6 +168,10 @@ export function EventPaymentCardsBar({ orders: originalOrders, lanes = false, ev
   const [igOpen, setIgOpen] = useState(false);
 
   const [failedAttempts, setFailedAttempts] = useState<FailedAttempt[]>([]);
+  const [orphanPayments, setOrphanPayments] = useState<OrphanPayment[]>([]);
+  const [orphanResolve, setOrphanResolve] = useState<OrphanPayment | null>(null);
+  const [orphanOrderId, setOrphanOrderId] = useState("");
+  const [resolvingOrphan, setResolvingOrphan] = useState(false);
   const [errorsOpen, setErrorsOpen] = useState(false);
   const [loadingErrors, setLoadingErrors] = useState(false);
 
@@ -386,10 +402,6 @@ export function EventPaymentCardsBar({ orders: originalOrders, lanes = false, ev
   };
 
   const loadErrors = useCallback(async () => {
-    if (orderIds.length === 0) {
-      setFailedAttempts([]);
-      return;
-    }
     setLoadingErrors(true);
     try {
       const batchSize = 100;
@@ -406,16 +418,68 @@ export function EventPaymentCardsBar({ orders: originalOrders, lanes = false, ev
       }
       all.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
       setFailedAttempts(all);
+      if (eventId) {
+        const { data: orphans, error: orphanError } = await supabase
+          .from("orphan_payments")
+          .select("id,payment_id,external_reference,amount,payer_name,payer_email,payer_phone,created_at,status")
+          .eq("event_id", eventId).eq("status", "open")
+          .order("created_at", { ascending: false }).limit(50);
+        if (orphanError) throw orphanError;
+        setOrphanPayments((orphans || []) as OrphanPayment[]);
+      } else setOrphanPayments([]);
     } catch (err) {
       console.error("Erro ao carregar erros de pagamento:", err);
     } finally {
       setLoadingErrors(false);
     }
-  }, [orderIds]);
+  }, [orderIds, eventId]);
 
   useEffect(() => {
     if (filter === "errors" || lanes) loadErrors();
   }, [filter, lanes, loadErrors]);
+
+  const orphanOrderCandidates = useMemo(() => originalOrders.filter((order) =>
+    !isOrderMarkedPaid(order) && order.stage !== "cancelled" && !order.merged_into_order_id,
+  ), [originalOrders]);
+
+  const resolveOrphan = async () => {
+    if (!orphanResolve || !orphanOrderId || resolvingOrphan) return;
+    setResolvingOrphan(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("live-orphan-payment-resolve", {
+        body: { orphanId: orphanResolve.id, orderId: orphanOrderId },
+      });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      toast.success("Pagamento vinculado e pedido confirmado");
+      setOrphanResolve(null);
+      setOrphanOrderId("");
+      await loadErrors();
+      refreshOrders();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Não foi possível vincular o pagamento");
+    } finally {
+      setResolvingOrphan(false);
+    }
+  };
+
+  const renderOrphanPayments = () => orphanPayments.length > 0 && (
+    <div className="mb-3 space-y-2 rounded-lg border border-amber-400/60 bg-amber-400/10 p-2">
+      <div className="text-xs font-bold text-amber-700 dark:text-amber-300">Pagamento recebido sem pedido — vincule manualmente</div>
+      {orphanPayments.map((payment) => (
+        <button
+          key={payment.id}
+          type="button"
+          onClick={() => { setOrphanOrderId(""); setOrphanResolve(payment); }}
+          className="flex w-full flex-col gap-0.5 rounded-md border border-amber-500/40 bg-card px-3 py-2 text-left hover:bg-accent"
+        >
+          <span className="text-xs font-semibold">{brl(Number(payment.amount))} — {payment.payer_name || "Pagador não identificado"}</span>
+          <span className="text-[11px] text-muted-foreground">Pedido excluído · {payment.external_reference || payment.payment_id}</span>
+          <span className="text-[11px] font-semibold text-amber-700 dark:text-amber-300">Clique para vincular a um pedido</span>
+        </button>
+      ))}
+    </div>
+  );
 
   // ── Load team-shared pins for the currently listed orders ──
   const loadPins = useCallback(async () => {
@@ -1031,9 +1095,9 @@ export function EventPaymentCardsBar({ orders: originalOrders, lanes = false, ev
               >
                 <AlertCircle className="h-3.5 w-3.5" />
                 Erros de Pagamento
-                {failedAttempts.length > 0 && (
+                {failedAttempts.length + orphanPayments.length > 0 && (
                   <span className="rounded-full bg-red-600 px-1.5 py-0.5 text-[10px] font-bold text-white">
-                    {failedAttempts.length}
+                    {failedAttempts.length + orphanPayments.length}
                   </span>
                 )}
               </Button>
@@ -1260,14 +1324,14 @@ export function EventPaymentCardsBar({ orders: originalOrders, lanes = false, ev
             >
               <AlertCircle className="h-3.5 w-3.5" />
               Erros de Pagamento
-              {failedAttempts.length > 0 && (
+              {failedAttempts.length + orphanPayments.length > 0 && (
                 <span
                   className={cn(
                     "px-1.5 py-0.5 rounded-full text-[10px] font-bold",
                     filter === "errors" ? "bg-white text-red-900" : "bg-red-900/20",
                   )}
                 >
-                  {failedAttempts.length}
+                  {failedAttempts.length + orphanPayments.length}
                 </span>
               )}
             </button>
@@ -1288,11 +1352,12 @@ export function EventPaymentCardsBar({ orders: originalOrders, lanes = false, ev
                   Atualizar
                 </button>
               </div>
-              {loadingErrors && failedAttempts.length === 0 ? (
+              {renderOrphanPayments()}
+              {loadingErrors && failedAttempts.length === 0 && orphanPayments.length === 0 ? (
                 <div className="text-xs text-red-200 py-2 px-1">Carregando erros de pagamento...</div>
               ) : failedAttempts.length === 0 ? (
                 <div className="text-xs text-red-200 py-2 px-1">
-                  Nenhum erro de pagamento registrado neste evento.
+                  Nenhuma tentativa de pagamento recusada neste evento.
                 </div>
               ) : (
                 <div className="flex items-stretch gap-2 overflow-x-auto pb-1 scrollbar-thin">
@@ -1353,8 +1418,9 @@ export function EventPaymentCardsBar({ orders: originalOrders, lanes = false, ev
             <DialogHeader>
               <DialogTitle>Erros de pagamento neste evento</DialogTitle>
             </DialogHeader>
+            {renderOrphanPayments()}
             {failedAttempts.length === 0 ? (
-              <p className="py-4 text-sm text-muted-foreground">Nenhum erro de pagamento registrado.</p>
+              <p className="py-4 text-sm text-muted-foreground">Nenhuma tentativa de pagamento recusada.</p>
             ) : (
               <div className="max-h-[60vh] space-y-2 overflow-y-auto">
                 {failedAttempts.map((att) => (
@@ -1384,6 +1450,44 @@ export function EventPaymentCardsBar({ orders: originalOrders, lanes = false, ev
           </DialogContent>
         </Dialog>
 
+        <Dialog open={!!orphanResolve} onOpenChange={(open) => { if (!open && !resolvingOrphan) setOrphanResolve(null); }}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>Vincular pagamento ao pedido</DialogTitle>
+            </DialogHeader>
+            {orphanResolve && (
+              <div className="space-y-3 text-sm">
+                <div className="rounded-md border bg-muted/30 p-3">
+                  <div className="font-bold">{brl(Number(orphanResolve.amount))}</div>
+                  <div className="text-muted-foreground">{orphanResolve.payer_name || orphanResolve.payer_email || "Pagador não identificado"}</div>
+                  <div className="mt-1 break-all text-xs text-muted-foreground">Ref.: {orphanResolve.external_reference || orphanResolve.payment_id}</div>
+                </div>
+                <label className="block space-y-1">
+                  <span className="text-xs font-semibold">Pedido aberto desta live</span>
+                  <select
+                    className="w-full rounded-md border bg-background px-3 py-2 text-sm"
+                    value={orphanOrderId}
+                    onChange={(event) => setOrphanOrderId(event.target.value)}
+                  >
+                    <option value="">Selecione o pedido</option>
+                    {orphanOrderCandidates.map((order) => (
+                      <option key={order.id} value={order.id}>
+                        @{order.customer?.instagram_handle?.replace(/^@+/, "") || "sem instagram"} — {brl(getOrderFinalValue(order))} — #{order.id.slice(-4)}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <p className="text-xs text-muted-foreground">O sistema confere novamente a live, o valor e se o pagamento já foi usado antes de confirmar.</p>
+              </div>
+            )}
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setOrphanResolve(null)} disabled={resolvingOrphan}>Voltar</Button>
+              <Button onClick={resolveOrphan} disabled={!orphanOrderId || resolvingOrphan}>
+                {resolvingOrphan ? "Vinculando..." : "Vincular e marcar pago"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
       </div>
 
