@@ -126,6 +126,13 @@ function provider(cfg: GatewayConfig) {
 }
 const reasoningOpts = { store: false, forceReasoning: true, reasoningEffort: "low", reasoningSummary: "auto", include: ["reasoning.encrypted_content"] };
 
+/** Prefer the real provider/reservation cause over the SDK's generic "No output generated". */
+function realError(cfg: GatewayConfig, e: unknown): string {
+  const sdk = String((e as Error)?.message || e);
+  const real = (cfg.guardedFetch as any)?.lastError?.() as string | null | undefined;
+  return (real && !sdk.includes(real) ? `${real} | ${sdk}` : sdk).slice(0, 400);
+}
+
 async function usage(result: any) {
   try { const u = await result.totalUsage; return { inTok: u?.inputTokens, outTok: u?.outputTokens }; } catch { return {}; }
 }
@@ -200,7 +207,7 @@ export async function runTriage(cfg: GatewayConfig, model: string, conv: ConvMes
     log({ kind: "triagem", model, ok: true, ms: Date.now() - t0, ...(await usage(result)) });
     return out;
   } catch (e) {
-    log({ kind: "triagem", model, ok: false, error: String((e as Error)?.message || e).slice(0, 400), ms: Date.now() - t0 });
+    log({ kind: "triagem", model, ok: false, error: realError(cfg, e), ms: Date.now() - t0 });
     throw e;
   }
 }
@@ -499,7 +506,7 @@ CONTEXTO DO SISTEMA (não invente nada além disso):
     out.text = trackUrl ? out.text.replaceAll("{{rastreio}}", trackUrl) : out.text.replaceAll("{{rastreio}}", "").trim();
     return out;
   } catch (e) {
-    log({ kind: "agente", model, ok: false, error: String((e as Error)?.message || e).slice(0, 400), ms: Date.now() - t0 });
+    log({ kind: "agente", model, ok: false, error: realError(cfg, e), ms: Date.now() - t0 });
     throw e;
   }
 }

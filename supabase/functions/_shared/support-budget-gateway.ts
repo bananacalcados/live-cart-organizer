@@ -1,12 +1,15 @@
 import { requestTokenReservation } from "./support-cost.ts";
 
 // Each actual HTTP request, including SDK retries/tool continuations, needs an atomic reservation.
-export function budgetGateway(sb: any, meta: { id: string; phone: string; number: string | null }, kind: string) {
-  return async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+export type BudgetFetch = typeof fetch & { lastError: () => string | null };
+// The SDK hides the real cause behind "No output generated"; keep the last refusal/HTTP error to log it.
+export function budgetGateway(sb: any, meta: { id: string; phone: string; number: string | null }, kind: string): BudgetFetch {
+  let lastError: string | null = null;
+  const fn = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
     const body = String(init?.body ?? "{}");
     const parsed = JSON.parse(body);
     const { data: reserve, error } = await sb.rpc("support_cost_reserve", { p_suggestion: meta.id, p_phone: meta.phone, p_number: meta.number, p_kind: kind, p_model: parsed.model, p_tokens: requestTokenReservation(body) });
-    if (error || !reserve?.allowed) throw new Error(reserve?.reason ?? "reserva_de_tokens_indisponivel");
+    if (error || !reserve?.allowed) { lastError = `reserva_recusada: ${String(reserve?.reason ?? error?.message ?? "indisponivel")}`.slice(0, 400); throw new Error(lastError); }
     const settle = (i: number | null, o: number | null, ok: boolean, message: string | null, run: string | null) => sb.rpc("support_cost_settle", { p_id: reserve.id, p_input: i, p_output: o, p_ok: ok, p_error: message, p_run: run });
     try {
       const response = await fetch(input, init);
@@ -14,6 +17,7 @@ export function budgetGateway(sb: any, meta: { id: string; phone: string; number
       if (!response.ok) {
         const payload = await response.clone().json().catch(() => ({}));
         const message = String(payload.message ?? payload.error?.message ?? `IA: ${response.status}`).slice(0, 400);
+        lastError = `HTTP ${response.status}: ${message}`.slice(0, 400);
         await settle(0, 0, false, message, run);
         if ([402, 403, 404, 429].includes(response.status) || response.status >= 500) {
           const until = response.status === 429 ? new Date(Date.now() + Math.max(300000, Number(response.headers.get("Retry-After") ?? 0) * 1000)).toISOString() : null;
@@ -43,6 +47,7 @@ export function budgetGateway(sb: any, meta: { id: string; phone: string; number
         async cancel(reason) { await reader.cancel(reason); await settle(null, null, false, "stream_cancelado", run); },
       });
       return new Response(stream, { status: response.status, headers: response.headers });
-    } catch (e) { await settle(null, null, false, String((e as Error).message).slice(0, 400), null); throw e; }
+    } catch (e) { lastError ??= `rede: ${String((e as Error).message)}`.slice(0, 400); await settle(null, null, false, String((e as Error).message).slice(0, 400), null); throw e; }
   };
+  return Object.assign(fn, { lastError: () => lastError }) as BudgetFetch;
 }

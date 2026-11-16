@@ -26396,6 +26396,8 @@ export type Database = {
           id: boolean
           max_offer_attempts: number
           return_window_days: number
+          shadow_at: string | null
+          shadow_reason: string | null
           ship_replacement_when: string
           support_whatsapp_phone: string | null
           tracking_share_last_event: boolean
@@ -26428,6 +26430,8 @@ export type Database = {
           id?: boolean
           max_offer_attempts?: number
           return_window_days?: number
+          shadow_at?: string | null
+          shadow_reason?: string | null
           ship_replacement_when?: string
           support_whatsapp_phone?: string | null
           tracking_share_last_event?: boolean
@@ -26460,6 +26464,8 @@ export type Database = {
           id?: boolean
           max_offer_attempts?: number
           return_window_days?: number
+          shadow_at?: string | null
+          shadow_reason?: string | null
           ship_replacement_when?: string
           support_whatsapp_phone?: string | null
           tracking_share_last_event?: boolean

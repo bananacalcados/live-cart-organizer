@@ -1737,6 +1737,13 @@
       "when": 1794711004180,
       "tag": "0247_mp_movements_readonly_audit",
       "breakpoints": true
+    },
+    {
+      "idx": 248,
+      "version": "7",
+      "when": 1794863694714,
+      "tag": "0248_support_send_failure_shadow_only",
+      "breakpoints": true
     }
   ]
 }
