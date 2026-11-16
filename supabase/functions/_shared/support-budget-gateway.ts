@@ -20,7 +20,9 @@ export function budgetGateway(sb: any, meta: { id: string; phone: string; number
         lastError = `HTTP ${response.status}: ${message}`.slice(0, 400);
         await settle(0, 0, false, message, run);
         if ([402, 403, 404, 429].includes(response.status) || response.status >= 500) {
-          const until = response.status === 429 ? new Date(Date.now() + Math.max(300000, Number(response.headers.get("Retry-After") ?? 0) * 1000)).toISOString() : null;
+          // 429/5xx are transient: pause with an expiry so the agent resumes by itself; 402/403/404 stay until fixed.
+          const until = response.status === 429 ? new Date(Date.now() + Math.max(300000, Number(response.headers.get("Retry-After") ?? 0) * 1000)).toISOString()
+            : response.status >= 500 ? new Date(Date.now() + 900000).toISOString() : null;
           await sb.rpc("support_cost_pause", { p_reason: message, p_until: until });
         }
         return response;
