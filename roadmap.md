@@ -4,3 +4,4 @@
 - [x] Avisar pedido aberto duplicado na mesma live antes de salvar
 - [x] Deixar erro genérico da AppMax seguir a cascata e remover duplicidade de fallback
 - [x] Mostrar somente mensagem amigável à cliente; testar sem cobrança real
+- [ ] Concluir varredura dos caminhos relacionados e conferência visual sem alterar dados
