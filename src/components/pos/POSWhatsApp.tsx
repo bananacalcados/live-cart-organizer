@@ -32,6 +32,7 @@ import { useWhatsAppNumberStore } from "@/stores/whatsappNumberStore";
 import { WhatsAppNumberSelector } from "@/components/WhatsAppNumberSelector";
 import { ConversationList } from "@/components/chat/ConversationList";
 import { ChatView } from "@/components/chat/ChatView";
+import { CrossInstanceHistoryNotice } from "@/components/chat/CrossInstanceHistoryNotice";
 import { AttendantNudgeCard } from "@/components/chat/AttendantNudgeCard";
 import { ProductWaitlistDialog } from "@/components/chat/ProductWaitlistDialog";
 import { ProductArrivalCard } from "@/components/chat/ProductArrivalCard";
@@ -2852,6 +2853,23 @@ export function POSWhatsApp({ storeId, initialFilter, initialPhone, initialWhats
                 </Button>
               </div>
             </div>
+
+            {selectedConversation && !selectedConversation.isGroup && selectedChannel !== "instagram" && selectedChannel !== "messenger" && (
+              <CrossInstanceHistoryNotice
+                phone={selectedPhone}
+                currentNumberId={messageBoundNumberId}
+                currentMessageCount={chatMessages.length}
+                loading={messagesLoading}
+                instances={metaNumbers.filter((n) => n.provider !== "instagram" && n.provider !== "messenger")}
+                onView={(id) => {
+                  setSelectedConvNumberId(id);
+                  const n = metaNumbers.find((number) => number.id === id);
+                  setSelectedSendNumberId(storeNumbers.some((number) => number.id === id) ? id : null);
+                  if (n) setSendVia(n.provider === "meta" ? "meta" : "zapi");
+                  loadMessages(selectedPhone, id);
+                }}
+              />
+            )}
 
             {!selectedConversation?.isGroup && (
               <PendingCheckoutOrdersBar

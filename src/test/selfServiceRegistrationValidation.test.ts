@@ -27,4 +27,18 @@ describe("registration field validation", () => {
     expect(registrationErrors(valid, alt, false)).toEqual({});
     expect(Object.keys(registrationErrors(valid, alt, true))).toEqual(["alt_cep"]);
   });
+  it("rejects browser email autofill in each address field with a friendly error", () => {
+    expect(registrationErrors({ ...valid, address: "kashimirtricot@gmail.com" }, valid, false).address).toBe("Digite o nome da rua, não o e-mail.");
+    expect(registrationErrors({ ...valid, address_number: "cliente@example.com" }, valid, false).address_number).toBe("Digite o número do endereço, não o e-mail.");
+    expect(registrationErrors({ ...valid, neighborhood: "cliente@example.com" }, valid, false).neighborhood).toBe("Digite o bairro, não o e-mail.");
+  });
+  it.each(["12", "12A", "S/N", "sn", "Km 12", "123-B"])("accepts common address number %s", (address_number) => {
+    expect(registrationErrors({ ...valid, address: "Rua 7 de Setembro", address_number }, valid, false)).toEqual({});
+  });
+  it("rejects an implausible address number", () => {
+    expect(registrationErrors({ ...valid, address_number: "abc" }, valid, false).address_number).toContain("número válido");
+  });
+  it("validates alternate delivery address fields too", () => {
+    expect(registrationErrors(valid, { ...valid, address: "cliente@example.com" }, true).alt_address).toBe("Digite o nome da rua, não o e-mail.");
+  });
 });

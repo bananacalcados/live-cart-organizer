@@ -410,17 +410,17 @@ export default function SelfServiceOrderPage() {
               <h2 className="text-lg font-bold">Preencha seus dados</h2>
               <p className="text-sm font-semibold">Seu cadastro só fica confirmado depois de enviar a mensagem de confirmação no WhatsApp.</p>
             </>)}
-            <div className="space-y-1"><Label>Nome completo</Label><Input {...fieldProps("full_name")} autoComplete="name" value={form.full_name} onChange={set("full_name")} />{fieldError("full_name")}</div>
-            <div className="space-y-1"><Label>CEP</Label><Input {...fieldProps("cep")} inputMode="numeric" value={form.cep} onChange={(e) => { const v = maskCep(e.target.value); setForm((f) => ({ ...f, cep: v })); lookupCep(v); }} />{fieldError("cep")}</div>
-            <div className="space-y-1"><Label>Rua</Label><Input {...fieldProps("address")} value={form.address} onChange={set("address")} />{fieldError("address")}</div>
+            <div className="space-y-1"><Label>Nome completo</Label><Input {...fieldProps("full_name")} autoComplete="section-main name" value={form.full_name} onChange={set("full_name")} />{fieldError("full_name")}</div>
+            <div className="space-y-1"><Label>CEP</Label><Input {...fieldProps("cep")} inputMode="numeric" autoComplete="section-main postal-code" value={form.cep} onChange={(e) => { const v = maskCep(e.target.value); setForm((f) => ({ ...f, cep: v })); lookupCep(v); }} />{fieldError("cep")}</div>
+            <div className="space-y-1"><Label>Rua</Label><Input {...fieldProps("address")} autoComplete="section-main address-line1" value={form.address} onChange={set("address")} />{fieldError("address")}</div>
             <div className="grid grid-cols-2 gap-2">
-              <div className="space-y-1"><Label>Número</Label><Input {...fieldProps("address_number")} value={form.address_number} onChange={set("address_number")} />{fieldError("address_number")}</div>
-              <div className="space-y-1"><Label>Complemento</Label><Input {...fieldProps("complement")} value={form.complement} onChange={set("complement")} />{fieldError("complement")}</div>
+              <div className="space-y-1"><Label>Número</Label><Input {...fieldProps("address_number")} autoComplete="section-main address-line2" value={form.address_number} onChange={set("address_number")} />{fieldError("address_number")}</div>
+              <div className="space-y-1"><Label>Complemento</Label><Input {...fieldProps("complement")} autoComplete="section-main address-line3" value={form.complement} onChange={set("complement")} />{fieldError("complement")}</div>
             </div>
-            <div className="space-y-1"><Label>Bairro</Label><Input {...fieldProps("neighborhood")} value={form.neighborhood} onChange={set("neighborhood")} />{fieldError("neighborhood")}</div>
+            <div className="space-y-1"><Label>Bairro</Label><Input {...fieldProps("neighborhood")} autoComplete="section-main address-level3" value={form.neighborhood} onChange={set("neighborhood")} />{fieldError("neighborhood")}</div>
             <div className="grid grid-cols-3 gap-2">
-              <div className="col-span-2 space-y-1"><Label>Cidade</Label><Input {...fieldProps("city")} value={form.city} onChange={set("city")} />{fieldError("city")}</div>
-              <div className="space-y-1"><Label>UF</Label><Input {...fieldProps("state")} maxLength={2} value={form.state} onChange={set("state")} />{fieldError("state")}</div>
+              <div className="col-span-2 space-y-1"><Label>Cidade</Label><Input {...fieldProps("city")} autoComplete="section-main address-level2" value={form.city} onChange={set("city")} />{fieldError("city")}</div>
+              <div className="space-y-1"><Label>UF</Label><Input {...fieldProps("state")} autoComplete="section-main address-level1" maxLength={2} value={form.state} onChange={set("state")} />{fieldError("state")}</div>
             </div>
             <button type="button" className="text-sm font-semibold text-primary underline" onClick={() => setUseAlt((v) => !v)}>
               {useAlt ? "Usar meu endereço principal" : "Enviar para outro endereço"}
@@ -428,24 +428,24 @@ export default function SelfServiceOrderPage() {
             {useAlt && (
               <div className="space-y-3 rounded-xl border border-primary/40 p-3">
                 <p className="text-xs font-semibold text-muted-foreground">Endereço de entrega deste pedido (seu endereço principal continua salvo)</p>
-                <div className="space-y-1"><Label>CEP de entrega</Label><Input {...fieldProps("alt_cep")} inputMode="numeric" value={alt.cep} onChange={(e) => { const v = maskCep(e.target.value); setAlt((a) => ({ ...a, cep: v })); lookupAltCep(v); }} />{fieldError("alt_cep")}</div>
-                <div className="space-y-1"><Label>Rua</Label><Input {...fieldProps("alt_address")} value={alt.address} onChange={(e) => setAlt((a) => ({ ...a, address: e.target.value }))} />{fieldError("alt_address")}</div>
+                <div className="space-y-1"><Label>CEP de entrega</Label><Input {...fieldProps("alt_cep")} inputMode="numeric" autoComplete="section-alt postal-code" value={alt.cep} onChange={(e) => { const v = maskCep(e.target.value); setAlt((a) => ({ ...a, cep: v })); lookupAltCep(v); }} />{fieldError("alt_cep")}</div>
+                <div className="space-y-1"><Label>Rua</Label><Input {...fieldProps("alt_address")} autoComplete="section-alt address-line1" value={alt.address} onChange={(e) => setAlt((a) => ({ ...a, address: e.target.value }))} />{fieldError("alt_address")}</div>
                 <div className="grid grid-cols-2 gap-2">
-                  <div className="space-y-1"><Label>Número</Label><Input {...fieldProps("alt_address_number")} value={alt.address_number} onChange={(e) => setAlt((a) => ({ ...a, address_number: e.target.value }))} />{fieldError("alt_address_number")}</div>
-                  <div className="space-y-1"><Label>Complemento</Label><Input {...fieldProps("alt_complement")} value={alt.complement} onChange={(e) => setAlt((a) => ({ ...a, complement: e.target.value }))} />{fieldError("alt_complement")}</div>
+                  <div className="space-y-1"><Label>Número</Label><Input {...fieldProps("alt_address_number")} autoComplete="section-alt address-line2" value={alt.address_number} onChange={(e) => setAlt((a) => ({ ...a, address_number: e.target.value }))} />{fieldError("alt_address_number")}</div>
+                  <div className="space-y-1"><Label>Complemento</Label><Input {...fieldProps("alt_complement")} autoComplete="section-alt address-line3" value={alt.complement} onChange={(e) => setAlt((a) => ({ ...a, complement: e.target.value }))} />{fieldError("alt_complement")}</div>
                 </div>
-                <div className="space-y-1"><Label>Bairro</Label><Input {...fieldProps("alt_neighborhood")} value={alt.neighborhood} onChange={(e) => setAlt((a) => ({ ...a, neighborhood: e.target.value }))} />{fieldError("alt_neighborhood")}</div>
+                <div className="space-y-1"><Label>Bairro</Label><Input {...fieldProps("alt_neighborhood")} autoComplete="section-alt address-level3" value={alt.neighborhood} onChange={(e) => setAlt((a) => ({ ...a, neighborhood: e.target.value }))} />{fieldError("alt_neighborhood")}</div>
                 <div className="grid grid-cols-3 gap-2">
-                  <div className="col-span-2 space-y-1"><Label>Cidade</Label><Input {...fieldProps("alt_city")} value={alt.city} onChange={(e) => setAlt((a) => ({ ...a, city: e.target.value }))} />{fieldError("alt_city")}</div>
-                  <div className="space-y-1"><Label>UF</Label><Input {...fieldProps("alt_state")} maxLength={2} value={alt.state} onChange={(e) => setAlt((a) => ({ ...a, state: e.target.value }))} />{fieldError("alt_state")}</div>
+                  <div className="col-span-2 space-y-1"><Label>Cidade</Label><Input {...fieldProps("alt_city")} autoComplete="section-alt address-level2" value={alt.city} onChange={(e) => setAlt((a) => ({ ...a, city: e.target.value }))} />{fieldError("alt_city")}</div>
+                  <div className="space-y-1"><Label>UF</Label><Input {...fieldProps("alt_state")} autoComplete="section-alt address-level1" maxLength={2} value={alt.state} onChange={(e) => setAlt((a) => ({ ...a, state: e.target.value }))} />{fieldError("alt_state")}</div>
                 </div>
               </div>
             )}
             <div className="space-y-1">
               <Label>CPF</Label>
-              <Input {...fieldProps("cpf")} inputMode="numeric" value={form.cpf} onChange={(e) => setForm((f) => ({ ...f, cpf: maskCpf(e.target.value) }))} />{fieldError("cpf")}
+              <Input {...fieldProps("cpf")} inputMode="numeric" autoComplete="off" value={form.cpf} onChange={(e) => setForm((f) => ({ ...f, cpf: maskCpf(e.target.value) }))} />{fieldError("cpf")}
             </div>
-            <div className="space-y-1"><Label>E-mail</Label><Input {...fieldProps("email")} type="email" autoComplete="email" value={form.email} onChange={set("email")} />{fieldError("email")}</div>
+            <div className="space-y-1"><Label>E-mail</Label><Input {...fieldProps("email")} type="email" autoComplete="section-main email" value={form.email} onChange={set("email")} />{fieldError("email")}</div>
             {attemptedSubmit && Object.keys(errors).length > 0 && <p role="alert" className="text-sm font-semibold text-destructive">Corrija os campos destacados acima para confirmar seu cadastro.</p>}
             <p className="text-sm text-muted-foreground">Ao tocar abaixo, o WhatsApp vai abrir. Envie a mensagem pronta para concluir a confirmação — só abrir o WhatsApp não confirma.</p>
             <Button className="h-14 w-full text-base font-bold" onClick={submit} disabled={busy}>

@@ -1751,6 +1751,13 @@
       "when": 1794868554692,
       "tag": "0249_live_order_delete_guard_and_orphan_payments",
       "breakpoints": true
+    },
+    {
+      "idx": 250,
+      "version": "7",
+      "when": 1794871306225,
+      "tag": "0250_chat_cross_instance_message_counts",
+      "breakpoints": true
     }
   ]
 }

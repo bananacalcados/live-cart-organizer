@@ -9,6 +9,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { WhatsAppNumberSelector } from "@/components/WhatsAppNumberSelector";
 import { useWhatsAppNumberStore } from "@/stores/whatsappNumberStore";
 import { posSendText } from "@/lib/pos/posWhatsappSend";
+import { recordOutgoingWhatsappMessage } from "@/lib/pos/recordOutgoingWhatsappMessage";
 import { markExchangesDispatched } from "@/lib/pos/markExchangeDispatched";
 
 interface Props {
@@ -45,8 +46,10 @@ export function ExchangeDispatchDialog({ ev, onClose, onDone }: Props) {
           const msg = `Oi${nome ? `, ${nome}` : ""}! Sua troca ${ev.codigo_devolucao || ""} foi despachada 📦\nRastreio: ${code.trim()}${carrier.trim() ? ` (${carrier.trim()})` : ""}`;
           const provider = numbers.find((x) => x.id === waNumberId)?.provider || null;
           const id = await posSendText({ provider, phone, message: msg, numberId: waNumberId });
-          if (id) await supabase.from("trocas_devolucoes").update({ whatsapp_notification_sent_at: new Date().toISOString() } as any).eq("id", ev.id);
-          else toast.warning("Troca marcada, mas o WhatsApp não foi enviado.");
+          if (id) {
+            await recordOutgoingWhatsappMessage({ phone, message: msg, messageId: id, numberId: waNumberId });
+            await supabase.from("trocas_devolucoes").update({ whatsapp_notification_sent_at: new Date().toISOString() } as any).eq("id", ev.id);
+          } else toast.warning("Troca marcada, mas o WhatsApp não foi enviado.");
         }
       }
       toast.success(`${ev.codigo_devolucao || "Troca"} marcada como despachada.`);

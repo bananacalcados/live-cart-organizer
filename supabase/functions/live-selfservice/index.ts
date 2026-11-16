@@ -13,6 +13,8 @@ import { isAuthorizedCron } from "../_shared/cron-guard.ts";
 import { loadSelfserviceAdvertising, cleanSelfserviceSignals, resolveSelfserviceAdvertising, ordinaryAllowed } from "../_shared/selfservice-advertising.ts";
 import { orderInstagram, selfservicePhoneKey } from "../_shared/selfservice-identity.ts";
 import { resolveEventNumber } from "../_shared/event-sender.ts";
+import { registrationAddressFieldError } from "../_shared/registration-address.ts";
+import { registrationCustomerIds } from "../_shared/registration-customer.ts";
 
 const PUBLIC_BASE = "https://checkout.bananacalcados.com.br";
 const ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
@@ -589,7 +591,7 @@ Deno.serve(withAccessLog("live-selfservice", async (req) => {
       const { data: base } = await sb.from("orders").select("customer_id").eq("id", n.order_id).eq("event_id", ev.id).maybeSingle();
       if (!base?.customer_id) return [];
       const { data } = await sb.from("orders")
-        .select("id, products, stage, is_paid, paid_externally, created_at, payment_window_expires_at, registered_at, discount_type, discount_value, free_shipping, shipping_cost, checkout_installment_config, cashback_id, cashback_amount, merged_into_order_id, customer:customers(instagram_handle)")
+        .select("id, customer_id, products, stage, is_paid, paid_externally, created_at, payment_window_expires_at, registered_at, discount_type, discount_value, free_shipping, shipping_cost, checkout_installment_config, cashback_id, cashback_amount, merged_into_order_id, customer:customers(instagram_handle)")
         .eq("event_id", ev.id).eq("customer_id", base.customer_id).neq("stage", "cancelled").eq("is_paid", false)
         .order("created_at", { ascending: true }).limit(10);
       return (data || []).filter((o: any) => !o.paid_externally && !o.merged_into_order_id && Array.isArray(o.products) && o.products.length > 0);
@@ -626,13 +628,13 @@ Deno.serve(withAccessLog("live-selfservice", async (req) => {
         const { data: matches } = await sb.rpc("selfservice_match_initial_order", { p_event_id: ev.id, p_phone: phone });
         if (!matches?.length) return [];
         const { data: matched } = await sb.from("orders")
-          .select("id, products, stage, is_paid, paid_externally, created_at, payment_window_expires_at, registered_at, discount_type, discount_value, free_shipping, shipping_cost, checkout_installment_config, cashback_id, cashback_amount, merged_into_order_id, customer:customers(instagram_handle)")
+          .select("id, customer_id, products, stage, is_paid, paid_externally, created_at, payment_window_expires_at, registered_at, discount_type, discount_value, free_shipping, shipping_cost, checkout_installment_config, cashback_id, cashback_amount, merged_into_order_id, customer:customers(instagram_handle)")
           .eq("event_id", ev.id).in("id", matches);
         return matched || [];
       }
       const { data } = await sb
         .from("orders")
-        .select("id, products, stage, is_paid, paid_externally, created_at, payment_window_expires_at, registered_at, discount_type, discount_value, free_shipping, shipping_cost, checkout_installment_config, cashback_id, cashback_amount, merged_into_order_id, customer:customers(instagram_handle)")
+        .select("id, customer_id, products, stage, is_paid, paid_externally, created_at, payment_window_expires_at, registered_at, discount_type, discount_value, free_shipping, shipping_cost, checkout_installment_config, cashback_id, cashback_amount, merged_into_order_id, customer:customers(instagram_handle)")
         .eq("event_id", ev.id)
         .in("customer_id", ids)
         .neq("stage", "cancelled")
@@ -644,7 +646,7 @@ Deno.serve(withAccessLog("live-selfservice", async (req) => {
       const { data: matches } = await sb.rpc("selfservice_match_initial_order", { p_event_id: ev.id, p_phone: phone });
       if (!matches?.length) return [];
       const { data: matched } = await sb.from("orders")
-        .select("id, products, stage, is_paid, paid_externally, created_at, payment_window_expires_at, registered_at, discount_type, discount_value, free_shipping, shipping_cost, checkout_installment_config, cashback_id, cashback_amount, merged_into_order_id, customer:customers(instagram_handle)")
+        .select("id, customer_id, products, stage, is_paid, paid_externally, created_at, payment_window_expires_at, registered_at, discount_type, discount_value, free_shipping, shipping_cost, checkout_installment_config, cashback_id, cashback_amount, merged_into_order_id, customer:customers(instagram_handle)")
         .eq("event_id", ev.id).in("id", matches);
       return matched || [];
     }
@@ -768,6 +770,10 @@ Deno.serve(withAccessLog("live-selfservice", async (req) => {
       if (!addr.address || !addr.address_number || !addr.city || !addr.state) {
         return json({ ok: false, error: "Preencha o endereço completo (rua, número, cidade)." }, 400);
       }
+      for (const [field, value] of [["address", addr.address], ["address_number", addr.address_number], ["neighborhood", addr.neighborhood]] as const) {
+        const error = registrationAddressFieldError(field, value);
+        if (error) return json({ ok: false, error }, 400);
+      }
       const adv = await resolveSelfserviceAdvertising(sb, body.signals);
       const allowed = adv && adv.mode !== "refused";
       const signals = allowed ? cleanSelfserviceSignals(body.signals, req) : {};
@@ -800,11 +806,17 @@ Deno.serve(withAccessLog("live-selfservice", async (req) => {
         city: String(altSrc.city || "").trim().slice(0, 120),
         state: String(altSrc.state || "").trim().slice(0, 2).toUpperCase(),
       } : null;
+      if (altAddr) {
+        for (const [field, value] of [["address", altAddr.address], ["address_number", altAddr.address_number], ["neighborhood", altAddr.neighborhood]] as const) {
+          const error = registrationAddressFieldError(field, value);
+          if (error) return json({ ok: false, error }, 400);
+        }
+      }
       const orderAddr = altAddr && altAddr.cep.length === 8 && altAddr.address && altAddr.address_number && altAddr.city && altAddr.state ? altAddr : addr;
 
       if (target.length) {
-        // Cliente achada pelo @: grava o WhatsApp confirmado no cliente que já tem o pedido.
-        for (const cid of new Set(target.map((o: any) => o._ig_customer_id).filter(Boolean))) {
+        // Qualquer pedido identificado recebe o telefone validado, sem sobrescrever a ficha.
+        for (const cid of registrationCustomerIds(target)) {
           await sb.from("customers").update({ whatsapp: phone }).eq("id", cid).or("whatsapp.is.null,whatsapp.eq.");
         }
         for (const o of target) {

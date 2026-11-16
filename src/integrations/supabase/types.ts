@@ -31320,6 +31320,13 @@ export type Database = {
         }
         Returns: Json
       }
+      chat_cross_instance_message_counts: {
+        Args: { p_phone: string }
+        Returns: {
+          message_count: number
+          whatsapp_number_id: string
+        }[]
+      }
       check_chargeback_risk:
         | {
             Args: {

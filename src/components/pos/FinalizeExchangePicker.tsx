@@ -21,6 +21,7 @@ import { loadExchangeNfes } from "@/lib/pos/exchangeNfe";
 import { WhatsAppNumberSelector } from "@/components/WhatsAppNumberSelector";
 import { useWhatsAppNumberStore } from "@/stores/whatsappNumberStore";
 import { posSendText } from "@/lib/pos/posWhatsappSend";
+import { recordOutgoingWhatsappMessage } from "@/lib/pos/recordOutgoingWhatsappMessage";
 import type { Database } from "@/integrations/supabase/types";
 
 type TdEvent = Database["public"]["Tables"]["trocas_devolucoes"]["Row"];
@@ -849,6 +850,8 @@ export function FinalizeExchangePicker({ open, sellerId, sellerName, onCancel, o
                         provider, phone, message: waMessage, numberId: waNumberId,
                       });
                       if (!msgId) throw new Error("Falha ao enviar WhatsApp");
+
+                      await recordOutgoingWhatsappMessage({ phone, message: waMessage, messageId: msgId, numberId: waNumberId });
 
                       await supabase.from("pos_sales").update({
                         tracking_code: trackingCode.trim(),
