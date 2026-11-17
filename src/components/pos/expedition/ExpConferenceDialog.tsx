@@ -23,6 +23,7 @@ import { extractEdgeError } from "@/lib/edgeFunctionError";
 import { isValidCpf, formatCpf, onlyDigitsCpf } from "@/lib/cpfUtils";
 import { hydrateSaleCustomer } from "./customerHydrate";
 
+import { variantColorLabel, sizeDisplayLabel } from "@/lib/pos/expeditionVariantDisplay";
 import { sendTrackingWhatsApp } from "@/lib/pos/trackingSend";
 import { trackingCarrierFor } from "@/lib/logistics/trackingInput";
 import { attachRealTracking, getPublicTrackingCode, publicTrackingUrl } from "@/lib/shipmentTracking";
@@ -531,11 +532,11 @@ export function ExpConferenceDialog({ order, storeId, open, onOpenChange, onFini
                     className={`rounded-lg p-3 border-2 ${c?.scanned ? "border-exp-done bg-exp-done/10" : "border-pos-border"}`}
                   >
                     <div className="flex items-center justify-between gap-2 flex-wrap">
-                      <div>
+                      <div className="min-w-0">
                         <p className="text-lg font-bold">{it.product_name}</p>
-                        <p className="text-base font-semibold text-pos-muted-text">
-                          {[it.variant_name, it.size && `Tam ${it.size}`, it.barcode].filter(Boolean).join(" • ")}
-                        </p>
+                        {it.barcode && (
+                          <p className="text-sm font-semibold text-pos-muted-text">Código {it.barcode}</p>
+                        )}
                       </div>
                       <div className="flex items-center gap-2">
                         <span className="text-lg font-black">{it.quantity}x {brl(it.unit_price)}</span>
@@ -546,6 +547,25 @@ export function ExpConferenceDialog({ order, storeId, open, onOpenChange, onFini
                             Marcar manual
                           </Button>
                         )}
+                      </div>
+                    </div>
+                    {/* Cor e tamanho em destaque: é aqui que o envio sai errado. */}
+                    <div className="mt-3 grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_auto] gap-3">
+                      <div className="rounded-lg border-4 border-exp-check bg-exp-check/10 px-4 py-2 min-w-0">
+                        <p className="text-[11px] font-black uppercase tracking-widest text-pos-muted-text">
+                          Cor
+                        </p>
+                        <p className="text-3xl font-black leading-tight text-pos-text break-words">
+                          {variantColorLabel(it.variant_name, it.size) || "SEM COR"}
+                        </p>
+                      </div>
+                      <div className="rounded-lg border-4 border-exp-check bg-exp-check/10 px-6 py-2 text-center">
+                        <p className="text-[11px] font-black uppercase tracking-widest text-pos-muted-text">
+                          Tamanho
+                        </p>
+                        <p className="text-5xl font-black leading-tight text-pos-text">
+                          {sizeDisplayLabel(it.size)}
+                        </p>
                       </div>
                     </div>
                     <div className="mt-2 flex items-center gap-5">
@@ -764,7 +784,13 @@ export function ExpConferenceDialog({ order, storeId, open, onOpenChange, onFini
                     .filter((i) => !checks[i.id]?.scanned)
                     .map((i) => (
                       <SelectItem key={i.id} value={i.id} className="text-base">
-                        {[i.product_name, i.variant_name, i.size && `Tam ${i.size}`].filter(Boolean).join(" • ")}
+                        {[
+                          i.product_name,
+                          variantColorLabel(i.variant_name, i.size),
+                          i.size && `Tam ${i.size}`,
+                        ]
+                          .filter(Boolean)
+                          .join(" • ")}
                       </SelectItem>
                     ))}
                 </SelectContent>

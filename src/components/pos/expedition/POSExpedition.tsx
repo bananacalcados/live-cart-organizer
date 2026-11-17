@@ -36,6 +36,7 @@ import { ExpPurchasePanel } from "./ExpPurchasePanel";
 import { ExpBuyListPanel } from "./ExpBuyListPanel";
 import { ExpDeliveryPaymentDialog } from "./ExpDeliveryPaymentDialog";
 import { ExpDeleteOrderDialog } from "./ExpDeleteOrderDialog";
+import { variantColorLabel, sizeDisplayLabel } from "@/lib/pos/expeditionVariantDisplay";
 import { buildExchangeLocks, type ExchangeLock } from "@/lib/pos/exchangeReplacementLock";
 import { ShipmentSimulations } from "@/components/expedition/ShipmentSimulations";
 import { ExpPriceAdjustmentDialog } from "./ExpPriceAdjustmentDialog";
@@ -1816,9 +1817,30 @@ export function POSExpedition({ storeId, storeName, focusSaleId }: Props) {
                           <div key={it.id} className="flex items-start justify-between gap-3 py-2 border-b border-pos-border/60 last:border-0">
                             <div>
                               <p className="text-lg font-bold text-pos-text">{it.product_name}</p>
-                              <p className="text-base font-semibold text-pos-muted-text">
-                                {[it.variant_name, it.size && `Tam ${it.size}`, it.sku].filter(Boolean).join(" • ")}
-                              </p>
+                              {stage === "conferencia" ? (
+                                <div className="mt-2 flex items-stretch gap-3 flex-wrap">
+                                  <div className="rounded-lg border-4 border-exp-check bg-exp-check/10 px-4 py-1 min-w-0">
+                                    <p className="text-[11px] font-black uppercase tracking-widest text-pos-muted-text">
+                                      Cor
+                                    </p>
+                                    <p className="text-2xl font-black leading-tight text-pos-text break-words">
+                                      {variantColorLabel(it.variant_name, it.size) || "SEM COR"}
+                                    </p>
+                                  </div>
+                                  <div className="rounded-lg border-4 border-exp-check bg-exp-check/10 px-5 py-1 text-center">
+                                    <p className="text-[11px] font-black uppercase tracking-widest text-pos-muted-text">
+                                      Tamanho
+                                    </p>
+                                    <p className="text-4xl font-black leading-tight text-pos-text">
+                                      {sizeDisplayLabel(it.size)}
+                                    </p>
+                                  </div>
+                                </div>
+                              ) : (
+                                <p className="text-base font-semibold text-pos-muted-text">
+                                  {[it.variant_name, it.size && `Tam ${it.size}`, it.sku].filter(Boolean).join(" • ")}
+                                </p>
+                              )}
                               {stage === "aguardando" && (
                                 <p
                                   className={`text-sm font-black mt-1 ${
