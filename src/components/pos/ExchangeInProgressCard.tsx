@@ -87,7 +87,7 @@ export function ExchangeInProgressCard({ saleId, onChanged }: { saleId: string; 
         return (
           <div key={e.id} className={`rounded-lg border-2 p-3 text-sm ${overdue ? "border-destructive bg-destructive/10" : "border-amber-500 bg-amber-500/10"}`}>
             <div className="flex items-center gap-2 flex-wrap font-bold">
-              <RotateCcw className="h-4 w-4" /> Troca em andamento
+              <RotateCcw className="h-4 w-4 shrink-0" /> Troca em andamento
               <span className="font-mono text-xs">{e.codigo_devolucao}</span>
             </div>
             {rev?.valid_until && (
@@ -99,16 +99,16 @@ export function ExchangeInProgressCard({ saleId, onChanged }: { saleId: string; 
               </p>
             )}
             {repos.length > 0 ? (
-              <p className="text-xs mt-1">Produto da troca na Expedição: {repos.map((i) => `${i.quantidade}× ${i.produto_nome}${i.tamanho ? ` (${i.tamanho})` : ""}`).join(", ")}</p>
+              <p className="text-xs mt-1">{e.pedido_novo_id ? "Produto da troca na Expedição" : "Produto de troca registrado (ainda não está na Expedição)"}: {repos.map((i) => `${i.quantidade}× ${i.produto_nome}${i.tamanho ? ` (${i.tamanho})` : ""}`).join(", ")}</p>
             ) : (
               <p className="text-xs mt-1 text-muted-foreground">Nenhum produto da troca adicionado ainda.</p>
             )}
-            <div className="flex gap-2 mt-2 flex-wrap">
+            <div className="flex flex-col gap-2 mt-2">
               {canAddReplacement(e) && (
-                <Button size="sm" onClick={() => { setPicks([]); setAddFor(e); }}><Plus className="h-3 w-3 mr-1" /> Adicionar produto da troca</Button>
+                <Button size="sm" className="w-full h-auto whitespace-normal py-1.5" onClick={() => { setPicks([]); setAddFor(e); }}><Plus className="h-3 w-3 mr-1" /> Adicionar produto</Button>
               )}
               {canCancelExchange(e) && (
-                <Button size="sm" variant="destructive" onClick={() => { setMotivo(""); setCancelFor(e); }}><XCircle className="h-3 w-3 mr-1" /> Cancelar troca</Button>
+                <Button size="sm" variant="destructive" className="w-full h-auto whitespace-normal py-1.5" onClick={() => { setMotivo(""); setCancelFor(e); }}><XCircle className="h-3 w-3 mr-1" /> Cancelar troca</Button>
               )}
             </div>
           </div>
