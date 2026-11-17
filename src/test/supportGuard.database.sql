@@ -5,10 +5,10 @@ SELECT set_config('request.jwt.claims','{"role":"service_role"}',true);
 DO $$
 DECLARE
   x uuid := '0833dc6c-6bd4-4b2f-8cb2-1889a5993e9c';
-  y uuid := 'ae453235-50e1-4ef6-8a87-8c8a77b2b440';
+  y uuid := '1f715932-e118-4e88-8051-85a5c14f5a4b';
   o uuid; got uuid[]; s record;
 BEGIN
-  DELETE FROM public.support_channel_pauses;
+  DELETE FROM public.support_channel_pauses WHERE true;
   UPDATE public.support_outbox SET available_at=now()+interval '1 day' WHERE status='pending';
   UPDATE public.support_settings SET auto_reply_mode='auto', shadow_auto=false WHERE id=true;
 
@@ -37,7 +37,7 @@ BEGIN
   INSERT INTO public.support_outbox(phone,whatsapp_number_id,text,requested_by,idempotency_key) VALUES('5533900000004',x,'t','assistant_auto','guard-t4');
   INSERT INTO public.support_outbox(phone,whatsapp_number_id,text,requested_by,idempotency_key) VALUES('5533900000005',y,'t','assistant_auto','guard-t5');
   SELECT array_agg(whatsapp_number_id) INTO got FROM public.support_outbox_claim(30);
-  IF NOT (got = ARRAY[y]) THEN RAISE EXCEPTION 'claim com canal pausado errado: %', got; END IF;
+  IF got IS DISTINCT FROM ARRAY[y] THEN RAISE EXCEPTION 'claim com canal pausado errado: %', got; END IF;
 
   -- sombra manual: shadow_auto=false; Central sai mesmo assim, IA não
   UPDATE public.support_settings SET auto_reply_mode='shadow' WHERE id=true;
