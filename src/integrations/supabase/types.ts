@@ -26236,6 +26236,33 @@ export type Database = {
         }
         Relationships: []
       }
+      support_channel_pauses: {
+        Row: {
+          failures: number
+          paused_at: string
+          paused_until: string
+          reason: string
+          updated_at: string
+          whatsapp_number_id: string
+        }
+        Insert: {
+          failures?: number
+          paused_at?: string
+          paused_until: string
+          reason: string
+          updated_at?: string
+          whatsapp_number_id: string
+        }
+        Update: {
+          failures?: number
+          paused_at?: string
+          paused_until?: string
+          reason?: string
+          updated_at?: string
+          whatsapp_number_id?: string
+        }
+        Relationships: []
+      }
       support_cpf_attempts: {
         Row: {
           candidate_first_name: string | null
@@ -26491,6 +26518,10 @@ export type Database = {
           ai_triage_model: string
           ai_worker_lease: string | null
           ai_worker_until: string | null
+          alert_last_sent_at: string | null
+          alert_phone: string | null
+          alert_state: string | null
+          alert_whatsapp_number_id: string | null
           auto_reply_cooldown_hours: number
           auto_reply_instance_ids: string[]
           auto_reply_max_delay_s: number
@@ -26507,6 +26538,7 @@ export type Database = {
           max_offer_attempts: number
           return_window_days: number
           shadow_at: string | null
+          shadow_auto: boolean
           shadow_reason: string | null
           ship_replacement_when: string
           support_whatsapp_phone: string | null
@@ -26525,6 +26557,10 @@ export type Database = {
           ai_triage_model?: string
           ai_worker_lease?: string | null
           ai_worker_until?: string | null
+          alert_last_sent_at?: string | null
+          alert_phone?: string | null
+          alert_state?: string | null
+          alert_whatsapp_number_id?: string | null
           auto_reply_cooldown_hours?: number
           auto_reply_instance_ids?: string[]
           auto_reply_max_delay_s?: number
@@ -26541,6 +26577,7 @@ export type Database = {
           max_offer_attempts?: number
           return_window_days?: number
           shadow_at?: string | null
+          shadow_auto?: boolean
           shadow_reason?: string | null
           ship_replacement_when?: string
           support_whatsapp_phone?: string | null
@@ -26559,6 +26596,10 @@ export type Database = {
           ai_triage_model?: string
           ai_worker_lease?: string | null
           ai_worker_until?: string | null
+          alert_last_sent_at?: string | null
+          alert_phone?: string | null
+          alert_state?: string | null
+          alert_whatsapp_number_id?: string | null
           auto_reply_cooldown_hours?: number
           auto_reply_instance_ids?: string[]
           auto_reply_max_delay_s?: number
@@ -26575,6 +26616,7 @@ export type Database = {
           max_offer_attempts?: number
           return_window_days?: number
           shadow_at?: string | null
+          shadow_auto?: boolean
           shadow_reason?: string | null
           ship_replacement_when?: string
           support_whatsapp_phone?: string | null
@@ -34864,6 +34906,15 @@ export type Database = {
         }
         Returns: Json
       }
+      support_guard_mark_alert: {
+        Args: { p_state: string }
+        Returns: undefined
+      }
+      support_guard_recover: {
+        Args: { p_expected_shadow_at: string }
+        Returns: boolean
+      }
+      support_guard_status: { Args: never; Returns: Json }
       support_mask_cpf_text: { Args: { p_value: string }; Returns: string }
       support_normalize_text: { Args: { p: string }; Returns: string }
       support_outbox_claim: {

@@ -4,6 +4,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { isAuthorizedCron, unauthorizedResponse } from "../_shared/cron-guard.ts";
 import { loadBlockedSuffixes, isBlocked } from "../_shared/blocked-guard.ts";
 import { processSupportOutbox } from "../_shared/support-outbox.ts";
+import { runSupportGuardTick } from "../_shared/support-guard.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -25,6 +26,8 @@ serve(withAccessLog("cron-send-scheduled-messages", async (req) => {
     let assistantOutbox = { sent: 0, failed: 0, total: 0 };
     try { assistantOutbox = await processSupportOutbox(supabase); }
     catch (outboxError) { console.error('[support-outbox] falha controlada:', outboxError); }
+    try { await runSupportGuardTick(supabase); }
+    catch (guardError) { console.error('[support-guard] falha controlada:', guardError); }
 
     // Fetch pending messages that are due
     const { data: pending, error: fetchError } = await supabase

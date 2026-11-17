@@ -1,4 +1,8 @@
 import { internalCallHeaders } from './requireAuth.ts';
+import { isTransientSendError } from './support-guard.ts';
+
+const RETRY_WAITS_MS = [3_000, 8_000];
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 export const SUPPORT_OUTBOX_INSTANCES = [
   '0833dc6c-6bd4-4b2f-8cb2-1889a5993e9c',
@@ -46,8 +50,9 @@ async function invokeError(error: any) {
   return String(error.message || error).slice(0, 1000);
 }
 
-/** O claim SQL valida janela, instâncias e 30/hora atomicamente. Não há retry de envio incerto. */
-export async function processSupportOutbox(supabase: any) {
+/** O claim SQL valida janela, instâncias, pausa por canal e 30/hora atomicamente. */
+export async function processSupportOutbox(supabase: any, opts: { wait?: (ms: number) => Promise<void> } = {}) {
+  const wait = opts.wait ?? sleep;
   const { data: jobs, error } = await supabase.rpc('support_outbox_claim', { p_limit: 30 });
   if (error) throw new Error(error.message || 'Não foi possível reservar a caixa de saída');
   const rows = jobs || [];
@@ -59,7 +64,9 @@ export async function processSupportOutbox(supabase: any) {
   const providers = new Map<string, any>((numbers || []).map((n: any) => [n.id, n] as [string, any]));
   let sent = 0, failed = 0;
 
+  const skipped = new Set<string>();
   for (const [jobIndex, job] of rows.entries()) {
+    if (skipped.has(job.whatsapp_number_id)) continue;
     const instance = providers.get(job.whatsapp_number_id);
     const fn = instance?.is_active ? supportOutboxFunction(instance.provider) : null;
     const message = job.text + (job.link ? `\n${job.link}` : '');
@@ -68,16 +75,28 @@ export async function processSupportOutbox(supabase: any) {
     let data: any = null;
 
     if (fn && message.length <= 1000) {
-      const res = await supabase.functions.invoke(fn, {
-        body: instance.provider === 'instagram'
-          ? { recipientId: job.phone, message, channel: 'instagram', whatsapp_number_id: job.whatsapp_number_id }
-          : { phone: job.phone, message, whatsapp_number_id: job.whatsapp_number_id },
-        headers: { ...(await internalCallHeaders()), 'x-force-instance': 'true' },
-      });
-      data = res.data;
-      sendError = await invokeError(res.error);
-      if (!sendError && (data?.error || data?.success === false)) sendError = JSON.stringify(data.error || data).slice(0, 1000);
-      providerMessageId = data?.messageId ?? data?.data?.messages?.[0]?.id ?? data?.data?.messageid ?? null;
+      // Instagram: até 3 tentativas só para erro de plataforma (HTML/5xx), e só se o histórico
+      // confirmar que nada saiu (instagram-dm-send grava o envio ao concluir). WhatsApp não repete envio incerto.
+      for (let attempt = 0; ; attempt++) {
+        const res = await supabase.functions.invoke(fn, {
+          body: instance.provider === 'instagram'
+            ? { recipientId: job.phone, message, channel: 'instagram', whatsapp_number_id: job.whatsapp_number_id }
+            : { phone: job.phone, message, whatsapp_number_id: job.whatsapp_number_id },
+          headers: { ...(await internalCallHeaders()), 'x-force-instance': 'true' },
+        });
+        data = res.data;
+        sendError = await invokeError(res.error);
+        if (!sendError && (data?.error || data?.success === false)) sendError = JSON.stringify(data.error || data).slice(0, 1000);
+        providerMessageId = data?.messageId ?? data?.data?.messages?.[0]?.id ?? data?.data?.messageid ?? null;
+        if (!sendError || instance.provider !== 'instagram' || !isTransientSendError(sendError) || attempt >= RETRY_WAITS_MS.length) break;
+        await wait(RETRY_WAITS_MS[attempt]);
+        const { data: out } = await supabase.from('whatsapp_messages').select('message_id')
+          .eq('phone', job.phone).eq('whatsapp_number_id', job.whatsapp_number_id).eq('direction', 'outgoing')
+          .gte('created_at', job.claimed_at).limit(1);
+        if (out?.length) { sendError = null; providerMessageId = out[0].message_id ?? null; break; }
+        sendError = `${sendError} (tentativa ${attempt + 1} de 3)`;
+      }
+      if (sendError && instance.provider === 'instagram' && /tentativa/.test(sendError) === false && isTransientSendError(sendError)) sendError = `${sendError} (3 tentativas)`;
     } else if (!sendError) sendError = 'A mensagem com o link passa de 1.000 caracteres';
 
     if (!sendError) {
@@ -106,11 +125,12 @@ export async function processSupportOutbox(supabase: any) {
       await supabase.from('support_outbox').update({ status: 'failed', error: String(sendError).slice(0, 1000) })
         .eq('id', job.id).eq('status', 'pending').eq('claimed_at', job.claimed_at);
       if (job.suggestion_id) await supabase.from('support_auto_suggestions').update({ status: 'nova', decision: 'fila', reason: 'erro_envio_automatico', auto_send_after: null }).eq('id', job.suggestion_id);
-      await supabase.rpc('support_emergency_pause', { p_reason: `Falha de envio do assistente: ${String(sendError).slice(0, 700)}` });
-      const remaining = rows.slice(jobIndex + 1).map((r: any) => r.id);
-      if (remaining.length) await supabase.from('support_outbox').update({ claimed_at: null }).in('id', remaining).eq('status', 'pending');
+      // Falha isolada: o banco move a conversa para "Em suporte" e só pausa o canal com falhas repetidas.
+      // Os demais envios do mesmo canal voltam para a fila (respeitando a pausa, se houver); outros canais seguem.
+      const sameChannel = rows.slice(jobIndex + 1).filter((r: any) => r.whatsapp_number_id === job.whatsapp_number_id).map((r: any) => r.id);
+      if (sameChannel.length) await supabase.from('support_outbox').update({ claimed_at: null }).in('id', sameChannel).eq('status', 'pending');
+      skipped.add(job.whatsapp_number_id);
       failed++;
-      break;
     }
   }
   return { sent, failed, total: rows.length };

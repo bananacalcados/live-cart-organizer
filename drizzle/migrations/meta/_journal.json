@@ -1758,6 +1758,13 @@
       "when": 1794871306225,
       "tag": "0250_chat_cross_instance_message_counts",
       "breakpoints": true
+    },
+    {
+      "idx": 251,
+      "version": "7",
+      "when": 1794937532759,
+      "tag": "0251_support_guard_per_channel",
+      "breakpoints": true
     }
   ]
 }

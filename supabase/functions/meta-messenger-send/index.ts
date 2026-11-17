@@ -43,7 +43,8 @@ serve(withAccessLog("meta-messenger-send", async (req) => {
       if(error)throw error;
       if(!link?.username)return new Response(JSON.stringify({success:false,error:'Perfil não identificado. Aguarde ela mandar mensagem.'}),{headers:{...corsHeaders,'Content-Type':'application/json'}});
       const r=await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/instagram-dm-send`,{method:'POST',headers:{...(await internalCallHeaders()),authorization:req.headers.get('authorization') || '', 'Content-Type':'application/json'},body:JSON.stringify({username:link.username,message,mediaUrl,mediaType:type==='text'?undefined:type,whatsapp_number_id,manual:true})});
-      const data=await r.json();
+      const raw=await r.text(); let data:any;
+      try{data=JSON.parse(raw);}catch{data={error:`instagram-dm-send respondeu HTTP ${r.status} sem JSON (falha da plataforma): ${raw.slice(0,120)}`};}
       return new Response(JSON.stringify({...data,success:r.ok&&!data.error,error:data.error?(data.message || data.error):undefined}),{status:r.status,headers:{...corsHeaders,'Content-Type':'application/json'}});
     }
 
