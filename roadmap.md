@@ -12,7 +12,7 @@
 - [x] Auditar todos os formatos e caminhos no computador/celular, nos dois temas
 
 ## Troca após reversa (aprovado, em fases)
-- [ ] Fase 1: trava na Expedição (tag TROCA, concluir travado, não excluir)
+- [x] Fase 1: trava na Expedição (tag TROCA, concluir travado, não excluir)
 - [ ] Fase 2: cartão "Troca em andamento" no modal + adicionar produto + cancelar troca
 - [ ] Fase 3: diferença (link com frete grátis/cotado/valor fixo, voucher sem validade)
 - [ ] Fase 4: "Novo envio" na finalização do PDV

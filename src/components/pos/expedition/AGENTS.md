@@ -1,2 +1,3 @@
 - Expedition buy list (Lista de Compras) keeps a snapshot of the grade sizes on each item and changes quantity/status only via purchase_item_* RPCs, so editing a grade never rewrites past orders and every increase is audited.
 - Automatic gateway price reductions run server-side (_apply_gateway_price_rule), reuse pos_sale_price_adjustments and never reapply after a prior/reverted adjustment or NF-e, so manual decisions win.
+- Exchange replacement sales (trocas_devolucoes.pedido_novo_id) are locked by trigger guard_exchange_replacement_sale (mirror: src/lib/pos/exchangeReplacementLock.ts): no delete while exchange open, no conclusion before PDV finalization, so reserved exchange items aren't dropped.

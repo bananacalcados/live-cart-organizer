@@ -36,6 +36,7 @@ import { ExpPurchasePanel } from "./ExpPurchasePanel";
 import { ExpBuyListPanel } from "./ExpBuyListPanel";
 import { ExpDeliveryPaymentDialog } from "./ExpDeliveryPaymentDialog";
 import { ExpDeleteOrderDialog } from "./ExpDeleteOrderDialog";
+import { buildExchangeLocks, type ExchangeLock } from "@/lib/pos/exchangeReplacementLock";
 import { ShipmentSimulations } from "@/components/expedition/ShipmentSimulations";
 import { ExpPriceAdjustmentDialog } from "./ExpPriceAdjustmentDialog";
 import { GatewayPriceRulesDialog } from "./GatewayPriceRulesDialog";
@@ -135,6 +136,7 @@ export function POSExpedition({ storeId, storeName, focusSaleId }: Props) {
     return () => { alive = false; if (timer) clearTimeout(timer); supabase.removeChannel(ch); };
   }, [canRefund]);
   const [orders, setOrders] = useState<ExpOrder[]>([]);
+  const [exchangeLocks, setExchangeLocks] = useState<Record<string, ExchangeLock>>({});
   const [freightDates, setFreightDates] = useState<Record<string,string>>({});
   const [freightSummaries, setFreightSummaries] = useState<Record<string,{ cheapest:any; selected:any }>>({});
   const [correiosShipments, setCorreiosShipments] = useState<Record<string,{ id:string; codigo_objeto:string|null; status:string }>>({});
@@ -326,7 +328,15 @@ export function POSExpedition({ storeId, storeName, focusSaleId }: Props) {
         const m: Record<string, { refund_amount: number }> = {};
         for (const a of (adj as any[]) || []) m[a.sale_id] = { refund_amount: Number(a.refund_amount) };
         setPriceAdj(m);
-      } else setPriceAdj({});
+        // Produto de troca: 1 consulta com IN (índice em pedido_novo_id).
+        const { data: tds } = await supabase
+          .from("trocas_devolucoes")
+          .select("pedido_novo_id, codigo_devolucao, status, modo_expedicao")
+          .in("pedido_novo_id", ids)
+          .not("status", "in", "(cancelada,concluida)");
+        const locks = buildExchangeLocks((tds as any[]) || []);
+        setExchangeLocks((cur) => JSON.stringify(cur) === JSON.stringify(locks) ? cur : locks);
+      } else { setPriceAdj({}); setExchangeLocks({}); }
       await loadCounts();
     } catch (e: any) {
       toast.error(e.message || "Erro ao carregar expedição");
@@ -1430,6 +1440,11 @@ export function POSExpedition({ storeId, storeName, focusSaleId }: Props) {
                                 ⚠ AGUARDANDO PRODUTO PRA FAZER ENVIO — NÃO CONCLUIR
                               </Badge>
                             )}
+                            {exchangeLocks[o.id] && (
+                              <Badge className="bg-destructive text-destructive-foreground text-base font-black px-4 py-2 uppercase">
+                                TROCA {exchangeLocks[o.id].code}{!exchangeLocks[o.id].canConclude ? " — AGUARDANDO FINALIZAR A TROCA NO PDV" : ""}
+                              </Badge>
+                            )}
                             {o.is_test && (
                               <Badge className="bg-fuchsia-600 text-white text-sm font-black">TESTE</Badge>
                             )}
@@ -1783,6 +1798,7 @@ export function POSExpedition({ storeId, storeName, focusSaleId }: Props) {
                             size="lg"
                             variant="outline"
                             className="border-2 border-destructive text-destructive text-base font-black"
+                            disabled={!!exchangeLocks[o.id]}
                             onClick={() => setDeleteOrder(o)}
                             title="Excluir/estornar este pedido da expedição"
                           >
