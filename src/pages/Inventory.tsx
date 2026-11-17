@@ -38,6 +38,13 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import {
+  addResolvedStockCodeToCount,
+  findCountedItemByScannedCode,
+  incrementInventoryCountItem,
+  resolveStockLabelCode,
+  stockCodeCloneLookup,
+} from "@/lib/inventoryStockCode";
 
 interface PosStore {
   id: string;
@@ -495,10 +502,9 @@ export default function Inventory() {
     setQuantityInput("1");
 
     // Check if product already counted
-    const existing = countItems.find(i => i.barcode === barcode || i.sku === barcode);
+    const existing = findCountedItemByScannedCode(countItems, barcode);
     if (existing) {
-      const newQty = existing.counted_quantity + qty;
-      await supabase.from('inventory_count_items').update({ counted_quantity: newQty }).eq('id', existing.id);
+      const { quantity: newQty } = await incrementInventoryCountItem(existing, qty);
       setLastBipedProduct(`${existing.product_name} → ${newQty} un`);
       toast.success(`+${qty} ${existing.product_name} (total: ${newQty})`);
       barcodeInputRef.current?.focus();
@@ -559,11 +565,37 @@ export default function Inventory() {
       .limit(1);
 
     if (!products || products.length === 0) {
+      // New A4 label code: resolve only after every existing lookup above failed.
+      let resolvedStockCode = null;
+      try {
+        resolvedStockCode = await resolveStockLabelCode(barcode, selectedStoreId);
+      } catch (e) {
+        console.error('Stock label code resolution error:', e);
+      }
+
+      if (resolvedStockCode?.pos_product_id) {
+        const result = await addResolvedStockCodeToCount(activeCount.id, countItems, resolvedStockCode, qty);
+        if (result.error) {
+          toast.error('Erro ao registrar produto');
+        } else {
+          if (result.inserted) {
+            await supabase.from('inventory_counts').update({
+              counted_products: countItems.length + 1
+            }).eq('id', activeCount.id);
+          }
+          setLastBipedProduct(`${barcode} · ${result.productName} → ${result.quantity} un`);
+          toast.success(`${barcode} · ${result.productName} → ${result.quantity} un`);
+        }
+        barcodeInputRef.current?.focus();
+        return;
+      }
+
       // NOT FOUND in current store — check if it exists in ANOTHER store (clone flow)
+      const cloneLookupCode = stockCodeCloneLookup(resolvedStockCode, barcode);
       setIsCloneChecking(true);
       try {
         const { data: clone } = await supabase.functions.invoke('pos-clone-product-to-store', {
-          body: { barcode, target_store_id: selectedStoreId, preview: true },
+          body: { barcode: cloneLookupCode, target_store_id: selectedStoreId, preview: true },
         });
         if (clone?.found) {
           setCloneInfo({
@@ -573,7 +605,7 @@ export default function Inventory() {
             variant_count: clone.variant_count,
             variants: clone.variants || [],
           });
-          setCloneScanCode(barcode);
+          setCloneScanCode(cloneLookupCode);
           setCloneScanQty(qty);
           setShowCloneDialog(true);
           setIsCloneChecking(false);
