@@ -9,3 +9,4 @@
 - [x] Evitar itens duplicados e reaproveitar a clonagem para variação sem cadastro
 - [x] Confirmar CODE128 na câmera e testar somente com RPCs simuladas
 - [x] Listar os demais pontos de bipagem, sem alterá-los
+- [x] Auditar todos os formatos e caminhos no computador/celular, nos dois temas
