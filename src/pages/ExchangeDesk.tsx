@@ -17,6 +17,7 @@ import { SupportCostPanel } from "@/components/exchange-desk/SupportCostPanel";
 import { SupportOutboxPanel } from "@/components/exchange-desk/SupportOutboxPanel";
 import { SupportConversationsPanel } from "@/components/exchange-desk/SupportConversationsPanel";
 import { SupportAiHealthAlert } from "@/components/exchange-desk/SupportAiHealthAlert";
+import { SupportGuardBanner } from "@/components/exchange-desk/SupportGuardBanner";
 import { AutoReplySettings } from "@/components/exchange-desk/AutoReplySettings";
 import { AiAgentSettings } from "@/components/exchange-desk/AiAgentSettings";
 import { POSTaskWhatsAppDialog } from "@/components/pos/POSTaskWhatsAppDialog";
@@ -108,6 +109,7 @@ export default function ExchangeDesk({ storeId }: { storeId: string }) {
         </TabsList>
       </Tabs>
 
+      <SupportGuardBanner />
       <SupportAiHealthAlert />
 
       {isSupport && <SupportConversationsPanel refreshKey={refreshKey} onOpenChat={openChat} />}

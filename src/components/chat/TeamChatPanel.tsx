@@ -9,6 +9,7 @@ import { useTeamIdentity } from '@/hooks/chat/useTeamIdentity';
 import { useTeamChatPresence } from '@/hooks/chat/useTeamChatPresence';
 import { useTeamChatUnread } from '@/hooks/chat/useTeamChatUnread';
 import { cn } from '@/lib/utils';
+import { SupportGuardBanner } from '@/components/exchange-desk/SupportGuardBanner';
 
 interface ChatMessage {
   id: string;
@@ -260,6 +261,8 @@ export function TeamChatPanel({ onBack }: Props) {
           </div>
         </div>
       </div>
+
+      <SupportGuardBanner className="m-2 flex-shrink-0" />
 
       {/* Online members strip */}
       {members.length > 0 && (

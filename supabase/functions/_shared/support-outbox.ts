@@ -86,7 +86,7 @@ export async function processSupportOutbox(supabase: any, opts: { wait?: (ms: nu
         });
         data = res.data;
         sendError = await invokeError(res.error);
-        if (!sendError && (data?.error || data?.success === false)) sendError = JSON.stringify(data.error || data).slice(0, 1000);
+        if (!sendError && (data?.error || data?.success === false)) sendError = JSON.stringify(data?.details ? { error: data.error, details: data.details } : (data.error || data)).slice(0, 1000);
         providerMessageId = data?.messageId ?? data?.data?.messages?.[0]?.id ?? data?.data?.messageid ?? null;
         if (!sendError || instance.provider !== 'instagram' || !isTransientSendError(sendError) || attempt >= RETRY_WAITS_MS.length) break;
         await wait(RETRY_WAITS_MS[attempt]);
