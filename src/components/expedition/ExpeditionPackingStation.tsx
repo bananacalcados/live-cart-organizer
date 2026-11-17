@@ -8,6 +8,8 @@ import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { CheckCircle2, ScanBarcode, Camera, Keyboard, Package, ShieldCheck, AlertTriangle, Gift, ArrowRightLeft, Loader2, MapPin, Clock, Play, PackageCheck, PackageX, PackageMinus, Search, Filter, Users } from 'lucide-react';
+import { resolveStockLabelCode } from '@/lib/inventoryStockCode';
+import { itemMatchesResolvedStockLabel } from '@/lib/stockLabelMatch';
 
 interface Props {
   orders: any[];
@@ -226,7 +228,15 @@ export function ExpeditionPackingStation({ orders, searchTerm, onRefresh }: Prop
 
   const handleBarcodeScan = useCallback(async (barcode: string) => {
     if (!selectedGroup || !barcode.trim()) return;
-    const matchedItem = items.find((item: any) => item.barcode === barcode.trim() || item.sku === barcode.trim());
+    let matchedItem = items.find((item: any) => item.barcode === barcode.trim() || item.sku === barcode.trim());
+    if (!matchedItem) {
+      try {
+        const resolved = await resolveStockLabelCode(barcode.trim(), null);
+        if (resolved) matchedItem = items.find((item: any) => itemMatchesResolvedStockLabel(item, resolved));
+      } catch {
+        // Falha na etiqueta nova segue o aviso atual de código não encontrado.
+      }
+    }
     if (matchedItem) {
       const key = matchedItem.id;
       const current = scannedItems[key] || 0;
@@ -244,13 +254,26 @@ export function ExpeditionPackingStation({ orders, searchTerm, onRefresh }: Prop
   }, [selectedGroup, items, scannedItems, transferStockIfNeeded]);
 
   // Product-first scan: find group by scanned barcode/sku
-  const handleProductScan = useCallback((barcode: string) => {
+  const handleProductScan = useCallback(async (barcode: string) => {
     if (!barcode.trim()) return;
     const trimmed = barcode.trim();
 
-    const matchingGroups = customerGroups.filter(group =>
+    let matchingGroups = customerGroups.filter(group =>
       group.allItems.some((item: any) => item.barcode === trimmed || item.sku === trimmed)
     );
+
+    if (matchingGroups.length === 0) {
+      try {
+        const resolved = await resolveStockLabelCode(trimmed, null);
+        if (resolved) {
+          matchingGroups = customerGroups.filter(group =>
+            group.allItems.some((item: any) => itemMatchesResolvedStockLabel(item, resolved))
+          );
+        }
+      } catch {
+        // Falha na etiqueta nova segue o aviso atual de pedido não encontrado.
+      }
+    }
 
     if (matchingGroups.length === 0) {
       toast.error(`Nenhum pedido encontrado com o código: ${trimmed}`);

@@ -11,6 +11,8 @@ import { ExpeditionBarcodeScanner } from '@/components/expedition/ExpeditionBarc
 import { StockCheckRequestDialog } from '@/components/expedition/StockCheckRequestDialog';
 import { StockCorrectionDialog } from '@/components/expedition-beta/StockCorrectionDialog';
 import { EmitNfeButton } from '@/components/fiscal/EmitNfeButton';
+import { resolveStockLabelCode } from '@/lib/inventoryStockCode';
+import { itemMatchesResolvedStockLabel } from '@/lib/stockLabelMatch';
 
 interface Props {
   orders: any[];
@@ -220,13 +222,22 @@ export function BetaPickingList({ orders, searchTerm, showChecking, onRefresh }:
     return () => { supabase.removeChannel(channel); };
   }, [onRefresh]);
 
-  const handleBarcodeScan = useCallback((code: string) => {
+  const handleBarcodeScan = useCallback(async (code: string) => {
     const trimmed = code.trim();
     if (!trimmed) return;
 
-    const matched = sortedItems.find(([key, item]) =>
+    let matched = sortedItems.find(([key, item]) =>
       item.sku === trimmed || item.barcodes.includes(trimmed)
     );
+
+    if (!matched) {
+      try {
+        const resolved = await resolveStockLabelCode(trimmed, null);
+        if (resolved) matched = sortedItems.find(([, item]) => itemMatchesResolvedStockLabel(item, resolved));
+      } catch {
+        // Falha na etiqueta nova segue o aviso atual de produto não encontrado.
+      }
+    }
 
     if (!matched) {
       toast.error(`Produto não encontrado: ${trimmed}`);

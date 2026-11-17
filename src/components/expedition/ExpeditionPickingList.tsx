@@ -9,6 +9,8 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { CheckCircle2, XCircle, Printer, MapPin, Loader2, RefreshCw, ScanBarcode, Clock, ShieldCheck, Camera, X, Users, Search, AlertTriangle, Hand, Store } from 'lucide-react';
 import { ExpeditionBarcodeScanner } from '@/components/expedition/ExpeditionBarcodeScanner';
 import { StockCheckRequestDialog } from '@/components/expedition/StockCheckRequestDialog';
+import { resolveStockLabelCode } from '@/lib/inventoryStockCode';
+import { itemMatchesResolvedStockLabel } from '@/lib/stockLabelMatch';
 
 interface Props {
   orders: any[];
@@ -282,7 +284,7 @@ export function ExpeditionPickingList({ orders, searchTerm, showChecking, onRefr
   };
 
   // Barcode scan handler for checking mode
-  const handleBarcodeScan = useCallback((code: string) => {
+  const handleBarcodeScan = useCallback(async (code: string) => {
     const trimmed = code.trim();
     if (!trimmed) return;
 
@@ -298,6 +300,15 @@ export function ExpeditionPickingList({ orders, searchTerm, showChecking, onRefr
     if (!matched && gtinToKeyMap[trimmed]) {
       const mappedKey = gtinToKeyMap[trimmed];
       matched = sortedItems.find(([key]) => key === mappedKey);
+    }
+
+    if (!matched) {
+      try {
+        const resolved = await resolveStockLabelCode(trimmed, null);
+        if (resolved) matched = sortedItems.find(([, item]) => itemMatchesResolvedStockLabel(item, resolved));
+      } catch {
+        // Falha na etiqueta nova segue o aviso atual de produto não encontrado.
+      }
     }
 
     if (!matched) {

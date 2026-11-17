@@ -9,6 +9,8 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { CheckCircle2, ScanBarcode, Camera, Package, Loader2, PackageCheck, PackageMinus, PackageX, Search, Users, Gift, Truck, FileText, AlertTriangle } from 'lucide-react';
 import { EmitNfeButton } from '@/components/fiscal/EmitNfeButton';
+import { resolveStockLabelCode } from '@/lib/inventoryStockCode';
+import { itemMatchesResolvedStockLabel } from '@/lib/stockLabelMatch';
 
 const Barcode = lazy(() => import('react-barcode'));
 
@@ -162,9 +164,17 @@ export function BetaPackingStation({ orders, searchTerm, onRefresh }: Props) {
     setQualityChecks({ feet_correct: false, no_defects: false, gift_verified: !hasGift });
   }, [selectedGroupKey, hasGift]);
 
-  const handleBarcodeScan = useCallback((barcode: string) => {
+  const handleBarcodeScan = useCallback(async (barcode: string) => {
     if (!selectedGroup || !barcode.trim()) return;
-    const matchedItem = items.find((item: any) => item.barcode === barcode.trim() || item.sku === barcode.trim());
+    let matchedItem = items.find((item: any) => item.barcode === barcode.trim() || item.sku === barcode.trim());
+    if (!matchedItem) {
+      try {
+        const resolved = await resolveStockLabelCode(barcode.trim(), null);
+        if (resolved) matchedItem = items.find((item: any) => itemMatchesResolvedStockLabel(item, resolved));
+      } catch {
+        // Falha na etiqueta nova segue o aviso atual de código não encontrado.
+      }
+    }
     if (matchedItem) {
       const key = matchedItem.id;
       const current = scannedItems[key] || 0;
@@ -180,9 +190,17 @@ export function BetaPackingStation({ orders, searchTerm, onRefresh }: Props) {
     setBarcodeInput('');
   }, [selectedGroup, items, scannedItems]);
 
-  const handleProductScan = useCallback((barcode: string) => {
+  const handleProductScan = useCallback(async (barcode: string) => {
     if (!barcode.trim()) return;
-    const matching = customerGroups.filter(g => g.allItems.some((i: any) => i.barcode === barcode.trim() || i.sku === barcode.trim()));
+    let matching = customerGroups.filter(g => g.allItems.some((i: any) => i.barcode === barcode.trim() || i.sku === barcode.trim()));
+    if (matching.length === 0) {
+      try {
+        const resolved = await resolveStockLabelCode(barcode.trim(), null);
+        if (resolved) matching = customerGroups.filter(g => g.allItems.some((i: any) => itemMatchesResolvedStockLabel(i, resolved)));
+      } catch {
+        // Falha na etiqueta nova segue o aviso atual de pedido não encontrado.
+      }
+    }
     if (matching.length === 1) {
       setSelectedGroupKey(matching[0].key);
       toast.success(`Pedido(s) ${matching[0].orderNames.join(', ')} localizado(s)!`);

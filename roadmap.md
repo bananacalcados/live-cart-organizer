@@ -16,3 +16,9 @@
 - [x] Fase 2: cartão "Troca em andamento" no modal + adicionar produto + cancelar troca
 - [x] Fase 3: diferença (link com frete grátis/cotado/valor fixo, voucher sem validade)
 - [x] Fase 4: "Novo envio" na finalização do PDV
+
+# Etiquetas novas — parte 2
+- [x] Aceitar códigos novos na conferência, separação e embalagem da Expedição
+- [x] Aceitar códigos novos em transferências, trocas e entrada por grade
+- [x] Testar todas as telas com RPC simulada e auditar a conferência na prévia
+- [x] Responder como a conferência pode ser concluída, o que é registrado e quais itens não têm etiqueta

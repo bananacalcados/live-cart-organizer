@@ -51,7 +51,7 @@ export function findCountedItemForResolvedCode<T extends Pick<InventoryStockCoun
   );
 }
 
-export async function resolveStockLabelCode(code: string, storeId: string): Promise<ResolvedStockCode | null> {
+export async function resolveStockLabelCode(code: string, storeId: string | null): Promise<ResolvedStockCode | null> {
   if (!isNewStockLabelCode(code)) return null;
   const { data, error } = await (supabase.rpc as any)("resolve_stock_code", {
     p_code: code,

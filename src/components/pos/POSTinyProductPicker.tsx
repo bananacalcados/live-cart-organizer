@@ -3,6 +3,8 @@ import { Search, Loader2, Package } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
+import { resolvePosNewCode } from "@/lib/posStockCode";
 
 interface TinyProduct {
   tiny_id: number;
@@ -47,25 +49,38 @@ export function POSTinyProductPicker({ storeId, label = "Produto", value, onSele
     if (term.length < 2) { setResults([]); return; }
     setSearching(true);
     try {
-      const isBarcode = /^\d{8,14}$/.test(term);
-
-      // First try local DB — use unaccent RPC for text search, include ALL products (even zero stock)
-      let localData: any[] | null = null;
-
-      if (isBarcode) {
-        const { data } = await supabase
-          .from('pos_products')
-          .select('*')
-          .eq('store_id', storeId)
-          .or(`barcode.eq.${term},sku.eq.${term}`)
-          .order('name')
-          .limit(20);
-        localData = data;
-      } else {
+      const searchLocal = async (value: string): Promise<any[] | null> => {
+        const isBarcode = /^\d{8,14}$/.test(value);
+        if (isBarcode) {
+          const { data } = await supabase
+            .from('pos_products')
+            .select('*')
+            .eq('store_id', storeId)
+            .or(`barcode.eq.${value},sku.eq.${value}`)
+            .order('name')
+            .limit(20);
+          return data;
+        }
         // Use unaccent RPC for accent-insensitive search, no is_active filter
         const { data } = await supabase
-          .rpc('search_products_unaccent', { search_term: term, p_store_id: storeId }) as any;
-        localData = data;
+          .rpc('search_products_unaccent', { search_term: value, p_store_id: storeId }) as any;
+        return data;
+      };
+
+      // First try local DB — use unaccent RPC for text search, include ALL products (even zero stock)
+      let localData = await searchLocal(term);
+
+      if (!localData?.length) {
+        try {
+          const label = await resolvePosNewCode(term, storeId);
+          if (label.kind === "no_store_product") {
+            toast.error(`${label.code} existe, mas não tem cadastro de estoque nesta loja`);
+          } else if (label.kind === "found") {
+            localData = await searchLocal(label.lookup);
+          }
+        } catch {
+          // Falha na etiqueta nova segue o resultado atual de busca vazia.
+        }
       }
 
       if (localData && localData.length > 0) {

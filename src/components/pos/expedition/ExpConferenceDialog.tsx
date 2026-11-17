@@ -28,6 +28,8 @@ import { sendTrackingWhatsApp } from "@/lib/pos/trackingSend";
 import { trackingCarrierFor } from "@/lib/logistics/trackingInput";
 import { attachRealTracking, getPublicTrackingCode, publicTrackingUrl } from "@/lib/shipmentTracking";
 import { TrackingVarValues, formatShippingAddress, renderTrackingMessage } from "@/lib/pos/trackingMessage";
+import { isNewStockLabelCode, resolveStockLabelCode, type ResolvedStockCode } from "@/lib/inventoryStockCode";
+import { itemMatchesResolvedStockLabel } from "@/lib/stockLabelMatch";
 
 
 interface Props {
@@ -230,14 +232,28 @@ export function ExpConferenceDialog({ order, storeId, open, onOpenChange, onFini
   const handleScan = async (raw?: string) => {
     const code = (raw ?? scanInput).replace(/\s/g, "");
     if (!code) return;
-    const item = order.items.find((i) => i.barcode === code && !checks[i.id]?.scanned);
+    let item = order.items.find((i) => i.barcode === code && !checks[i.id]?.scanned);
+    let resolved: ResolvedStockCode | null = null;
+
+    // Etiqueta nova: só consulta depois que a bipagem atual não encontrou o item.
+    if (!item && isNewStockLabelCode(code)) {
+      try {
+        resolved = await resolveStockLabelCode(code, storeId || order.store_id || null);
+        if (resolved) {
+          item = order.items.find((i) => !checks[i.id]?.scanned && itemMatchesResolvedStockLabel(i, resolved!));
+        }
+      } catch {
+        // Falha na consulta segue o fluxo atual de código não encontrado.
+      }
+    }
+
     if (item) {
       setChecks((p) => ({ ...p, [item.id]: { ...p[item.id], scanned: true } }));
       setScanInput("");
       toast.success(`Bipado: ${item.product_name}`);
       return;
     }
-    if (order.items.some((i) => i.barcode === code)) {
+    if (order.items.some((i) => i.barcode === code) || (resolved && order.items.some((i) => itemMatchesResolvedStockLabel(i, resolved)))) {
       toast.error("Este código já foi bipado");
       setScanInput("");
       return;

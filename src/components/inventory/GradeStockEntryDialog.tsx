@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Loader2, Trash2, Pencil, Search, PackagePlus } from "lucide-react";
 import { toast } from "sonner";
+import { resolvePosNewCode } from "@/lib/posStockCode";
 
 type SizeQty = { size: string; qty: number };
 interface Template { id: string; name: string; sizes: SizeQty[] }
@@ -215,13 +216,29 @@ function EntryTab({ templates, stores, onGoTemplates, onApplied }: { templates: 
     if (term.length < 2 || !storeId) { setResults([]); return; }
     const t = setTimeout(async () => {
       setSearching(true);
-      const safe = term.replace(/[,()%]/g, " ");
-      const { data } = await supabase.from("pos_products").select("parent_sku, name")
-        .eq("store_id", storeId).not("parent_sku", "is", null)
-        .or(`name.ilike.%${safe}%,parent_sku.ilike.%${safe}%,sku.ilike.%${safe}%,barcode.eq.${safe}`)
-        .limit(300);
+      const searchParents = async (value: string) => {
+        const safe = value.replace(/[,()%]/g, " ");
+        const { data } = await supabase.from("pos_products").select("parent_sku, name")
+          .eq("store_id", storeId).not("parent_sku", "is", null)
+          .or(`name.ilike.%${safe}%,parent_sku.ilike.%${safe}%,sku.ilike.%${safe}%,barcode.eq.${safe}`)
+          .limit(300);
+        return (data || []) as any[];
+      };
+      let rows = await searchParents(term);
+      if (!rows.length) {
+        try {
+          const label = await resolvePosNewCode(term, storeId);
+          if (label.kind === "no_store_product") {
+            toast.error(`${label.code} existe, mas não tem cadastro de estoque nesta loja`);
+          } else if (label.kind === "found") {
+            rows = await searchParents(label.lookup);
+          }
+        } catch {
+          // Falha na etiqueta nova segue o resultado atual de busca vazia.
+        }
+      }
       const map = new Map<string, string>();
-      for (const r of (data || []) as any[]) if (!map.has(r.parent_sku)) map.set(r.parent_sku, String(r.name || "").replace(/\s*-\s*[^-]*$/, ""));
+      for (const r of rows) if (!map.has(r.parent_sku)) map.set(r.parent_sku, String(r.name || "").replace(/\s*-\s*[^-]*$/, ""));
       setResults([...map.entries()].slice(0, 20).map(([parent_sku, name]) => ({ parent_sku, name })));
       setSearching(false);
     }, 300);

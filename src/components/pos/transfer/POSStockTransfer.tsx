@@ -13,6 +13,7 @@ import {
   REAL_STORES, draftKey, destKey, transferLabel, linesTotals, buildReceiptText,
   type TransferLine, type TransferResult,
 } from "./transferUtils";
+import { resolvePosNewCode } from "@/lib/posStockCode";
 
 interface Props { storeId: string }
 
@@ -106,9 +107,29 @@ export default function POSStockTransfer({ storeId }: Props) {
     lastScan.current = { q, t: now };
     setCode(""); setBusy(true);
     try {
-      const res = await invoke({ action: "resolve", store_id: fromStore, to_store_id: toStore, code: q });
+      let res = await invoke({ action: "resolve", store_id: fromStore, to_store_id: toStore, code: q });
       if (!res?.ok) throw new Error(res?.error || "Falha na busca");
-      const products: ResolvedProduct[] = res.products || [];
+      let products: ResolvedProduct[] = res.products || [];
+
+      if (!products.length) {
+        let label: Awaited<ReturnType<typeof resolvePosNewCode>> | null = null;
+        try {
+          label = await resolvePosNewCode(q, fromStore);
+        } catch {
+          // Falha da etiqueta nova mantém o aviso atual de produto não encontrado.
+        }
+        if (label?.kind === "no_store_product") {
+          beep(false);
+          toast.error(`${label.code} existe, mas não tem cadastro de estoque nesta loja`);
+          return;
+        }
+        if (label?.kind === "found") {
+          res = await invoke({ action: "resolve", store_id: fromStore, to_store_id: toStore, code: label.lookup });
+          if (!res?.ok) throw new Error(res?.error || "Falha na busca");
+          products = res.products || [];
+        }
+      }
+
       if (!products.length) { beep(false); toast.error(`Produto não encontrado no estoque da ${storeName(fromStore)}`); return; }
       if (products.length === 1 || res.mode === "code") addProduct(products[0]);
       else setChoices(products);
