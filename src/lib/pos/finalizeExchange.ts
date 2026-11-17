@@ -66,6 +66,8 @@ export interface FinalizeExchangeParams {
   /** Forma do estorno financeiro (quando resolucao_diferenca = 'estorno_financeiro'). */
   estorno_forma?: "pix" | "cartao" | "dinheiro" | null;
   codigo_devolucao?: string | null;
+  /** Fase 4: venda do produto da troca já na Expedição (pedido_novo_id). "Novo envio" libera ela, sem criar outra venda. */
+  novoEnvioSaleId?: string | null;
 }
 
 export type DevolucaoStatus =
@@ -84,6 +86,8 @@ export interface FinalizeExchangeResult {
   awaitingShipping?: boolean;
   /** ID da venda-espelho criada em pos_sales para a reposição (só em trocas). */
   posSaleId?: string | null;
+  /** Fase 4: produto da troca liberado na Expedição. */
+  novoEnvio?: boolean;
   devolucao: {
     status: DevolucaoStatus;
     chave?: string | null;
@@ -151,7 +155,7 @@ export async function finalizeExchange(
     motivo_cancelamento, sellerName, sellerId, conferidos, reposicaoItemIds,
     emitirDevolucao = true, ambiente,
     origem_canal, cliente_id, valor_devolvido, valor_reposicao,
-    resolucao_diferenca, estorno_forma, codigo_devolucao,
+    resolucao_diferenca, estorno_forma, codigo_devolucao, novoEnvioSaleId,
   } = params;
 
   let restocked = 0;
@@ -380,6 +384,16 @@ export async function finalizeExchange(
   if (concluded) {
     // ── 6) Criar venda-espelho da reposição na aba Pedidos (idempotente) ──
     // Só faz sentido quando é TROCA (tem reposição). Devolução pura não gera venda.
+    if (tipo === "troca" && novoEnvioSaleId) {
+      // Novo envio: o produto já está na Expedição. Só libera a conclusão (trava do servidor
+      // olha o status); a troca vira 'concluida' sozinha quando a Expedição concluir o envio.
+      const { error } = await supabase
+        .from("trocas_devolucoes")
+        .update({ status: "aguardando_envio", fase2_erro: null } as any)
+        .eq("id", eventId);
+      if (error) throw error;
+      return { totalReturn, restocked, concluded, awaitingShipping: false, posSaleId: novoEnvioSaleId, devolucao, atribuicao, novoEnvio: true };
+    }
     if (tipo === "troca") {
       const r = await ensureExchangeMirrorSale({
         eventId, loja_origem_id, pedido_original_id, origem_canal, cliente_id,

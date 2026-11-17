@@ -240,6 +240,12 @@ export function FinalizeExchangePicker({ open, sellerId, sellerName, onCancel, o
       );
       setReposicoes(items.filter((i) => i.direcao === "reposicao"));
 
+      // Novo envio (Fase 4): o envio segue pela Expedição, não pelo assistente de NF/rastreio.
+      if (ev.status === "aguardando_envio" && ev.pedido_novo_id) {
+        toast.info(`${ev.codigo_devolucao}: novo envio já liberado. Conclua o envio pela Expedição.`);
+        setSelected(null); setPhase("list");
+        return;
+      }
       // Reabrir aguardando_envio: pula direto pra NF-e ou pra rastreio.
       if (ev.status === "aguardando_envio") {
         await loadShippingState(ev);
@@ -308,6 +314,7 @@ export function FinalizeExchangePicker({ open, sellerId, sellerName, onCancel, o
         resolucao_diferenca: diferenca < -0.009 ? resolucao : undefined,
         estorno_forma: diferenca < -0.009 && resolucao === "estorno_financeiro" ? estornoForma : null,
         codigo_devolucao: selected.codigo_devolucao,
+        novoEnvioSaleId: selected.tipo === "troca" ? selected.pedido_novo_id : null,
       });
 
       const dev = result.devolucao;
@@ -371,6 +378,12 @@ export function FinalizeExchangePicker({ open, sellerId, sellerName, onCancel, o
         }
       }
 
+
+      if (result.novoEnvio) {
+        toast.success(`Novo envio liberado: o produto da troca ${selected.codigo_devolucao} já pode ter a Expedição concluída.`, { duration: 8000 });
+        onDone();
+        return;
+      }
 
       // Se ficou aguardando envio (troca com reposição), abre Step 2 (NF-e).
       if (result.awaitingShipping && result.posSaleId) {
@@ -621,6 +634,18 @@ export function FinalizeExchangePicker({ open, sellerId, sellerName, onCancel, o
 
 
 
+              {selected.tipo === "troca" && (
+                <div className={cn("rounded-lg border-2 p-3 space-y-1",
+                  selected.pedido_novo_id ? "border-sky-400 bg-sky-500/15" : "border-pos-white/10 bg-pos-white/5")}>
+                  <p className="text-[13px] font-bold text-pos-white">Novo envio</p>
+                  <p className="text-[11px] text-pos-white/70">
+                    {selected.pedido_novo_id
+                      ? "O produto da troca que está na Expedição (tag TROCA) será liberado para concluir o envio ao concluir aqui."
+                      : "Sem produto de troca na Expedição. Para usar o novo envio, adicione o produto pelo cartão \"Troca em andamento\" no WhatsApp."}
+                  </p>
+                </div>
+              )}
+
               <div className="flex items-center justify-between pt-2">
                 <Button variant="ghost" className="text-pos-white/70" onClick={() => setPhase("list")}>Voltar</Button>
                 <Button
@@ -629,7 +654,7 @@ export function FinalizeExchangePicker({ open, sellerId, sellerName, onCancel, o
                   onClick={finalize}
                 >
                   {saving ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <PackageCheck className="h-4 w-4 mr-1" />}
-                  Concluir troca/devolução
+                  {selected.tipo === "troca" && selected.pedido_novo_id ? "Concluir e liberar novo envio" : "Concluir troca/devolução"}
                 </Button>
               </div>
             </div>

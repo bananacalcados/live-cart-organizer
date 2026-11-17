@@ -1807,6 +1807,13 @@
       "when": 1794949834195,
       "tag": "0257_exchange_guard_keep_definer",
       "breakpoints": true
+    },
+    {
+      "idx": 258,
+      "version": "7",
+      "when": 1794952366556,
+      "tag": "0258_exchange_new_shipment_autoconclude",
+      "breakpoints": true
     }
   ]
 }
