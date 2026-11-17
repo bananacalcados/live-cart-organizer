@@ -25553,6 +25553,59 @@ export type Database = {
         }
         Relationships: []
       }
+      stock_inventory_cycles: {
+        Row: {
+          closed_at: string | null
+          closed_by: string | null
+          closed_by_name: string | null
+          created_by: string | null
+          created_by_name: string | null
+          id: string
+          name: string | null
+          notes: string | null
+          numero: number
+          started_at: string
+          status: string
+          store_id: string
+        }
+        Insert: {
+          closed_at?: string | null
+          closed_by?: string | null
+          closed_by_name?: string | null
+          created_by?: string | null
+          created_by_name?: string | null
+          id?: string
+          name?: string | null
+          notes?: string | null
+          numero?: number
+          started_at?: string
+          status?: string
+          store_id: string
+        }
+        Update: {
+          closed_at?: string | null
+          closed_by?: string | null
+          closed_by_name?: string | null
+          created_by?: string | null
+          created_by_name?: string | null
+          id?: string
+          name?: string | null
+          notes?: string | null
+          numero?: number
+          started_at?: string
+          status?: string
+          store_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "stock_inventory_cycles_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "pos_stores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       stock_label_batch_items: {
         Row: {
           adjustment_id: string | null
@@ -25620,6 +25673,7 @@ export type Database = {
           applied_at: string
           created_by: string | null
           created_by_name: string | null
+          cycle_id: string | null
           id: string
           items_changed: number
           master_id: string | null
@@ -25640,6 +25694,7 @@ export type Database = {
           applied_at?: string
           created_by?: string | null
           created_by_name?: string | null
+          cycle_id?: string | null
           id?: string
           items_changed?: number
           master_id?: string | null
@@ -25660,6 +25715,7 @@ export type Database = {
           applied_at?: string
           created_by?: string | null
           created_by_name?: string | null
+          cycle_id?: string | null
           id?: string
           items_changed?: number
           master_id?: string | null
@@ -34519,6 +34575,72 @@ export type Database = {
         }
         Returns: string
       }
+      stock_cycle_close: {
+        Args: { p_cycle_id: string; p_user_name?: string }
+        Returns: Json
+      }
+      stock_cycle_open: {
+        Args: { p_name?: string; p_store_id: string; p_user_name?: string }
+        Returns: Json
+      }
+      stock_cycle_report: {
+        Args: {
+          p_cycle_id: string
+          p_limit?: number
+          p_offset?: number
+          p_search?: string
+          p_status?: string
+        }
+        Returns: {
+          barcode: string
+          code: string
+          color: string
+          labels: number
+          last_batch_at: string
+          last_batch_numero: number
+          last_mode: string
+          master_id: string
+          pos_product_id: string
+          product_name: string
+          size: string
+          sku: string
+          status: string
+          stock: number
+          total_count: number
+          variant_id: string
+        }[]
+      }
+      stock_cycle_rows: {
+        Args: { p_cycle_id: string }
+        Returns: {
+          barcode: string
+          code: string
+          color: string
+          labels: number
+          last_batch_at: string
+          last_batch_numero: number
+          last_mode: string
+          master_id: string
+          pos_product_id: string
+          product_name: string
+          size: string
+          sku: string
+          status: string
+          stock: number
+          variant_id: string
+        }[]
+      }
+      stock_cycle_summary: { Args: { p_cycle_id: string }; Returns: Json }
+      stock_cycle_zero_unprinted: {
+        Args: {
+          p_confirm: string
+          p_cycle_id: string
+          p_max?: number
+          p_user_name?: string
+          p_variant_ids?: string[]
+        }
+        Returns: Json
+      }
       stock_label_preview: {
         Args: { p_master_id: string; p_store_id: string }
         Returns: {
@@ -34532,6 +34654,7 @@ export type Database = {
           variant_id: string
         }[]
       }
+      stock_zero_unlocked: { Args: never; Returns: boolean }
       stop_live_shown_product: {
         Args: { p_event_id: string }
         Returns: undefined
