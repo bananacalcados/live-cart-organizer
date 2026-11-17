@@ -49,6 +49,7 @@ import { ExpCorreiosShipmentPanel } from "./ExpCorreiosShipmentPanel";
 import { Printer, ClipboardList } from "lucide-react";
 import { getCorreiosLabelFormat, saveCorreiosLabelFormat, normalizeCorreiosLabelFormat, CORREIOS_LABEL_FORMATS, type CorreiosLabelFormat } from '@/lib/correiosLabelFormat';
 import { reserveCorreiosPrintTab, printCorreiosLabel } from '@/lib/openCorreiosLabel';
+import { SupportGuardBanner } from '@/components/exchange-desk/SupportGuardBanner';
 const ExpRefundsPanel = lazyNamed(() => import("./ExpRefundsPanel"), "ExpRefundsPanel");
 const ExchangeDesk = lazyNamed(() => import("@/pages/ExchangeDesk"), "default");
 
@@ -771,6 +772,7 @@ export function POSExpedition({ storeId, storeName, focusSaleId }: Props) {
 
   return (
     <div className="flex flex-col h-full bg-pos-bg">
+      {!showExchanges && <SupportGuardBanner className="m-3 mb-0" />}
       {/* Header */}
       <div className="px-4 py-4 border-b border-pos-border bg-pos-card">
         <div className="flex items-center justify-between gap-3 flex-wrap">

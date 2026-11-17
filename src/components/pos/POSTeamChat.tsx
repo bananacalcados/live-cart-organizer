@@ -12,6 +12,7 @@ import {
   ArrowRightLeft, AlertTriangle, CheckCircle2, ImageIcon, Mic, MicOff, Paperclip
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { SupportGuardBanner } from '@/components/exchange-desk/SupportGuardBanner';
 
 interface ChatMessage {
   id: string;
@@ -478,6 +479,7 @@ export function POSTeamChat({ storeId }: Props) {
 
   return (
     <div className="flex-1 flex flex-col h-full overflow-hidden">
+      <SupportGuardBanner className="m-2 mb-0 flex-shrink-0" />
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-pos-orange/20 bg-pos-white/5">
         <div>
