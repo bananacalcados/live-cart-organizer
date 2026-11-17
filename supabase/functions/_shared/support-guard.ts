@@ -16,6 +16,7 @@ export function isTransientSendError(error: string | null | undefined): boolean 
 /** NF/Correios/histórico exigem decisão humana; falha de envio e triagem podem voltar sozinhas. */
 export function shadowAutoRecoverable(reason: string | null | undefined): boolean {
   if (!reason) return false;
+  if (reason.startsWith('Erros técnicos repetidos na reversa da Central')) return true;
   return !/reversa|NF|nota|Correios|histórico|colocar a mensagem da reversa/i.test(reason);
 }
 

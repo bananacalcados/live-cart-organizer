@@ -19,6 +19,7 @@ Deno.test('volta sozinha só de sombra automática, após 30 min, triagem saudá
   assert(!planGuardTick({ ...s, triage_total: 6, triage_failed: 4 }, NOW).tryRecover, 'triagem doente');
   assert(!planGuardTick({ ...s, alert_configured: false }, NOW).tryRecover, 'sem envio de teste');
   assert(!shadowAutoRecoverable('Falha na reversa/NF da Central: x'), 'NF/Correios voltou sozinho');
+  assert(shadowAutoRecoverable('Erros técnicos repetidos na reversa da Central: timeout'), 'erro técnico repetido deve voltar sozinho');
 });
 Deno.test('aviso: no máximo 1 a cada 30 min e outro quando normaliza', () => {
   const paused = { ...base, paused: [{ id: 'i1', name: '@bananacalcados', until: new Date(NOW + 600_000).toISOString(), reason: '3 falhas' }] };

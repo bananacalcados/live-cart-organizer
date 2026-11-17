@@ -16,7 +16,26 @@ export function centralTestCode(requestId: string) {
   return `TS${digits}BR`;
 }
 
+export const TECH_PAUSE_PREFIX = 'Erros técnicos repetidos na reversa da Central';
+
+/** Erro de API/rede (Correios/SEFAZ fora, timeout, 5xx) — não é regra de negócio. */
+export function isTechnicalReverseError(msg: string | null | undefined): boolean {
+  if (!msg) return false;
+  return /timed? ?out|timeout|ECONN|network|fetch failed|HTTP 5\d\d|\b50[0-4]\b|indispon|fora do ar|fila da SEFAZ|Unexpected token '<'|<html|sem identificador|não retornaram o código|falha ao criar a reversa|Erro inesperado/i.test(msg);
+}
+
+async function recentTechnicalFailures(db: Db): Promise<number> {
+  if (!db.from) return 0;
+  try {
+    const since = new Date(Date.now() - 15 * 60_000).toISOString();
+    const { data } = await db.from('correios_reverse_shipments').select('error_message')
+      .like('idempotency_key', 'central-%').eq('status', 'erro').gte('updated_at', since).limit(20);
+    return (data || []).filter((r: any) => isTechnicalReverseError(r.error_message)).length;
+  } catch { return 0; }
+}
+
 type Db = {
+  from?: (t: string) => any;
   rpc: (name: string, args: Record<string, unknown>) => PromiseLike<{ data: any; error: any }>;
 };
 type Invoke = (name: string, body: Record<string, unknown>) => Promise<{ data: any; error: string | null }>;
@@ -110,7 +129,11 @@ export async function runCentralAutoReverse(db: Db, requestId: string, invoke: I
   // Um registro já existente sem código pode ser a outra chamada simultânea ainda processando.
   // Nunca emite outra nota nem outra pré-postagem: a equipe retoma a mesma reversa.
   const reason = String(providerError || 'Os Correios não retornaram o código de postagem').slice(0, 800);
-  await rpc(db, 'support_emergency_pause', { p_reason: `Falha na reversa/NF da Central: ${reason}` }).catch(() => null);
+  // Regra de negócio (CNPJ, dados faltando, pré-checagem) só escala este pedido.
+  // Pausa geral só com 3+ erros técnicos (API Correios/SEFAZ) em 15 min, e volta sozinha.
+  if (isTechnicalReverseError(reason) && (await recentTechnicalFailures(db)) >= 3) {
+    await rpc(db, 'support_emergency_pause', { p_reason: `${TECH_PAUSE_PREFIX}: ${reason}` }).catch(() => null);
+  }
   await rpc(db, 'central_reverse_finish', {
     p_request_id: requestId, p_reverse_id: item?.id || null, p_code: null, p_valid_until: null, p_error: reason,
   }).catch(() => null);

@@ -93,3 +93,10 @@ Deno.test('TESTE em andamento não dispara dry-run paralelo', async () => {
   const out: any = await runCentralAutoReverse(db as any, request, async () => { invokes++; return { data: null, error: null }; });
   assert(out.status === 'escalado' && invokes === 0);
 });
+
+Deno.test('regra de negócio da reversa nunca conta como erro técnico', async () => {
+  const { isTechnicalReverseError } = await import('./central-auto-reverse.ts');
+  if (isTechnicalReverseError('A nota desta venda é da empresa CNPJ 43102495000172, que não está vinculada')) throw new Error('CNPJ pausou');
+  if (isTechnicalReverseError('Pré-checagem da nota de devolução não passou')) throw new Error('precheck pausou');
+  if (!isTechnicalReverseError('Correios: HTTP 503')) throw new Error('503 não contou');
+});

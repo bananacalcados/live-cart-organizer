@@ -42,6 +42,11 @@ export function reverseAllowedCnpjs(value: unknown, contractCnpj: string): strin
   return [...new Set([...list, contractCnpj].map((v) => String(v || '').replace(/\D/g, '')).filter((v) => v.length === 14))];
 }
 
+/** Destinatário da reversa: o emitente da NF se vinculado ao cartão; senão o primeiro CNPJ vinculado. */
+export function reverseDestinationCnpj(emitCnpj: string, allowed: string[]): string {
+  return allowed.includes(emitCnpj) ? emitCnpj : allowed[0];
+}
+
 Deno.serve(withAccessLog("correios-reverse", async (req) => {
   const reply = (data: unknown, status = 200) => new Response(JSON.stringify(data), { status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
@@ -140,20 +145,6 @@ Deno.serve(withAccessLog("correios-reverse", async (req) => {
       const settings = await loadCorreiosSettings(db);
       const store = { ...(settings.remetente as any), nome: (settings.remetente as any)?.nome_etiqueta || 'Banana Calçados' };
       const markErr = async (msg: string) => { await db.from('correios_reverse_shipments').update({ status: 'erro', error_message: msg, updated_at: new Date().toISOString() }).eq('id', row.id); throw Object.assign(fail(msg, 502), { marked: true }); };
-      // Contrato/cartão dos Correios só aceita como destinatário os CNPJs vinculados a ele.
-      // A nota de devolução sai pela empresa da nota original; se esse CNPJ não está no contrato,
-      // o balcão recusa ("cartão suspenso/vencido"). Bloqueia ANTES de emitir nota ou pré-postagem.
-      {
-        const { data: orig } = await db.from('fiscal_documents').select('chave_acesso,finalidade')
-          .eq('pos_sale_id', row.sale_id).eq('modelo', 55).eq('status', 'authorized').neq('finalidade', 4)
-          .order('created_at', { ascending: false }).limit(1).maybeSingle();
-        const origCnpj = String(orig?.chave_acesso || '').slice(6, 20);
-        const { data: cfgRow } = await db.from('app_settings').select('value').eq('key', 'correios_reverse_allowed_cnpjs').maybeSingle();
-        const allowed = reverseAllowedCnpjs(cfgRow?.value, String((settings.token_meta as any)?.cnpj || ''));
-        if (/^\d{14}$/.test(origCnpj) && !allowed.includes(origCnpj)) {
-          await markErr(`A nota desta venda é da empresa CNPJ ${origCnpj}, que não está vinculada ao contrato dos Correios. A reversa seria recusada na agência — fale com o responsável pelo contrato antes de gerar.`);
-        }
-      }
       let nf: any = null;
       try {
         // Pré-checagem completa (XML/original, endereço, CFOP/CST e devolucao-guard) antes de qualquer emissão real.
@@ -188,8 +179,12 @@ Deno.serve(withAccessLog("correios-reverse", async (req) => {
         }
       } catch (e) { console.error('[correios-reverse] vínculo com troca falhou', e); }
       // Quem recebe a mercadoria é quem emitiu a nota de entrada: o CNPJ do destinatário precisa ser o da chave da nota.
+      // A NF pode ser de CNPJ diferente do contrato (Correios aceitam). O DESTINATÁRIO da pré-postagem,
+      // porém, precisa ser um CNPJ vinculado ao cartão: se o emitente da nota não for, usa o destinatário padrão.
       const emitCnpj = String(doc!.chave_acesso).slice(6, 20);
-      if (/^\d{14}$/.test(emitCnpj)) store.cnpj = emitCnpj;
+      const { data: cfgRow } = await db.from('app_settings').select('value').eq('key', 'correios_reverse_allowed_cnpjs').maybeSingle();
+      store.cnpj = reverseDestinationCnpj(emitCnpj, reverseAllowedCnpjs(cfgRow?.value, String((settings.token_meta as any)?.cnpj || '')));
+      const diag = { cartao_postagem: settings.cartao_postagem, contrato: settings.contrato, destinatario_cnpj: store.cnpj, nf_emitente_cnpj: emitCnpj, nf_numero: doc!.numero };
       const ad = row.address || {};
       const cust = { nome: row.customer_name, cpf: row.customer_cpf, telefone: row.customer_phone, email: row.request?.remetente?.email || null, cep: ad.cep, logradouro: ad.logradouro, numero: ad.numero, complemento: ad.complemento, bairro: ad.bairro, cidade: ad.cidade, uf: ad.uf };
       const valid = reverseValidity(new Date());
@@ -202,7 +197,7 @@ Deno.serve(withAccessLog("correios-reverse", async (req) => {
         const { cf } = await cws();
         const res: any = await cf('/prepostagem/v1/prepostagens', { method: 'POST', body: JSON.stringify({ ...payload, numeroCartaoPostagem: settings.cartao_postagem }) });
         if (!res?.id) throw new Error('Correios: pré-postagem reversa sem identificador');
-        const patch = { prepostagem_id: String(res.id), codigo_objeto: res.codigoObjeto || null, response: { id: res.id, codigoObjeto: res.codigoObjeto, statusAtual: res.statusAtual, prazoPostagem: res.prazoPostagem, dataValidadeLogReversa: res.dataValidadeLogReversa }, updated_at: new Date().toISOString() };
+        const patch = { prepostagem_id: String(res.id), codigo_objeto: res.codigoObjeto || null, response: { diag, id: res.id, codigoObjeto: res.codigoObjeto, statusAtual: res.statusAtual, prazoPostagem: res.prazoPostagem, dataValidadeLogReversa: res.dataValidadeLogReversa }, updated_at: new Date().toISOString() };
         await db.from('correios_reverse_shipments').update(patch).eq('id', row.id);
         row = { ...row, ...patch };
       } catch (e) {
