@@ -7,6 +7,7 @@ import { NewExchangePicker } from "./NewExchangePicker";
 import { PresentialExchangePicker } from "./PresentialExchangePicker";
 import { CustomerChargebackBadge } from "./CustomerChargebackBadge";
 import { CustomerExchangeBadge } from "./CustomerExchangeBadge";
+import { ExchangeInProgressCard } from "./ExchangeInProgressCard";
 import { ShippingTypeButtons } from "./ShippingTypeButtons";
 import { OrderTrackingLinkActions } from "./OrderTrackingLinkActions";
 import type { ChargebackRecord } from "@/hooks/useCustomerChargebacks";
@@ -67,6 +68,8 @@ export function CustomerOrderActions({
   const stop = (e: React.SyntheticEvent) => e.stopPropagation();
 
   return (
+    <>
+    {exchanges.length > 0 && <ExchangeInProgressCard saleId={saleId} onChanged={onChanged} />}
     <div className="mt-2 flex flex-wrap items-center gap-1.5" onClick={stop}>
       {exchanges.length > 0 && <CustomerExchangeBadge exchanges={exchanges} size="sm" />}
       {chargebacks.length > 0 && <CustomerChargebackBadge chargebacks={chargebacks} size="sm" />}
@@ -169,5 +172,6 @@ export function CustomerOrderActions({
       />
       )}
     </div>
+    </>
   );
 }

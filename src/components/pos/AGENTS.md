@@ -1,1 +1,2 @@
 - Chat "Reversa" opens NewExchangePicker by phone; the reverse dialog inside it is locked to the chosen sale/items and correios-reverse link_troca ties its return NF-e to the new exchange, so no reverse exists without an exchange.
+- Exchange replacement products are added only via RPC exchange_add_replacement (conditional total-0 sale linked by pedido_novo_id, prices from catalog, stock reserved by existing triggers) and removed only via exchange_cancel, so no revenue/CAPI/automation fires and stock returns on cancel.

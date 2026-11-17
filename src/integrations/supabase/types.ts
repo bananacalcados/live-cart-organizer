@@ -27851,6 +27851,8 @@ export type Database = {
       }
       trocas_devolucoes: {
         Row: {
+          cancelada_em: string | null
+          cancelada_por: string | null
           chave_acesso_original: string | null
           chave_devolucao: string | null
           cliente_id: string | null
@@ -27870,6 +27872,7 @@ export type Database = {
           loja_origem_id: string | null
           modo_expedicao: Database["public"]["Enums"]["td_modo_expedicao"]
           motivo: Database["public"]["Enums"]["td_motivo"]
+          motivo_cancelamento_troca: string | null
           motivo_excecao_antecipado: string | null
           nfe_reposicao_id: string | null
           origem_canal: Database["public"]["Enums"]["td_origem_canal"]
@@ -27890,6 +27893,8 @@ export type Database = {
           whatsapp_notification_sent_at: string | null
         }
         Insert: {
+          cancelada_em?: string | null
+          cancelada_por?: string | null
           chave_acesso_original?: string | null
           chave_devolucao?: string | null
           cliente_id?: string | null
@@ -27909,6 +27914,7 @@ export type Database = {
           loja_origem_id?: string | null
           modo_expedicao?: Database["public"]["Enums"]["td_modo_expedicao"]
           motivo: Database["public"]["Enums"]["td_motivo"]
+          motivo_cancelamento_troca?: string | null
           motivo_excecao_antecipado?: string | null
           nfe_reposicao_id?: string | null
           origem_canal: Database["public"]["Enums"]["td_origem_canal"]
@@ -27929,6 +27935,8 @@ export type Database = {
           whatsapp_notification_sent_at?: string | null
         }
         Update: {
+          cancelada_em?: string | null
+          cancelada_por?: string | null
           chave_acesso_original?: string | null
           chave_devolucao?: string | null
           cliente_id?: string | null
@@ -27948,6 +27956,7 @@ export type Database = {
           loja_origem_id?: string | null
           modo_expedicao?: Database["public"]["Enums"]["td_modo_expedicao"]
           motivo?: Database["public"]["Enums"]["td_motivo"]
+          motivo_cancelamento_troca?: string | null
           motivo_excecao_antecipado?: string | null
           nfe_reposicao_id?: string | null
           origem_canal?: Database["public"]["Enums"]["td_origem_canal"]
@@ -31988,6 +31997,14 @@ export type Database = {
       events_buyer_origin_matrix_range: {
         Args: { p_channel?: string; p_from: string; p_to: string }
         Returns: Json
+      }
+      exchange_add_replacement: {
+        Args: { p_items: Json; p_troca_id: string }
+        Returns: string
+      }
+      exchange_cancel: {
+        Args: { p_motivo: string; p_troca_id: string }
+        Returns: undefined
       }
       exchange_desk_action: {
         Args: {
