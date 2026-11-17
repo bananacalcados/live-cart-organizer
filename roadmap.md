@@ -1,6 +1,5 @@
-# Quatro correções de cadastro, trocas e chat (16/11)
-- [x] Preencher WhatsApp vazio da ficha de todos os pedidos identificados no cadastro
-- [x] Validar endereço no navegador e no servidor, sem recusar endereços comuns
-- [x] Registrar no chat os avisos automáticos de troca/devolução enviados com sucesso
-- [x] Avisar e permitir abrir histórico do mesmo telefone em outra instância
-- [x] Rodar 48 testes simulados e revisar as telas sem envios ou alterações reais
+# Fase 3 do estoque — Inventário
+- [x] Criar a aba Inventário com abertura, histórico, resumo e relatório paginado
+- [x] Adicionar exportação CSV, zeramento sequencial com parada e encerramento
+- [x] Exibir lotes de zeramento no histórico, sem reimpressão
+- [x] Testar com RPCs simuladas, sem alterar estoque real, e revisar a prévia

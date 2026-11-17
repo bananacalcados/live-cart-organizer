@@ -18,6 +18,7 @@ const MODE_LABELS: Record<string, string> = {
   print_only: "Só impressão",
   balance: "Balanço",
   add: "Entrada",
+  zero: "Zeramento",
 };
 
 interface StoreOption { id: string; name: string }
@@ -249,6 +250,7 @@ export function LabelBatchesHistory({ stores, initialStoreId }: { stores: StoreO
               <SelectItem value="print_only">Só impressão</SelectItem>
               <SelectItem value="balance">Balanço</SelectItem>
               <SelectItem value="add">Entrada</SelectItem>
+              <SelectItem value="zero">Zeramento</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -282,10 +284,12 @@ export function LabelBatchesHistory({ stores, initialStoreId }: { stores: StoreO
                       </div>
                     </button>
                     <div className="flex flex-wrap gap-2">
-                      <Button size="sm" variant="outline" disabled={reprintBusy === batch.id} onClick={() => void reprint(batch)}>
-                        {reprintBusy === batch.id ? <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : <Printer className="mr-1 h-3.5 w-3.5" />}
-                        Reimprimir etiquetas
-                      </Button>
+                      {batch.mode !== "zero" && (
+                        <Button size="sm" variant="outline" disabled={reprintBusy === batch.id} onClick={() => void reprint(batch)}>
+                          {reprintBusy === batch.id ? <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : <Printer className="mr-1 h-3.5 w-3.5" />}
+                          Reimprimir etiquetas
+                        </Button>
+                      )}
                       {batch.status === "applied" && batch.mode !== "print_only" && (
                         <Button size="sm" variant="outline" onClick={() => setRevertTarget(batch)}>
                           <RotateCcw className="mr-1 h-3.5 w-3.5" /> Desfazer
