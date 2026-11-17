@@ -25,3 +25,16 @@ export function parseTrackingInput(input: string): { code: string; carrier: stri
 export function normalizeTrackingField(input: string): string {
   return parseTrackingInput(input)?.code ?? input;
 }
+
+/**
+ * Transportadora real do rastreio: o link colado (ex.: Frenet .../JAD/...) vence a forma de envio
+ * cotada quando ela diz Correios mas o objeto é de outra transportadora — senão a cliente
+ * recebe "código dos Correios" que não rastreia nos Correios.
+ */
+export function trackingCarrierFor(url: string | null | undefined, code: string | null | undefined, chosen: string | null | undefined): string | null {
+  const parsed = parseTrackingInput(url || "")?.carrier ?? null;
+  const c = (chosen || "").trim() || null;
+  if (parsed && parsed !== "Correios" && (!c || /correios/i.test(c))) return parsed;
+  if (c && /correios/i.test(c) && code && !/^[A-Z]{2}[0-9]{9}[A-Z]{2}$/i.test(code.trim()) && /jadlog|\/JAD\//i.test(url || "")) return "Jadlog";
+  return c;
+}

@@ -8,6 +8,7 @@ import { alreadyResolved, CONSOLIDATION_TEXT, cpfRequestAllowed, isRefundStatusQ
 import { completedRefundText, type SupportRefundConsult } from "./support-refund.ts";
 import { currentCustomerText, resolveReturnFlow, returnFlowContinuation, type ReturnFlowContext, type ReturnFlowState } from "./support-return-flow.ts";
 import { instagramDmHandoff } from "./instagram-support.ts";
+import { MULTI_ORDER_MAX, multiTrackingText, recentTrackableOrders, whichProductQuestion } from "./support-multi-orders.ts";
 
 export const TRIAGE_CATEGORIES = ["venda", "troca", "devolucao", "troca_ou_devolucao_ambiguo", "rastreio", "outro_suporte", "nada"] as const;
 export type TriageCategory = typeof TRIAGE_CATEGORIES[number];
@@ -32,7 +33,7 @@ export function sanitizeText(t: string): string {
 
 export function firstName(name: string | null | undefined): string | null {
   const f = (name || "").trim().split(/\s+/)[0] || "";
-  if (!f || /\d|@/.test(f)) return null;
+  if (!f || /\d|@/.test(f) || !/\p{L}{2}/u.test(f)) return null;
   return f.charAt(0).toUpperCase() + f.slice(1).toLowerCase();
 }
 
@@ -267,6 +268,7 @@ export type AgentOutcome = {
   returnFlowState?: ReturnFlowState | null;
   returnFlowReason?: string | null;
   returnFlowPendingLink?: "troca" | "devolucao" | null;
+  multiOrders?: "rastreio_varios_pedidos" | "perguntou_qual_produto";
 };
 
 export async function runAgent(cfg: GatewayConfig, model: string, script: string, nome: string | null, triage: Triage,
@@ -314,8 +316,50 @@ export async function runAgent(cfg: GatewayConfig, model: string, script: string
     if (!candidate.confirmed) return { ...out, text: `Encontrei um pedido no nome de ${candidate.first_name}. É o do ${candidate.product} comprado em ${candidate.month}?` };
     out.cpfDifferentPhone = candidate.different_phone;
   }
-  const selected = deps.orders.length === 1 ? deps.orders[0] : deps.orders.find(o => o.ref === triage.facts?.selected_ref);
-  if (deps.orders.length > 1 && !selected) return handoff("varios_pedidos_sem_identificacao", triage.justificativa);
+  let selected = deps.orders.length === 1 ? deps.orders[0] : deps.orders.find(o => o.ref === triage.facts?.selected_ref);
+  if (deps.orders.length > 1 && !selected) {
+    // Rastreio com vários pedidos: responde a situação de cada um (até 4), sem escalar.
+    if (triage.categoria === "rastreio" && deps.tracking) {
+      const recent = recentTrackableOrders(deps.orders, now);
+      if (!recent.length) return handoff("pedido_nao_localizado", triage.justificativa);
+      if (recent.length > MULTI_ORDER_MAX) return handoff("varios_pedidos_mais_de_4", triage.justificativa);
+      const rows: { order: OrderCtx; info: TrackingInfo }[] = [];
+      for (const o of recent) {
+        const info = await deps.tracking(o.ref);
+        rec("consultar_rastreio", { pedido: o.ref }, info ? { etapa: info.etapa, tem_link: !!info.url } : { erro: "sem_dados_de_envio" });
+        if (!info) return handoff("sem_dados_de_envio", triage.justificativa);
+        const raw = trackingNeedsHuman(info);
+        // Ainda não enviado não tem link: diz "em separação" em vez de escalar.
+        const h = raw === "sem_rastreio" && (info.etapa === "em_separacao" || info.etapa === "separado") ? null : raw;
+        if (h) { out.tracking = { ref: o.ref, info }; return handoff("rastreio:" + h, triage.justificativa); }
+        rows.push({ order: o, info });
+      }
+      out.tracking = { ref: rows[0].order.ref, info: rows[0].info };
+      out.multiOrders = "rastreio_varios_pedidos";
+      out.text = multiTrackingText(nome, rows);
+      return out;
+    }
+    // Troca/devolução com vários pedidos: uma pergunta listando os elegíveis, sem link.
+    if (["troca", "devolucao", "troca_ou_devolucao_ambiguo"].includes(triage.categoria)) {
+      const tipo = triage.categoria === "troca" ? "troca" : triage.categoria === "devolucao" ? "devolucao" : null;
+      const listed: OrderCtx[] = [];
+      for (const o of deps.orders.slice(0, 8)) {
+        if (o.canal !== "online") continue;
+        const e = await deps.checkEligibility(o.ref, tipo ?? "troca");
+        rec("checar_elegibilidade", { pedido: o.ref, tipo: tipo ?? "troca" }, e);
+        if (e.elegivel === "eligible" || e.motivo === "sem_data_de_entrega") listed.push(o);
+      }
+      if (listed.length === 1) {
+        // Só um elegível: segue o fluxo normal com ele.
+        triage = { ...triage, facts: { ...(triage.facts ?? {} as SupportFacts), selected_ref: listed[0].ref } as SupportFacts };
+      } else if (listed.length >= 2 && listed.length <= MULTI_ORDER_MAX) {
+        out.multiOrders = "perguntou_qual_produto";
+        out.text = whichProductQuestion(nome, tipo, listed);
+        return out;
+      } else return handoff("varios_pedidos_sem_identificacao", triage.justificativa);
+    } else return handoff("varios_pedidos_sem_identificacao", triage.justificativa);
+  }
+  if (!selected) selected = deps.orders.find(o => o.ref === triage.facts?.selected_ref);
   const returnStep = refundQuestion ? null : resolveReturnFlow({
     category: triage.categoria, text: currentCustomerText(conv), nome,
     flow: deps.returnFlow, offersAlreadyMade: deps.offersAlreadyMade, maxOffers: deps.maxOffers,
@@ -512,11 +556,12 @@ CONTEXTO DO SISTEMA (não invente nada além disso):
 }
 
 /** Decisão final é do sistema, a partir das ações validadas. */
-export function finalDecision(o: Pick<AgentOutcome, "link" | "handoff"> & { tracking?: AgentOutcome["tracking"]; consolidation?: AgentOutcome["consolidation"]; resolved?: boolean; prazoPorEnvio?: boolean; prazoPorRecebimentoInformado?: boolean }, orders: OrderCtx[]): { decision: string; reason: string } {
+export function finalDecision(o: Pick<AgentOutcome, "link" | "handoff"> & { tracking?: AgentOutcome["tracking"]; consolidation?: AgentOutcome["consolidation"]; resolved?: boolean; prazoPorEnvio?: boolean; prazoPorRecebimentoInformado?: boolean; multiOrders?: AgentOutcome["multiOrders"] }, orders: OrderCtx[]): { decision: string; reason: string } {
   if (o.resolved) return { decision: "nada", reason: "caso_ja_resolvido" };
   if (o.consolidation) return { decision: "consolidar_em_outra_instancia", reason: "atendimento_humano_mesmo_assunto:" + o.consolidation.id };
   if (o.handoff) return { decision: "fila", reason: "ia_escalou:" + o.handoff.motivo };
   if (o.link) return { decision: "enviar_link", reason: o.prazoPorRecebimentoInformado ? "prazo_pela_data_informada_pela_cliente" : o.prazoPorEnvio ? "prazo_garantido_pela_data_de_envio" : "um_pedido_elegivel" };
+  if (o.multiOrders) return { decision: "conversa", reason: o.multiOrders };
   if (o.tracking) {
     const h = trackingNeedsHuman(o.tracking.info);
     if (h) return { decision: "fila", reason: "rastreio:" + h };

@@ -34932,6 +34932,7 @@ export type Database = {
         Returns: boolean
       }
       support_guard_status: { Args: never; Returns: Json }
+      support_is_nudge: { Args: { p_text: string }; Returns: boolean }
       support_mask_cpf_text: { Args: { p_value: string }; Returns: string }
       support_normalize_text: { Args: { p: string }; Returns: string }
       support_outbox_claim: {

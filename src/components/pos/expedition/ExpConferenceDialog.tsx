@@ -24,6 +24,7 @@ import { isValidCpf, formatCpf, onlyDigitsCpf } from "@/lib/cpfUtils";
 import { hydrateSaleCustomer } from "./customerHydrate";
 
 import { sendTrackingWhatsApp } from "@/lib/pos/trackingSend";
+import { trackingCarrierFor } from "@/lib/logistics/trackingInput";
 import { attachRealTracking, getPublicTrackingCode, publicTrackingUrl } from "@/lib/shipmentTracking";
 import { TrackingVarValues, formatShippingAddress, renderTrackingMessage } from "@/lib/pos/trackingMessage";
 
@@ -388,10 +389,11 @@ export function ExpConferenceDialog({ order, storeId, open, onOpenChange, onFini
         .update({
           tracking_code: tracking.trim() || null,
           tracking_url: trackingUrl.trim() || null,
+          tracking_carrier: trackingCarrierFor(trackingUrl, tracking, carrier),
           delivery_days: deliveryDays.trim() || null,
         } as any)
         .in("id", groupIds);
-      await attachRealTracking({ saleIds: groupIds, realCode: tracking.trim(), carrier });
+      await attachRealTracking({ saleIds: groupIds, realCode: tracking.trim(), carrier: trackingCarrierFor(trackingUrl, tracking, carrier) });
       toast.success("Rastreio enviado no WhatsApp");
 
     } catch (e: any) {
@@ -449,7 +451,7 @@ export function ExpConferenceDialog({ order, storeId, open, onOpenChange, onFini
         expedition_finished_at: allCompleted ? new Date().toISOString() : null,
         expedition_waiting_products: !allCompleted,
         shipping_carrier: carrier,
-        tracking_carrier: carrier,
+        tracking_carrier: trackingCarrierFor(trackingUrl, tracking, carrier),
         tracking_code: tracking.trim() || null,
         tracking_url: trackingUrl.trim() || null,
         delivery_days: deliveryDays.trim() || null,
@@ -459,7 +461,7 @@ export function ExpConferenceDialog({ order, storeId, open, onOpenChange, onFini
 
       // Ao registrar o código real, o acompanhamento do cliente pula direto para "Enviado".
       if (tracking.trim()) {
-        await attachRealTracking({ saleIds: groupIds, realCode: tracking.trim(), carrier });
+        await attachRealTracking({ saleIds: groupIds, realCode: tracking.trim(), carrier: trackingCarrierFor(trackingUrl, tracking, carrier) });
       }
 
       await saveExpeditionShippingCost({

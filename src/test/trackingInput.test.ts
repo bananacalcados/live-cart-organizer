@@ -22,3 +22,16 @@ describe("rastreio colado como link", () => {
     expect(parseTrackingInput("HTTPS://RASTREIO.FRENET.COM.BR/JA159D/619019")).toBeNull();
   });
 });
+
+import { trackingCarrierFor } from "@/lib/logistics/trackingInput";
+describe("transportadora real do rastreio", () => {
+  it("link Frenet JAD com envio cotado nos Correios vira Jadlog", () => {
+    expect(trackingCarrierFor("https://rastreio.frenet.com.br/JAD/636282206", "636282206", "Correios SEDEX")).toBe("Jadlog");
+  });
+  it("objeto dos Correios mantém a forma de envio", () => {
+    expect(trackingCarrierFor("https://rastreio.frenet.com.br/COR/AP724578092BR", "AP724578092BR", "Correios PAC")).toBe("Correios PAC");
+  });
+  it("sem link mantém o que foi escolhido", () => {
+    expect(trackingCarrierFor("", "123", "Jadlog")).toBe("Jadlog");
+  });
+});

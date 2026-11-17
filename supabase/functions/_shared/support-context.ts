@@ -81,7 +81,9 @@ export async function buildSupportContext(sb: Sb, s: { phone: string; whatsapp_n
       ? await sb.from("shipment_simulations").select("id,sale_id,tracking_code,stage,stage_history,posted_at,delivered_at,incident_type,merged_into_id,real_events,created_at").in("id", parentIds)
       : { data: [] };
     for (const z of simRows ?? []) {
-      const eff = z.merged_into_id ? (parents ?? []).find((p: any) => p.id === z.merged_into_id) ?? z : z;
+      // Unificado mas ainda não despachado (sem envio próprio): mostra a etapa do próprio pedido.
+      const parent = z.merged_into_id ? (parents ?? []).find((p: any) => p.id === z.merged_into_id) : null;
+      const eff = parent && !(saleShip.get(z.sale_id) == null && ["em_separacao", "separado"].includes(z.stage)) ? parent : z;
       const prev = sims.get(z.sale_id);
       if (!prev || String(z.created_at) > String(prev.created_at)) sims.set(z.sale_id, eff);
     }

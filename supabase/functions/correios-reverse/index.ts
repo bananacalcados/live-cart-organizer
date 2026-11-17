@@ -36,6 +36,12 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const fail = (msg: string, status = 400) => Object.assign(new Error(msg), { status });
 const fromB64 = (s: string) => Uint8Array.from(atob(s), (c) => c.charCodeAt(0));
 
+/** CNPJs aceitos como destinatário da reversa no contrato (app_settings.correios_reverse_allowed_cnpjs). */
+export function reverseAllowedCnpjs(value: unknown, contractCnpj: string): string[] {
+  const list = Array.isArray(value) ? value : Array.isArray((value as any)?.cnpjs) ? (value as any).cnpjs : ['16941125000156'];
+  return [...new Set([...list, contractCnpj].map((v) => String(v || '').replace(/\D/g, '')).filter((v) => v.length === 14))];
+}
+
 Deno.serve(withAccessLog("correios-reverse", async (req) => {
   const reply = (data: unknown, status = 200) => new Response(JSON.stringify(data), { status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
@@ -134,6 +140,20 @@ Deno.serve(withAccessLog("correios-reverse", async (req) => {
       const settings = await loadCorreiosSettings(db);
       const store = { ...(settings.remetente as any), nome: (settings.remetente as any)?.nome_etiqueta || 'Banana Calçados' };
       const markErr = async (msg: string) => { await db.from('correios_reverse_shipments').update({ status: 'erro', error_message: msg, updated_at: new Date().toISOString() }).eq('id', row.id); throw Object.assign(fail(msg, 502), { marked: true }); };
+      // Contrato/cartão dos Correios só aceita como destinatário os CNPJs vinculados a ele.
+      // A nota de devolução sai pela empresa da nota original; se esse CNPJ não está no contrato,
+      // o balcão recusa ("cartão suspenso/vencido"). Bloqueia ANTES de emitir nota ou pré-postagem.
+      {
+        const { data: orig } = await db.from('fiscal_documents').select('chave_acesso,finalidade')
+          .eq('pos_sale_id', row.sale_id).eq('modelo', 55).eq('status', 'authorized').neq('finalidade', 4)
+          .order('created_at', { ascending: false }).limit(1).maybeSingle();
+        const origCnpj = String(orig?.chave_acesso || '').slice(6, 20);
+        const { data: cfgRow } = await db.from('app_settings').select('value').eq('key', 'correios_reverse_allowed_cnpjs').maybeSingle();
+        const allowed = reverseAllowedCnpjs(cfgRow?.value, String((settings.token_meta as any)?.cnpj || ''));
+        if (/^\d{14}$/.test(origCnpj) && !allowed.includes(origCnpj)) {
+          await markErr(`A nota desta venda é da empresa CNPJ ${origCnpj}, que não está vinculada ao contrato dos Correios. A reversa seria recusada na agência — fale com o responsável pelo contrato antes de gerar.`);
+        }
+      }
       let nf: any = null;
       try {
         // Pré-checagem completa (XML/original, endereço, CFOP/CST e devolucao-guard) antes de qualquer emissão real.

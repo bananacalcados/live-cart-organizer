@@ -1779,6 +1779,20 @@
       "when": 1794947371919,
       "tag": "0253_exchange_add_replacement_and_cancel",
       "breakpoints": true
+    },
+    {
+      "idx": 254,
+      "version": "7",
+      "when": 1794948497111,
+      "tag": "0254_support_nudge_reprocess_pending",
+      "breakpoints": true
+    },
+    {
+      "idx": 255,
+      "version": "7",
+      "when": 1794948703717,
+      "tag": "0255_fix_jadlog_carrier_label_on_frenet_links",
+      "breakpoints": true
     }
   ]
 }
