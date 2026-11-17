@@ -27863,6 +27863,7 @@ export type Database = {
           despachada_por: string | null
           devolucao_doc_id: string | null
           diferenca: number
+          diferenca_venda_id: string | null
           estoque_movimentado: boolean
           estorno_forma: string | null
           fase2_erro: string | null
@@ -27905,6 +27906,7 @@ export type Database = {
           despachada_por?: string | null
           devolucao_doc_id?: string | null
           diferenca?: number
+          diferenca_venda_id?: string | null
           estoque_movimentado?: boolean
           estorno_forma?: string | null
           fase2_erro?: string | null
@@ -27947,6 +27949,7 @@ export type Database = {
           despachada_por?: string | null
           devolucao_doc_id?: string | null
           diferenca?: number
+          diferenca_venda_id?: string | null
           estoque_movimentado?: boolean
           estorno_forma?: string | null
           fase2_erro?: string | null
@@ -32005,6 +32008,10 @@ export type Database = {
       exchange_cancel: {
         Args: { p_motivo: string; p_troca_id: string }
         Returns: undefined
+      }
+      exchange_create_difference_link: {
+        Args: { p_frete: number; p_frete_modo: string; p_troca_id: string }
+        Returns: Json
       }
       exchange_desk_action: {
         Args: {

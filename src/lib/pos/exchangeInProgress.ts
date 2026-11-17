@@ -15,3 +15,17 @@ export function canAddReplacement(e: { tipo: string; status: string; pedido_novo
 export function canCancelExchange(e: { status: string; voucher_id?: string | null; gateway_refund_id?: string | null }) {
   return OPEN_EXCHANGE_STATUSES.includes(e.status) && !e.voucher_id && !e.gateway_refund_id;
 }
+
+type DiffItem = { direcao: string; valor_unitario?: number | null; quantidade?: number | null };
+/** Mesma conta do servidor (exchange_create_difference_link): reposição − devolvido. */
+export function exchangeDifference(items: DiffItem[]) {
+  const sum = (d: string) => items.filter((i) => i.direcao === d).reduce((s, i) => s + Number(i.valor_unitario || 0) * Number(i.quantidade ?? 1), 0);
+  const dev = Math.round(sum("devolvido") * 100) / 100;
+  const rep = Math.round(sum("reposicao") * 100) / 100;
+  return { dev, rep, diff: Math.round((rep - dev) * 100) / 100 };
+}
+/** Valor do link: só a diferença a pagar (nunca negativa) + frete escolhido. */
+export function differenceLinkTotal(diff: number, frete: number, modo: "gratis" | "cotado" | "fixo") {
+  const f = modo === "gratis" ? 0 : Math.max(0, frete || 0);
+  return Math.round((Math.max(diff, 0) + f) * 100) / 100;
+}

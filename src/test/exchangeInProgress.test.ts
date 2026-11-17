@@ -19,3 +19,16 @@ describe("troca em andamento", () => {
     expect(canCancelExchange({ status: "aguardando_envio" })).toBe(false);
   });
 });
+
+import { exchangeDifference, differenceLinkTotal } from "@/lib/pos/exchangeInProgress";
+describe("diferença da troca", () => {
+  it("produto mais caro: cliente paga a diferença", () => {
+    expect(exchangeDifference([{ direcao: "devolvido", valor_unitario: 159.99, quantidade: 1 }, { direcao: "reposicao", valor_unitario: 199.99, quantidade: 1 }]).diff).toBe(40);
+  });
+  it("produto mais barato: diferença negativa vira crédito", () => {
+    expect(exchangeDifference([{ direcao: "devolvido", valor_unitario: 200, quantidade: 1 }, { direcao: "reposicao", valor_unitario: 150, quantidade: 1 }]).diff).toBe(-50);
+  });
+  it("frete grátis não cobra frete", () => { expect(differenceLinkTotal(40, 25, "gratis")).toBe(40); });
+  it("frete cotado/fixo soma à diferença", () => { expect(differenceLinkTotal(40, 25.5, "fixo")).toBe(65.5); });
+  it("crédito da cliente não abate o frete no link", () => { expect(differenceLinkTotal(-50, 20, "cotado")).toBe(20); });
+});

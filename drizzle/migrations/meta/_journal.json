@@ -1793,6 +1793,20 @@
       "when": 1794948703717,
       "tag": "0255_fix_jadlog_carrier_label_on_frenet_links",
       "breakpoints": true
+    },
+    {
+      "idx": 256,
+      "version": "7",
+      "when": 1794949814463,
+      "tag": "0256_exchange_difference_link",
+      "breakpoints": true
+    },
+    {
+      "idx": 257,
+      "version": "7",
+      "when": 1794949834195,
+      "tag": "0257_exchange_guard_keep_definer",
+      "breakpoints": true
     }
   ]
 }

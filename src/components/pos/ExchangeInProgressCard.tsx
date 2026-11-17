@@ -3,20 +3,20 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Loader2, Plus, RotateCcw, Trash2, XCircle, AlertTriangle } from "lucide-react";
+import { Loader2, Plus, RotateCcw, Trash2, XCircle, AlertTriangle, Link2, Copy } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { POSTinyProductPicker } from "./POSTinyProductPicker";
 import { invalidateExchangeRegistry } from "@/hooks/useExchangeRegistry";
-import { canAddReplacement, canCancelExchange, isPostingOverdue, OPEN_EXCHANGE_STATUSES } from "@/lib/pos/exchangeInProgress";
+import { canAddReplacement, canCancelExchange, isPostingOverdue, OPEN_EXCHANGE_STATUSES, exchangeDifference, differenceLinkTotal } from "@/lib/pos/exchangeInProgress";
 
 const SITE_STORE_ID = "2bd2c08d-321c-47ee-98a9-e27e936818ab";
 const PEROLA_STORE_ID = "4ade7b44-5043-4ab1-a124-7a6ab5468e29";
 
 interface Ex {
   id: string; codigo_devolucao: string | null; tipo: string; status: string; pedido_novo_id: string | null;
-  voucher_id: string | null; gateway_refund_id: string | null; created_at: string;
-  trocas_devolucoes_itens: { direcao: string; produto_nome: string | null; tamanho: string | null; quantidade: number | null }[];
+  voucher_id: string | null; gateway_refund_id: string | null; created_at: string; diferenca_venda_id: string | null;
+  trocas_devolucoes_itens: { direcao: string; produto_nome: string | null; tamanho: string | null; quantidade: number | null; valor_unitario: number | null }[];
 }
 interface Pick { key: number; sku: string; barcode?: string; name: string; size?: string; quantity: number }
 
@@ -30,10 +30,17 @@ export function ExchangeInProgressCard({ saleId, onChanged }: { saleId: string; 
   const [picks, setPicks] = useState<Pick[]>([]);
   const [motivo, setMotivo] = useState("");
   const [saving, setSaving] = useState(false);
+  const [diffSales, setDiffSales] = useState<Record<string, { status: string; total: number; store_id: string }>>({});
+  const [linkFor, setLinkFor] = useState<Ex | null>(null);
+  const [freteModo, setFreteModo] = useState<"gratis" | "cotado" | "fixo">("gratis");
+  const [frete, setFrete] = useState(0);
+  const [quotes, setQuotes] = useState<{ id: string; label: string; price: number }[]>([]);
+  const [quoting, setQuoting] = useState(false);
+  const [saleCtx, setSaleCtx] = useState<{ store_id: string; cep: string | null } | null>(null);
 
   const load = useCallback(async () => {
     const { data } = await supabase.from("trocas_devolucoes")
-      .select("id, codigo_devolucao, tipo, status, pedido_novo_id, voucher_id, gateway_refund_id, created_at, trocas_devolucoes_itens(direcao, produto_nome, tamanho, quantidade)")
+      .select("id, codigo_devolucao, tipo, status, pedido_novo_id, voucher_id, gateway_refund_id, created_at, diferenca_venda_id, trocas_devolucoes_itens(direcao, produto_nome, tamanho, quantidade, valor_unitario)")
       .eq("pedido_original_id", saleId).eq("tipo", "troca").in("status", OPEN_EXCHANGE_STATUSES as any)
       .order("created_at", { ascending: false }).limit(5);
     const list = (data as any[]) || [];
@@ -42,8 +49,14 @@ export function ExchangeInProgressCard({ saleId, onChanged }: { saleId: string; 
     const [{ data: r }, { data: s }] = await Promise.all([
       supabase.from("correios_reverse_shipments").select("valid_until, codigo_objeto").eq("sale_id", saleId)
         .not("status", "in", "(cancelada,erro)").order("created_at", { ascending: false }).limit(1).maybeSingle(),
-      supabase.from("pos_sales").select("store_id, stock_source_store_id").eq("id", saleId).maybeSingle(),
+      supabase.from("pos_sales").select("store_id, stock_source_store_id, customer_cep").eq("id", saleId).maybeSingle(),
     ]);
+    const ids = list.map((x) => x.diferenca_venda_id).filter(Boolean);
+    if (ids.length) {
+      const { data: ds } = await supabase.from("pos_sales").select("id, status, total, store_id").in("id", ids);
+      setDiffSales(Object.fromEntries(((ds as any[]) || []).map((d) => [d.id, { status: d.status, total: Number(d.total || 0), store_id: d.store_id }])));
+    } else setDiffSales({});
+    setSaleCtx(s ? { store_id: (s as any).store_id, cep: (s as any).customer_cep || null } : null);
     setRev((r as any) || null);
     const st = (s as any)?.stock_source_store_id || (s as any)?.store_id || null;
     setStockStore(st === SITE_STORE_ID ? PEROLA_STORE_ID : st);
@@ -79,6 +92,39 @@ export function ExchangeInProgressCard({ saleId, onChanged }: { saleId: string; 
     setCancelFor(null); setMotivo(""); done();
   };
 
+  const linkUrl = (saleIdX: string, storeId: string) => `https://checkout.bananacalcados.com.br/checkout-loja/${storeId}/${saleIdX}`;
+  const copy = async (url: string) => { await navigator.clipboard.writeText(url); toast.success("Link copiado"); };
+
+  const quote = async () => {
+    const cep = (saleCtx?.cep || "").replace(/\D/g, "");
+    if (cep.length !== 8) { toast.error("Venda original sem CEP para cotar"); return; }
+    setQuoting(true);
+    const { data: st } = await supabase.from("pos_stores").select("name").eq("id", saleCtx!.store_id).maybeSingle();
+    const nm = ((st as any)?.name || "").toLowerCase();
+    const { data, error } = await supabase.functions.invoke("checkout-quote-freight", {
+      body: { recipient_cep: cep, store: nm.includes("centro") ? "centro" : "perola", total_value: 200, weight_kg: 0.3, items_count: 1, store_id: saleCtx!.store_id },
+    });
+    setQuoting(false);
+    if (error) { toast.error("Não consegui cotar o frete"); return; }
+    const q = ((data as any)?.quotes || []).filter((x: any) => Number(x.price) > 0)
+      .map((x: any) => ({ id: String(x.id), label: `${x.carrier} ${x.service || ""}${x.delivery_days ? ` · ${x.delivery_days} dias` : ""}`, price: Number(x.price) }));
+    setQuotes(q);
+    if (!q.length) toast.error("Nenhuma cotação disponível");
+  };
+
+  const submitLink = async () => {
+    if (!linkFor) return;
+    if (freteModo !== "gratis" && !(frete > 0)) { toast.error(freteModo === "cotado" ? "Escolha uma cotação" : "Informe o valor do frete"); return; }
+    setSaving(true);
+    const { data, error } = await supabase.rpc("exchange_create_difference_link" as any, { p_troca_id: linkFor.id, p_frete: freteModo === "gratis" ? 0 : frete, p_frete_modo: freteModo });
+    setSaving(false);
+    if (error) { toast.error(error.message); return; }
+    const r = data as any;
+    await copy(linkUrl(r.sale_id, r.store_id));
+    toast.success(`Link de R$ ${Number(r.total).toFixed(2)} gerado e copiado. Não foi enviado à cliente.`);
+    setLinkFor(null); done();
+  };
+
   return (
     <div className="mt-2 space-y-2" onClick={(e) => e.stopPropagation()}>
       {rows.map((e) => {
@@ -103,6 +149,30 @@ export function ExchangeInProgressCard({ saleId, onChanged }: { saleId: string; 
             ) : (
               <p className="text-xs mt-1 text-muted-foreground">Nenhum produto da troca adicionado ainda.</p>
             )}
+            {e.pedido_novo_id && (() => {
+              const { dev, rep, diff } = exchangeDifference(e.trocas_devolucoes_itens);
+              const ds = e.diferenca_venda_id ? diffSales[e.diferenca_venda_id] : null;
+              const paid = ds && !["online_pending", "pending", "payment_failed", "cancelled"].includes(ds.status);
+              return (
+                <div className="mt-2 rounded border bg-background/60 p-2 text-xs space-y-1">
+                  <p>Devolvido: R$ {dev.toFixed(2)} · Troca: R$ {rep.toFixed(2)}</p>
+                  {diff > 0.009 && <p className="font-bold">Cliente paga a diferença: R$ {diff.toFixed(2)}</p>}
+                  {diff < -0.009 && <p className="font-bold">Crédito para a cliente: R$ {Math.abs(diff).toFixed(2)} — o voucher (sem validade) sai ao finalizar a troca no PDV.</p>}
+                  {Math.abs(diff) <= 0.009 && <p className="font-bold">Sem diferença de valor.</p>}
+                  {ds && ds.status !== "cancelled" && (
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className={paid ? "font-bold" : "text-destructive font-bold"}>{paid ? "✅ Link pago" : "⏳ Link aguardando pagamento"}: R$ {ds.total.toFixed(2)}</span>
+                      {!paid && <Button size="sm" variant="outline" className="h-7" onClick={() => copy(linkUrl(e.diferenca_venda_id!, ds.store_id))}><Copy className="h-3 w-3 mr-1" /> Copiar link</Button>}
+                    </div>
+                  )}
+                  {OPEN_EXCHANGE_STATUSES.includes(e.status) && !paid && (
+                    <Button size="sm" variant="secondary" className="w-full h-auto whitespace-normal py-1.5" onClick={() => { setFreteModo("gratis"); setFrete(0); setQuotes([]); setLinkFor(e); }}>
+                      <Link2 className="h-3 w-3 mr-1" /> {ds && ds.status !== "cancelled" ? "Gerar novo link (substitui o atual)" : diff > 0.009 ? "Gerar link da diferença" : "Gerar link só do frete"}
+                    </Button>
+                  )}
+                </div>
+              );
+            })()}
             <div className="flex flex-col gap-2 mt-2">
               {canAddReplacement(e) && (
                 <Button size="sm" className="w-full h-auto whitespace-normal py-1.5" onClick={() => { setPicks([]); setAddFor(e); }}><Plus className="h-3 w-3 mr-1" /> Adicionar produto</Button>
@@ -132,11 +202,52 @@ export function ExchangeInProgressCard({ saleId, onChanged }: { saleId: string; 
               </div>
             ))}
           </div>
-          <p className="text-xs text-muted-foreground">Vai para a Expedição com a tag TROCA e só pode ser concluído depois de finalizar a troca no PDV. O estoque fica reservado. Diferença de valor entra na próxima etapa.</p>
+          <p className="text-xs text-muted-foreground">Vai para a Expedição com a tag TROCA e só pode ser concluído depois de finalizar a troca no PDV. O estoque fica reservado.</p>
           <div className="flex justify-end gap-2">
             <Button variant="ghost" onClick={() => setAddFor(null)}>Voltar</Button>
             <Button onClick={submitAdd} disabled={saving || !picks.length}>{saving && <Loader2 className="h-4 w-4 mr-1 animate-spin" />} Enviar para a Expedição</Button>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!linkFor} onOpenChange={(o) => !o && setLinkFor(null)}>
+        <DialogContent className="max-w-md" onClick={(e) => e.stopPropagation()}>
+          <DialogHeader><DialogTitle>Link de pagamento — {linkFor?.codigo_devolucao}</DialogTitle></DialogHeader>
+          {linkFor && (() => {
+            const { diff } = exchangeDifference(linkFor.trocas_devolucoes_itens);
+            return (
+              <div className="space-y-3 text-sm">
+                <p>Diferença: <b>R$ {Math.max(diff, 0).toFixed(2)}</b></p>
+                <div className="flex gap-2 flex-wrap">
+                  {(["gratis", "cotado", "fixo"] as const).map((m) => (
+                    <Button key={m} size="sm" variant={freteModo === m ? "default" : "outline"} onClick={() => { setFreteModo(m); setFrete(0); }}>
+                      {m === "gratis" ? "Frete grátis" : m === "cotado" ? "Cotar frete" : "Valor fixo"}
+                    </Button>
+                  ))}
+                </div>
+                {freteModo === "cotado" && (
+                  <div className="space-y-1">
+                    <Button size="sm" variant="outline" onClick={quote} disabled={quoting}>{quoting && <Loader2 className="h-3 w-3 mr-1 animate-spin" />} Cotar pelo CEP da cliente</Button>
+                    {quotes.map((q) => (
+                      <label key={q.id} className="flex items-center gap-2 cursor-pointer">
+                        <input type="radio" name="frete-q" checked={frete === q.price} onChange={() => setFrete(q.price)} />
+                        <span className="flex-1">{q.label}</span><b>R$ {q.price.toFixed(2)}</b>
+                      </label>
+                    ))}
+                  </div>
+                )}
+                {freteModo === "fixo" && (
+                  <Input type="number" min={0} max={500} step="0.01" placeholder="Valor do frete" value={frete || ""} onChange={(ev) => setFrete(Math.max(0, Math.min(500, Number(ev.target.value) || 0)))} />
+                )}
+                <p className="font-bold">Total do link: R$ {differenceLinkTotal(diff, frete, freteModo).toFixed(2)}</p>
+                <p className="text-xs text-muted-foreground">O valor é recalculado pelo sistema. O link é copiado, não é enviado à cliente. Enquanto não for pago, o produto da troca não pode ser concluído na Expedição.</p>
+                <div className="flex justify-end gap-2">
+                  <Button variant="ghost" onClick={() => setLinkFor(null)}>Voltar</Button>
+                  <Button onClick={submitLink} disabled={saving}>{saving && <Loader2 className="h-4 w-4 mr-1 animate-spin" />} Gerar e copiar link</Button>
+                </div>
+              </div>
+            );
+          })()}
         </DialogContent>
       </Dialog>
 

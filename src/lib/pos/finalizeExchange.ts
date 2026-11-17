@@ -334,7 +334,7 @@ export async function finalizeExchange(
               cliente_id: cliente_id || null,
               valor: favorCliente,
               saldo: favorCliente,
-              validade: new Date(Date.now() + 180 * 864e5).toISOString().slice(0, 10),
+              validade: null, // sem validade (decisão do dono)
               status: "ativo",
               troca_devolucao_id: eventId,
             } as any)

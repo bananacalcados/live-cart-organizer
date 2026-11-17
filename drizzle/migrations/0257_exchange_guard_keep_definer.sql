@@ -1,0 +1,1 @@
+ALTER FUNCTION public.guard_exchange_replacement_sale() SECURITY DEFINER;
