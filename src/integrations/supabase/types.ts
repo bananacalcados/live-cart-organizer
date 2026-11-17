@@ -34118,6 +34118,25 @@ export type Database = {
         Returns: Json
       }
       resolve_short_link: { Args: { p_code: string }; Returns: string }
+      resolve_stock_code: {
+        Args: { p_code: string; p_store_id: string }
+        Returns: {
+          code: string
+          color: string
+          master_name: string
+          pos_product_id: string
+          product_barcode: string
+          product_name: string
+          product_sku: string
+          product_variant: string
+          size: string
+          stock: number
+          tiny_id: number
+          variant_gtin: string
+          variant_id: string
+          variant_sku: string
+        }[]
+      }
       resolve_typebot_event_id: {
         Args: { p_typebot_id: string }
         Returns: string
