@@ -7,6 +7,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { resolvePosNewCode, findSaleItemIndexForResolvedCode } from "@/lib/posStockCode";
 
 interface SaleItem {
   sku: string;
@@ -45,17 +46,29 @@ export function POSOrderVerification({ saleId, storeId, sellerId, items, hasGift
   const allVerified = verifiedItems.every(i => i.scanned && i.feetChecked && i.noDefects) && (!hasGift || giftChecked);
   const verifiedCount = verifiedItems.filter(i => i.scanned && i.feetChecked && i.noDefects).length;
 
-  const handleScan = () => {
-    const term = scanInput.trim().toLowerCase();
+  const handleScan = async () => {
+    const raw = scanInput.trim();
+    const term = raw.toLowerCase();
     if (!term) return;
 
-    const idx = verifiedItems.findIndex(i =>
+    let idx = verifiedItems.findIndex(i =>
       !i.scanned && (
         i.sku?.toLowerCase() === term ||
         i.barcode?.toLowerCase() === term ||
         i.name?.toLowerCase().includes(term)
       )
     );
+
+    if (idx < 0) {
+      try {
+        const r = await resolvePosNewCode(raw, storeId);
+        if (r.kind === "found" || r.kind === "no_store_product") {
+          idx = findSaleItemIndexForResolvedCode(verifiedItems, r.resolved);
+        }
+      } catch (e) {
+        console.error("resolve_stock_code error:", e);
+      }
+    }
 
     if (idx >= 0) {
       setVerifiedItems(prev => prev.map((item, i) =>

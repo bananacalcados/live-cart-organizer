@@ -1,3 +1,4 @@
+import { resolvePosNewCode } from "@/lib/posStockCode";
 import { useState, useEffect, useCallback, useRef } from "react";
 import {
   ScanBarcode, Search, Plus, Minus, Trash2, User, CreditCard,
@@ -451,12 +452,32 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
     }
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => {
-      handleBarcodeScan(barcodeInput.trim());
+      handleBarcodeScan(barcodeInput.trim(), true);
     }, 600);
     return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
   }, [barcodeInput, storeId]);
 
-  const handleBarcodeScan = async (term?: string) => {
+  // Busca exata por EAN/SKU no estoque local (mesmo caminho do EAN bipado)
+  const lookupExactCode = async (query: string, showOnly = false): Promise<boolean> => {
+    const { data } = await supabase
+      .from('pos_products')
+      .select('*')
+      .eq('store_id', storeId)
+      .or(`barcode.eq.${query},sku.eq.${query}`)
+      .eq('is_active', true)
+      .limit(10);
+    if (!data || data.length === 0) return false;
+    const products = data.map(mapDbProduct);
+    if (products.length === 1 && !showOnly) {
+      addToCart(products[0]);
+      setBarcodeInput("");
+    } else {
+      setSearchResults(products);
+    }
+    return true;
+  };
+
+  const handleBarcodeScan = async (term?: string, fromTyping = false) => {
     const query = term || barcodeInput.trim();
     if (!query) return;
     // Lock anti-duplicidade: bloqueia mesma query em < 1.2s (bip duplo do leitor)
@@ -504,6 +525,14 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
           setSearchResults(data.map(mapDbProduct));
         } else {
           setSearchResults([]);
+          // Código novo da etiqueta (ex.: T101-37): só quando a busca atual não achou
+          const r = await resolvePosNewCode(query, storeId);
+          if (r.kind === 'found') {
+            const ok = await lookupExactCode(r.lookup, fromTyping);
+            if (!ok && !fromTyping) toast.error("Produto não encontrado no estoque local");
+          } else if (r.kind === 'no_store_product' && !fromTyping) {
+            toast.error(`${r.code} existe, mas não tem cadastro de estoque nesta loja`);
+          }
         }
       }
     } catch (e) {
