@@ -460,22 +460,22 @@ export function ProductLabelPrintDialog({ masterId, masterSku, productName, item
   return (
     <>
       <Dialog open={open} onOpenChange={(value) => { if (!applying) onOpenChange(value); }}>
-        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-6xl max-h-[92vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2"><Tag className="h-5 w-5" /> Imprimir Etiquetas</DialogTitle>
+            <DialogTitle className="flex items-center gap-2 text-xl"><Tag className="h-6 w-6" /> Imprimir Etiquetas</DialogTitle>
             {master && (
-              <DialogDescription>
-                <span className="font-medium text-foreground">{master.name}</span>
-                <span className="ml-2 font-mono text-xs">{master.sku_root}</span>
+              <DialogDescription className="text-base text-foreground/80">
+                <span className="font-bold text-foreground">{master.name}</span>
+                <span className="ml-2 font-mono text-sm font-semibold text-foreground">{master.sku_root}</span>
               </DialogDescription>
             )}
           </DialogHeader>
 
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="space-y-1">
-              <Label className="text-xs">Formato</Label>
+              <Label className="text-sm font-semibold text-foreground">Formato</Label>
               <Select value={format} onValueChange={(v) => setFormat(v as Format)}>
-                <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                <SelectTrigger className="h-11 text-base font-medium"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="a4">A4 – 27 por folha (63,5 × 31 mm)</SelectItem>
                   <SelectItem value="old">8 × 5 cm (antigo)</SelectItem>
@@ -483,9 +483,9 @@ export function ProductLabelPrintDialog({ masterId, masterSku, productName, item
               </Select>
             </div>
             <div className="space-y-1">
-              <Label className="text-xs">Loja {mode !== "print_only" && <span className="text-destructive">*</span>}</Label>
+              <Label className="text-sm font-semibold text-foreground">Loja {mode !== "print_only" && <span className="text-destructive">*</span>}</Label>
               <Select value={storeId} onValueChange={(value) => void loadStorePreview(value)} disabled={filling || variants.length === 0}>
-                <SelectTrigger className="h-9"><SelectValue placeholder={filling ? "Carregando saldo…" : "Escolher loja"} /></SelectTrigger>
+                <SelectTrigger className="h-11 text-base font-medium"><SelectValue placeholder={filling ? "Carregando saldo…" : "Escolher loja"} /></SelectTrigger>
                 <SelectContent>{STORES.map((s) => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}</SelectContent>
               </Select>
             </div>
@@ -493,9 +493,9 @@ export function ProductLabelPrintDialog({ masterId, masterSku, productName, item
 
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="space-y-1">
-              <Label className="text-xs">O que fazer ao confirmar</Label>
+              <Label className="text-sm font-semibold text-foreground">O que fazer ao confirmar</Label>
               <Select value={mode} onValueChange={(value) => setMode(value as StockLabelMode)}>
-                <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                <SelectTrigger className="h-11 text-base font-medium"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="print_only">Só imprimir</SelectItem>
                   <SelectItem value="balance">Imprimir + Balanço (o saldo vira o que contei)</SelectItem>
@@ -505,9 +505,9 @@ export function ProductLabelPrintDialog({ masterId, masterSku, productName, item
             </div>
             {mode === "balance" ? (
               <div className="space-y-1">
-                <Label className="text-xs">Abrangência do balanço</Label>
+                <Label className="text-sm font-semibold text-foreground">Abrangência do balanço</Label>
                 <Select value={scope} onValueChange={(value) => setScope(value as StockLabelScope)} disabled={!singleProduct}>
-                  <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                  <SelectTrigger className="h-11 text-base font-medium"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="selected">Só as cores/tamanhos que preenchi</SelectItem>
                     {singleProduct && <SelectItem value="product">Produto inteiro — o que eu não preencher vira 0</SelectItem>}
@@ -525,7 +525,7 @@ export function ProductLabelPrintDialog({ masterId, masterSku, productName, item
 
           {mode === "balance" && (
             <div className="space-y-2">
-              <p className="text-sm rounded-md border bg-muted/40 p-3">
+              <p className="rounded-md border-2 border-primary/60 bg-primary/10 p-3 text-base font-semibold text-foreground">
                 Conte TODOS os pares desta loja, inclusive os já separados para envio. O sistema desconta sozinho os vendidos aguardando envio. Não conclua expedição deste produto enquanto conta.
               </p>
               <Button variant="outline" size="sm" onClick={fillFromStore} disabled={!storePreview || filling}>
@@ -537,18 +537,18 @@ export function ProductLabelPrintDialog({ masterId, masterSku, productName, item
           {format === "a4" && (
             <div className="grid gap-3 grid-cols-2 sm:grid-cols-6 items-end">
               <div className="space-y-1">
-                <Label className="text-xs">Começar na posição</Label>
-                <Input type="number" min={1} max={27} className="h-9" value={startPos}
+                <Label className="text-sm font-semibold text-foreground">Começar na posição</Label>
+                <Input type="number" min={1} max={27} className="h-11 text-base font-semibold" value={startPos}
                   onChange={(e) => setStartPos(Math.min(27, Math.max(1, parseInt(e.target.value) || 1)))} />
               </div>
               {([["top", "Margem sup. (mm)"], ["left", "Margem esq. (mm)"], ["colGap", "Entre colunas"], ["rowGap", "Entre linhas"]] as const).map(([k, l]) => (
                 <div key={k} className="space-y-1">
-                  <Label className="text-xs">{l}</Label>
-                  <Input type="number" step="0.1" className="h-9" value={layout[k]} onChange={(e) => updateLayout(k, parseFloat(e.target.value))} />
+                  <Label className="text-sm font-semibold text-foreground">{l}</Label>
+                  <Input type="number" step="0.1" className="h-11 text-base font-semibold" value={layout[k]} onChange={(e) => updateLayout(k, parseFloat(e.target.value))} />
                 </div>
               ))}
-              <label className="flex items-center gap-2 text-sm h-9">
-                <Checkbox checked={showPrice} onCheckedChange={(v) => setShowPrice(!!v)} /> Mostrar preço
+              <label className="flex h-11 items-center gap-2 text-base font-semibold text-foreground">
+                <Checkbox className="h-5 w-5 border-2" checked={showPrice} onCheckedChange={(v) => setShowPrice(!!v)} /> Mostrar preço
               </label>
             </div>
           )}
@@ -556,35 +556,35 @@ export function ProductLabelPrintDialog({ masterId, masterSku, productName, item
           {loading ? (
             <div className="flex items-center justify-center py-16"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>
           ) : variants.length === 0 ? (
-            <div className="text-center py-12 text-muted-foreground">Nenhuma variação ativa para este produto.</div>
+            <div className="py-12 text-center text-base font-medium text-foreground/70">Nenhuma variação ativa para este produto.</div>
           ) : (
-            <div className="overflow-x-auto border rounded">
-              <table className="text-sm w-full">
+            <div className="overflow-x-auto rounded-md border-2 border-foreground/20">
+              <table className="w-full text-base">
                 <thead>
-                  <tr className="bg-muted/50">
-                    <th className="text-left p-2 font-medium">Cor</th>
-                    {grid.sizes.map((s) => <th key={s} className="p-2 font-medium text-center">{s}</th>)}
+                  <tr className="bg-secondary">
+                    <th className="p-3 text-left text-base font-bold text-secondary-foreground">Cor</th>
+                    {grid.sizes.map((s) => <th key={s} className="p-3 text-center text-base font-bold text-secondary-foreground">{s}</th>)}
                   </tr>
                 </thead>
                 <tbody>
                   {grid.rows.map((r, i) => (
                     <tr key={i} className="border-t">
                       <td className="p-2 align-top">
-                        {multiProduct && <div className="text-[11px] text-muted-foreground truncate max-w-[180px]">{r.product}</div>}
-                        <div className="font-medium">{r.label}</div>
+                        {multiProduct && <div className="max-w-[180px] truncate text-sm font-semibold text-foreground/80">{r.product}</div>}
+                        <div className="text-base font-bold text-foreground">{r.label}</div>
                       </td>
                       {grid.sizes.map((s) => {
                         const v = r.cells[s];
-                        if (!v) return <td key={s} className="p-1 text-center text-muted-foreground">—</td>;
+                        if (!v) return <td key={s} className="p-2 text-center text-lg font-semibold text-foreground/60">—</td>;
                         const preview = storePreview?.[v.id];
                         return (
                           <td key={s} className="p-1 text-center align-top">
                             <Input type="number" min="0" step="1" value={qty[v.id] ?? ""} onChange={(e) => setQ(v.id, e.target.value)}
-                              placeholder="—" className="h-8 w-16 text-center mx-auto" aria-label={`Quantidade ${v.code || v.sku}`} />
-                            <div className="text-[10px] font-mono text-muted-foreground mt-0.5">{v.code || "sem código"}</div>
-                            {storePreview && <div className="text-[10px] text-muted-foreground">saldo {preview?.stock ?? 0}</div>}
-                            {!!preview?.pending && <div className="text-[10px] font-medium">+{preview.pending} vendido(s) aguardando envio</div>}
-                            {storePreview && !preview?.posProductId && <div className="text-[10px] text-muted-foreground">sem cadastro nesta loja</div>}
+                              placeholder="—" className="mx-auto h-10 w-20 border-2 text-center text-base font-bold text-foreground" aria-label={`Quantidade ${v.code || v.sku}`} />
+                            <div className="mt-1 inline-block rounded bg-secondary px-1.5 py-0.5 font-mono text-sm font-bold text-secondary-foreground">{v.code || "sem código"}</div>
+                            {storePreview && <div className="mt-1 text-sm font-semibold text-foreground">saldo {preview?.stock ?? 0}</div>}
+                            {!!preview?.pending && <div className="mt-1 rounded-md border border-primary/70 bg-primary/25 px-1.5 py-1 text-sm font-extrabold leading-snug text-foreground">+{preview.pending} vendido(s) aguardando envio</div>}
+                            {storePreview && !preview?.posProductId && <div className="mt-1 text-sm font-bold text-destructive">sem cadastro nesta loja</div>}
                           </td>
                         );
                       })}
@@ -596,9 +596,9 @@ export function ProductLabelPrintDialog({ masterId, masterSku, productName, item
           )}
 
           <DialogFooter className="flex-col sm:flex-row gap-2 items-stretch sm:items-center sm:justify-between">
-            <span className="text-sm text-muted-foreground">
-              Total: <strong>{totalLabels}</strong> etiqueta(s)
-              {format === "a4" && <> · <strong>{totalSheets}</strong> folha(s)</>}
+            <span className="text-base font-semibold text-foreground">
+              Total: <strong className="text-lg">{totalLabels}</strong> etiqueta(s)
+              {format === "a4" && <> · <strong className="text-lg">{totalSheets}</strong> folha(s)</>}
             </span>
             <div className="flex gap-2 flex-wrap">
               <Button variant="outline" onClick={() => setQty(Object.fromEntries(variants.map((v) => [v.id, ""])))}>Limpar campos</Button>
@@ -615,22 +615,22 @@ export function ProductLabelPrintDialog({ masterId, masterSku, productName, item
       <AlertDialog open={confirmOpen} onOpenChange={(value) => { if (!applying) setConfirmOpen(value); }}>
         <AlertDialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
           <AlertDialogHeader>
-            <AlertDialogTitle>Conferir antes de aplicar</AlertDialogTitle>
-            <AlertDialogDescription>
+            <AlertDialogTitle className="text-xl">Conferir antes de aplicar</AlertDialogTitle>
+            <AlertDialogDescription className="text-base text-foreground/80">
               Esta é apenas a prévia. O banco calcula e grava o saldo definitivo ao confirmar.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <div className="space-y-2">
             {confirmationRows.map(({ item, variant, preview, after }) => (
-              <div key={item.variant_id} className="flex items-start justify-between gap-3 rounded border p-2 text-sm">
+              <div key={item.variant_id} className="flex items-start justify-between gap-3 rounded-md border-2 p-3 text-base">
                 <div>
-                  <div className="font-mono font-semibold">{variant.code || variant.sku}</div>
-                  <div className="text-xs text-muted-foreground">{[variant.color, variant.size].filter(Boolean).join(" · ")}</div>
-                  {!preview?.posProductId && <div className="text-xs font-medium text-destructive">Sem cadastro nesta loja: será ignorada.</div>}
+                  <div className="font-mono text-base font-bold text-foreground">{variant.code || variant.sku}</div>
+                  <div className="text-sm font-semibold text-foreground/80">{[variant.color, variant.size].filter(Boolean).join(" · ")}</div>
+                  {!preview?.posProductId && <div className="text-sm font-bold text-destructive">Sem cadastro nesta loja: será ignorada.</div>}
                 </div>
-                <div className="text-right whitespace-nowrap">
+                <div className="whitespace-nowrap text-right text-lg font-bold text-foreground">
                   saldo {preview?.stock ?? 0} → {after}
-                  <div className="text-xs text-muted-foreground">{item.qty} etiqueta(s){mode === "balance" ? ` · ${preview?.pending || 0} pendente(s)` : ""}</div>
+                  <div className="text-sm font-semibold text-foreground/80">{item.qty} etiqueta(s){mode === "balance" ? ` · ${preview?.pending || 0} pendente(s)` : ""}</div>
                 </div>
               </div>
             ))}
