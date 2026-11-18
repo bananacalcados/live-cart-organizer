@@ -131,7 +131,7 @@ export function PresentialExchangePicker({ open, sellerId, sellerName, initialSa
   const [repos, setRepos] = useState<ReposRow[]>([]);
 
   // Resolução de diferença
-  const [creditoResolucao, setCreditoResolucao] = useState<"voucher" | "estorno_financeiro">("voucher");
+  const [creditoResolucao, setCreditoResolucao] = useState<"voucher" | "estorno_financeiro">("estorno_financeiro");
   const [estornoForma, setEstornoForma] = useState<"pix" | "cartao" | "dinheiro">("pix");
   const [pagForma, setPagForma] = useState<typeof PAY_METHODS[number]["value"]>("pix");
 
@@ -149,7 +149,7 @@ export function PresentialExchangePicker({ open, sellerId, sellerName, initialSa
       setPhase("store"); setStoreId(""); setSales([]); setPage(0);
       setSearch(""); setDebounced(""); setSale(null); setChaveOriginal(null);
       setCustomer(null); setItems([]); setMotivo(""); setRepos([]);
-      setCreditoResolucao("voucher"); setEstornoForma("pix"); setPagForma("pix");
+      setCreditoResolucao("estorno_financeiro"); setEstornoForma("pix"); setPagForma("pix");
       setVoucherCodigo(""); setVoucherAplicado(null);
     }
   }, [open]);
@@ -800,14 +800,16 @@ export function PresentialExchangePicker({ open, sellerId, sellerName, initialSa
                 <div className="space-y-2">
                   <p className="text-xs font-semibold text-pos-white/70">Como resolver o crédito?</p>
                   <div className="grid grid-cols-2 gap-2">
-                    {(["voucher", "estorno_financeiro"] as const).map((r) => (
+                    {(["estorno_financeiro", "voucher"] as const).map((r) => (
                       <button
                         key={r}
                         onClick={() => setCreditoResolucao(r)}
-                        className={cn("rounded-lg border-2 p-2.5 text-xs font-medium transition-all",
-                          creditoResolucao === r ? "border-purple-400 bg-purple-500/15 text-pos-white" : "border-pos-white/10 bg-pos-white/5 text-pos-white/60")}
+                        className={cn("rounded-lg border-4 p-3 text-[15px] font-extrabold uppercase transition-all",
+                          creditoResolucao === r
+                            ? (r === "voucher" ? "border-emerald-400 bg-emerald-500 text-black shadow-lg" : "border-amber-400 bg-amber-500 text-black shadow-lg")
+                            : (r === "voucher" ? "border-emerald-400/50 bg-pos-white/5 text-pos-white/80" : "border-amber-400/50 bg-pos-white/5 text-pos-white/80"))}
                       >
-                        {r === "voucher" ? "🎟️ Voucher" : "💸 Estorno"}
+                        {creditoResolucao === r ? "✓ " : ""}{r === "voucher" ? "Gerar voucher" : "Estorno financeiro"}
                       </button>
                     ))}
                   </div>
