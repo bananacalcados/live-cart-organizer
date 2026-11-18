@@ -1849,6 +1849,27 @@
       "when": 1794966926992,
       "tag": "0263_protect_reserved_voucher_from_pos_redemption",
       "breakpoints": true
+    },
+    {
+      "idx": 264,
+      "version": "7",
+      "when": 1795010257982,
+      "tag": "0264_exchange_swap_replacement",
+      "breakpoints": true
+    },
+    {
+      "idx": 265,
+      "version": "7",
+      "when": 1795010292684,
+      "tag": "0265_exchange_swap_replacement_order",
+      "breakpoints": true
+    },
+    {
+      "idx": 266,
+      "version": "7",
+      "when": 1795010382720,
+      "tag": "0266_exchange_swap_replacement_fix",
+      "breakpoints": true
     }
   ]
 }

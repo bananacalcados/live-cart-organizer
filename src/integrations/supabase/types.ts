@@ -27950,6 +27950,7 @@ export type Database = {
           fase2_erro: string | null
           faturamento_vendedora_troca: number
           gateway_refund_id: string | null
+          historico_reposicao: Json
           id: string
           loja_origem_id: string | null
           modo_expedicao: Database["public"]["Enums"]["td_modo_expedicao"]
@@ -27993,6 +27994,7 @@ export type Database = {
           fase2_erro?: string | null
           faturamento_vendedora_troca?: number
           gateway_refund_id?: string | null
+          historico_reposicao?: Json
           id?: string
           loja_origem_id?: string | null
           modo_expedicao?: Database["public"]["Enums"]["td_modo_expedicao"]
@@ -28036,6 +28038,7 @@ export type Database = {
           fase2_erro?: string | null
           faturamento_vendedora_troca?: number
           gateway_refund_id?: string | null
+          historico_reposicao?: Json
           id?: string
           loja_origem_id?: string | null
           modo_expedicao?: Database["public"]["Enums"]["td_modo_expedicao"]
@@ -32167,6 +32170,10 @@ export type Database = {
       exchange_support_conversations: {
         Args: { p_limit?: number; p_offset?: number; p_search?: string }
         Returns: Json
+      }
+      exchange_swap_replacement: {
+        Args: { p_items: Json; p_motivo: string; p_troca_id: string }
+        Returns: string
       }
       execute_merge_unified_duplicates: {
         Args: { p_dry_run?: boolean; p_rule?: string }

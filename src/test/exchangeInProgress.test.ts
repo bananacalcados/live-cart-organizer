@@ -32,3 +32,14 @@ describe("diferença da troca", () => {
   it("frete cotado/fixo soma à diferença", () => { expect(differenceLinkTotal(40, 25.5, "fixo")).toBe(65.5); });
   it("crédito da cliente não abate o frete no link", () => { expect(differenceLinkTotal(-50, 20, "cotado")).toBe(20); });
 });
+
+import { canSwapReplacement as swapOk } from "@/lib/pos/exchangeInProgress";
+describe("Trocar produto", () => {
+  const base = { tipo: "troca", status: "recebido_conferencia", pedido_novo_id: "s1" };
+  it("libera com produto já na Expedição", () => expect(swapOk(base)).toBe(true));
+  it("não libera sem produto ainda", () => expect(swapOk({ ...base, pedido_novo_id: null })).toBe(false));
+  it("não libera depois de finalizada (novo envio)", () => expect(swapOk({ ...base, status: "aguardando_envio" })).toBe(false));
+  it("não libera com voucher", () => expect(swapOk({ ...base, voucher_id: "v" })).toBe(false));
+  it("não libera com diferença paga", () => expect(swapOk({ ...base, diferenca_venda_id: "d" }, "completed")).toBe(false));
+  it("libera com diferença ainda não paga", () => expect(swapOk({ ...base, diferenca_venda_id: "d" }, "online_pending")).toBe(true));
+});

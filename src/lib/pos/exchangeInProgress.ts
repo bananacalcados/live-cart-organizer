@@ -29,3 +29,15 @@ export function differenceLinkTotal(diff: number, frete: number, modo: "gratis" 
   const f = modo === "gratis" ? 0 : Math.max(0, frete || 0);
   return Math.round((Math.max(diff, 0) + f) * 100) / 100;
 }
+
+const UNPAID = ["online_pending", "pending", "payment_failed", "cancelled"];
+/** "Trocar produto": troca aberta, já com produto na Expedição, sem voucher/estorno e diferença não paga (servidor confere envio e nota). */
+export function canSwapReplacement(
+  e: { tipo: string; status: string; pedido_novo_id: string | null; voucher_id?: string | null; gateway_refund_id?: string | null; diferenca_venda_id?: string | null },
+  diffStatus?: string | null,
+) {
+  if (e.tipo !== "troca" || !OPEN_EXCHANGE_STATUSES.includes(e.status) || !e.pedido_novo_id) return false;
+  if (e.voucher_id || e.gateway_refund_id) return false;
+  if (e.diferenca_venda_id && diffStatus && !UNPAID.includes(diffStatus)) return false;
+  return true;
+}

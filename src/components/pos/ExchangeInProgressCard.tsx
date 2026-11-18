@@ -3,12 +3,12 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Loader2, Plus, RotateCcw, Trash2, XCircle, AlertTriangle, Link2, Copy } from "lucide-react";
+import { Loader2, Plus, RotateCcw, Trash2, XCircle, AlertTriangle, Repeat, Link2, Copy } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { POSTinyProductPicker } from "./POSTinyProductPicker";
 import { invalidateExchangeRegistry } from "@/hooks/useExchangeRegistry";
-import { canAddReplacement, canCancelExchange, isPostingOverdue, OPEN_EXCHANGE_STATUSES, exchangeDifference, differenceLinkTotal } from "@/lib/pos/exchangeInProgress";
+import { canAddReplacement, canSwapReplacement, canCancelExchange, isPostingOverdue, OPEN_EXCHANGE_STATUSES, exchangeDifference, differenceLinkTotal } from "@/lib/pos/exchangeInProgress";
 
 const SITE_STORE_ID = "2bd2c08d-321c-47ee-98a9-e27e936818ab";
 const PEROLA_STORE_ID = "4ade7b44-5043-4ab1-a124-7a6ab5468e29";
@@ -26,6 +26,8 @@ export function ExchangeInProgressCard({ saleId, onChanged }: { saleId: string; 
   const [rev, setRev] = useState<{ valid_until: string | null; codigo_objeto: string | null } | null>(null);
   const [stockStore, setStockStore] = useState<string | null>(null);
   const [addFor, setAddFor] = useState<Ex | null>(null);
+  const [swapMode, setSwapMode] = useState(false);
+  const [swapMotivo, setSwapMotivo] = useState("");
   const [cancelFor, setCancelFor] = useState<Ex | null>(null);
   const [picks, setPicks] = useState<Pick[]>([]);
   const [motivo, setMotivo] = useState("");
@@ -70,15 +72,18 @@ export function ExchangeInProgressCard({ saleId, onChanged }: { saleId: string; 
 
   const submitAdd = async () => {
     if (!addFor || !picks.length) return;
+    if (swapMode && swapMotivo.trim().length < 3) { toast.error("Informe o motivo da troca de produto"); return; }
     setSaving(true);
-    const { error } = await supabase.rpc("exchange_add_replacement" as any, {
-      p_troca_id: addFor.id,
-      p_items: picks.map((p) => ({ sku: p.sku, barcode: p.barcode || null, quantity: p.quantity })),
-    });
+    const items = picks.map((p) => ({ sku: p.sku, barcode: p.barcode || null, quantity: p.quantity }));
+    const { error } = swapMode
+      ? await supabase.rpc("exchange_swap_replacement" as any, { p_troca_id: addFor.id, p_items: items, p_motivo: swapMotivo.trim() })
+      : await supabase.rpc("exchange_add_replacement" as any, { p_troca_id: addFor.id, p_items: items });
     setSaving(false);
     if (error) { toast.error(error.message); return; }
-    toast.success("Produto da troca enviado para a Expedição com a tag TROCA.");
-    setAddFor(null); setPicks([]); done();
+    toast.success(swapMode
+      ? "Produto trocado. O anterior saiu da Expedição e voltou ao estoque; o novo entrou com a tag TROCA."
+      : "Produto da troca enviado para a Expedição com a tag TROCA.");
+    setAddFor(null); setPicks([]); setSwapMode(false); setSwapMotivo(""); done();
   };
 
   const submitCancel = async () => {
@@ -175,7 +180,10 @@ export function ExchangeInProgressCard({ saleId, onChanged }: { saleId: string; 
             })()}
             <div className="flex flex-col gap-2 mt-2">
               {canAddReplacement(e) && (
-                <Button size="sm" className="w-full h-auto whitespace-normal py-1.5" onClick={() => { setPicks([]); setAddFor(e); }}><Plus className="h-3 w-3 mr-1" /> Adicionar produto</Button>
+                <Button size="sm" className="w-full h-auto whitespace-normal py-1.5" onClick={() => { setPicks([]); setSwapMode(false); setAddFor(e); }}><Plus className="h-3 w-3 mr-1" /> Adicionar produto</Button>
+              )}
+              {canSwapReplacement(e, e.diferenca_venda_id ? diffSales[e.diferenca_venda_id]?.status : null) && (
+                <Button size="sm" variant="outline" className="w-full h-auto whitespace-normal py-1.5" onClick={() => { setPicks([]); setSwapMotivo(""); setSwapMode(true); setAddFor(e); }}><Repeat className="h-3 w-3 mr-1" /> Trocar produto</Button>
               )}
               {canCancelExchange(e) && (
                 <Button size="sm" variant="destructive" className="w-full h-auto whitespace-normal py-1.5" onClick={() => { setMotivo(""); setCancelFor(e); }}><XCircle className="h-3 w-3 mr-1" /> Cancelar troca</Button>
@@ -187,7 +195,7 @@ export function ExchangeInProgressCard({ saleId, onChanged }: { saleId: string; 
 
       <Dialog open={!!addFor} onOpenChange={(o) => !o && setAddFor(null)}>
         <DialogContent className="max-w-lg" onClick={(e) => e.stopPropagation()}>
-          <DialogHeader><DialogTitle>Produto que a cliente vai ficar — {addFor?.codigo_devolucao}</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>{swapMode ? "Trocar produto" : "Produto que a cliente vai ficar"} — {addFor?.codigo_devolucao}</DialogTitle></DialogHeader>
           {stockStore && (
             <POSTinyProductPicker storeId={stockStore} label="Buscar produto" value=""
               onSelect={(p) => setPicks((a) => a.length >= 10 ? a : [...a, { key: Date.now(), sku: p.sku, barcode: p.barcode, name: p.product_name, size: p.size, quantity: 1 }])} />
@@ -202,10 +210,16 @@ export function ExchangeInProgressCard({ saleId, onChanged }: { saleId: string; 
               </div>
             ))}
           </div>
+          {swapMode && (
+            <>
+              <p className="text-sm">Escolha o <b>novo</b> produto. O atual sai da Expedição e volta ao estoque.{addFor?.diferenca_venda_id ? " O link da diferença ainda não pago será cancelado — gere outro com o valor novo." : ""}</p>
+              <Textarea placeholder="Motivo (obrigatório) — ex.: cliente preferiu outra cor" value={swapMotivo} onChange={(ev) => setSwapMotivo(ev.target.value)} />
+            </>
+          )}
           <p className="text-xs text-muted-foreground">Vai para a Expedição com a tag TROCA e só pode ser concluído depois de finalizar a troca no PDV. O estoque fica reservado.</p>
           <div className="flex justify-end gap-2">
             <Button variant="ghost" onClick={() => setAddFor(null)}>Voltar</Button>
-            <Button onClick={submitAdd} disabled={saving || !picks.length}>{saving && <Loader2 className="h-4 w-4 mr-1 animate-spin" />} Enviar para a Expedição</Button>
+            <Button onClick={submitAdd} disabled={saving || !picks.length}>{saving && <Loader2 className="h-4 w-4 mr-1 animate-spin" />} {swapMode ? "Trocar produto" : "Enviar para a Expedição"}</Button>
           </div>
         </DialogContent>
       </Dialog>
