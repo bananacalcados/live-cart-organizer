@@ -41,3 +41,8 @@ export function canSwapReplacement(
   if (e.diferenca_venda_id && diffStatus && !UNPAID.includes(diffStatus)) return false;
   return true;
 }
+
+/** "Converter em devolução": mesmas condições de "Cancelar troca", só para tipo troca (servidor confere o resto). */
+export function canConvertToReturn(e: { tipo: string; status: string; voucher_id?: string | null; gateway_refund_id?: string | null }) {
+  return e.tipo === "troca" && canCancelExchange(e);
+}

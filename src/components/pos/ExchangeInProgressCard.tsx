@@ -3,12 +3,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Loader2, Plus, RotateCcw, Trash2, XCircle, AlertTriangle, Repeat, Link2, Copy } from "lucide-react";
+import { Loader2, Plus, RotateCcw, Trash2, XCircle, Undo2, AlertTriangle, Repeat, Link2, Copy } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { POSTinyProductPicker } from "./POSTinyProductPicker";
+import { ConvertExchangeToReturnDialog } from "./ConvertExchangeToReturnDialog";
 import { invalidateExchangeRegistry } from "@/hooks/useExchangeRegistry";
-import { canAddReplacement, canSwapReplacement, canCancelExchange, isPostingOverdue, OPEN_EXCHANGE_STATUSES, exchangeDifference, differenceLinkTotal } from "@/lib/pos/exchangeInProgress";
+import { canAddReplacement, canSwapReplacement, canCancelExchange, canConvertToReturn, isPostingOverdue, OPEN_EXCHANGE_STATUSES, exchangeDifference, differenceLinkTotal } from "@/lib/pos/exchangeInProgress";
 
 const SITE_STORE_ID = "2bd2c08d-321c-47ee-98a9-e27e936818ab";
 const PEROLA_STORE_ID = "4ade7b44-5043-4ab1-a124-7a6ab5468e29";
@@ -29,6 +30,7 @@ export function ExchangeInProgressCard({ saleId, onChanged }: { saleId: string; 
   const [swapMode, setSwapMode] = useState(false);
   const [swapMotivo, setSwapMotivo] = useState("");
   const [cancelFor, setCancelFor] = useState<Ex | null>(null);
+  const [convertFor, setConvertFor] = useState<Ex | null>(null);
   const [picks, setPicks] = useState<Pick[]>([]);
   const [motivo, setMotivo] = useState("");
   const [saving, setSaving] = useState(false);
@@ -185,6 +187,9 @@ export function ExchangeInProgressCard({ saleId, onChanged }: { saleId: string; 
               {canSwapReplacement(e, e.diferenca_venda_id ? diffSales[e.diferenca_venda_id]?.status : null) && (
                 <Button size="sm" variant="outline" className="w-full h-auto whitespace-normal py-1.5" onClick={() => { setPicks([]); setSwapMotivo(""); setSwapMode(true); setAddFor(e); }}><Repeat className="h-3 w-3 mr-1" /> Trocar produto</Button>
               )}
+              {canConvertToReturn(e) && (
+                <Button size="sm" variant="secondary" className="w-full h-auto whitespace-normal py-1.5" onClick={() => setConvertFor(e)}><Undo2 className="h-3 w-3 mr-1" /> Converter em devolução</Button>
+              )}
               {canCancelExchange(e) && (
                 <Button size="sm" variant="destructive" className="w-full h-auto whitespace-normal py-1.5" onClick={() => { setMotivo(""); setCancelFor(e); }}><XCircle className="h-3 w-3 mr-1" /> Cancelar troca</Button>
               )}
@@ -264,6 +269,8 @@ export function ExchangeInProgressCard({ saleId, onChanged }: { saleId: string; 
           })()}
         </DialogContent>
       </Dialog>
+
+      <ConvertExchangeToReturnDialog troca={convertFor} onClose={() => setConvertFor(null)} onDone={done} />
 
       <Dialog open={!!cancelFor} onOpenChange={(o) => !o && setCancelFor(null)}>
         <DialogContent className="max-w-md" onClick={(e) => e.stopPropagation()}>
