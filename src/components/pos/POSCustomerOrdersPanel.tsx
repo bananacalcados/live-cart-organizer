@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { fetchRefundBadges, type RefundBadge } from "@/lib/refunds";
 import { RefundSourceBadges } from "@/components/refunds/RefundSourceBadges";
 import { POSVoucherPanel } from "@/components/pos/POSVoucherPanel";
+import { POSCashbackPanel } from "@/components/pos/POSCashbackPanel";
 import type { VoucherWriteResult } from "@/lib/vouchers";
 import { useCanRefund } from "@/hooks/useCanRefund";
 import { AlertTriangle, Coins, CreditCard, Mail, MapPin, Package, Phone, ShoppingBag, Truck, User } from "lucide-react";
@@ -179,6 +180,16 @@ export function POSCustomerOrdersPanel({
             </div>
           </div>
         ) : null}
+
+        <POSCashbackPanel
+          phone={igLink?.chosen?.phone || phone}
+          sales={unpaidOrders.filter((order) => order.kind === "pos_sale").map((order) => ({
+            id: order.id,
+            label: `${order.orderName || "Venda"}${order.createdAt ? ` · ${new Date(order.createdAt).toLocaleDateString("pt-BR")}` : ""}`,
+            total: Number(order.totalPrice || 0),
+          }))}
+          onChanged={(saleId, r) => onVoucherChanged?.(saleId, { voucher_id: null, voucher_amount: 0, discount_type: "fixed", discount_value: 0, total: r.total })}
+        />
 
         <POSVoucherPanel
           phone={igLink?.chosen?.phone || phone}

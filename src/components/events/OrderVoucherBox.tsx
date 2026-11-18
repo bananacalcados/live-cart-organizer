@@ -57,22 +57,22 @@ export function OrderVoucherBox({ order, onChanged }: { order: DbOrder; onChange
   if (!loading && !visible.length && !appliedId) return null;
 
   return (
-    <div className="mb-3 rounded-md border border-primary/30 bg-primary/5 px-3 py-2 text-xs space-y-1.5">
-      <p className="font-semibold text-foreground flex items-center gap-1"><Ticket className="h-3.5 w-3.5" /> Voucher de troca</p>
+    <div className="mb-3 rounded-lg border-2 border-accent bg-accent p-3 text-sm text-accent-foreground space-y-2 shadow-md">
+      <p className="text-base font-extrabold flex items-center gap-1.5"><Ticket className="h-5 w-5" /> Voucher de troca</p>
       {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" /> : visible.map((voucher) => {
         const applied = voucher.id === appliedId;
         return (
-          <div key={voucher.id} className="flex items-center justify-between gap-2">
+          <div key={voucher.id} className="flex items-center justify-between gap-2 rounded-md bg-background p-2.5 text-foreground">
             <div className="min-w-0">
-              <span className="font-semibold">{voucherBrl(applied ? appliedAmount : voucher.saldo)}</span>
-              <span className="text-muted-foreground"> · {voucher.codigo} · {voucher.validade ? `até ${new Date(`${voucher.validade}T12:00:00`).toLocaleDateString("pt-BR")}` : "sem validade"}</span>
+              <span className="block text-2xl font-black text-accent">{voucherBrl(applied ? appliedAmount : voucher.saldo)}</span>
+              <span className="block text-xs font-semibold"> {voucher.codigo} · {voucher.validade ? `até ${new Date(`${voucher.validade}T12:00:00`).toLocaleDateString("pt-BR")}` : "sem validade"}</span>
             </div>
             {paid && applied ? <span className="text-muted-foreground">Usado neste pedido</span> : applied ? (
-              <Button size="sm" variant="outline" className="h-6 px-2 text-[11px]" disabled={!!busy} onClick={() => void write(null, "remove")}>
+              <Button size="sm" variant="outline" className="h-8 px-3 text-sm font-bold" disabled={!!busy} onClick={() => void write(null, "remove")}>
                 {busy === "remove" ? <Loader2 className="h-3 w-3 animate-spin" /> : "Remover"}
               </Button>
             ) : (
-              <Button size="sm" className="h-6 px-2 text-[11px]" disabled={!!busy || !!appliedId} onClick={() => void write(voucher.id, voucher.id)}>
+              <Button size="sm" className="h-8 px-3 text-sm font-bold" disabled={!!busy || !!appliedId} onClick={() => void write(voucher.id, voucher.id)}>
                 {busy === voucher.id ? <Loader2 className="h-3 w-3 animate-spin" /> : "Abater"}
               </Button>
             )}
@@ -82,10 +82,10 @@ export function OrderVoucherBox({ order, onChanged }: { order: DbOrder; onChange
       {appliedId && !visible.some((v) => v.id === appliedId) && (
         <div className="flex items-center justify-between gap-2">
           <span>Voucher de {voucherBrl(appliedAmount)} {paid ? "usado neste pedido" : "abatido"}</span>
-          {!paid && <Button size="sm" variant="outline" className="h-6 px-2 text-[11px]" disabled={!!busy} onClick={() => void write(null, "remove")}>Remover</Button>}
+          {!paid && <Button size="sm" variant="outline" className="h-8 px-3 text-sm font-bold" disabled={!!busy} onClick={() => void write(null, "remove")}>Remover</Button>}
         </div>
       )}
-      <p className="text-[10px] text-muted-foreground">1 voucher por pedido. A baixa acontece só quando o pagamento é confirmado; depois disso ele não pode ser usado de novo.</p>
+      <p className="text-xs font-medium">1 voucher por pedido. A baixa acontece só quando o pagamento é confirmado; depois disso ele não pode ser usado de novo.</p>
     </div>
   );
 }

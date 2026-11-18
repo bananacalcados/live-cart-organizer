@@ -19,6 +19,8 @@ import { EmbeddedDialog, EmbeddedDialogContent } from "@/components/chat/Embedde
 import LinkInstallmentRuleFields from "@/components/pos/LinkInstallmentRuleFields";
 import { buildLinkInstallmentRule } from "@/lib/installmentRules";
 import type { SplitPartInput } from "@/lib/splitPayment";
+import { listPhoneCashbacks, setSaleCashback, cashbackReachesMin, type PhoneCashback } from "@/lib/saleCashback";
+import { listAvailableVouchers, setTargetVoucher, type AvailableVoucher } from "@/lib/vouchers";
 
 
 interface CartItem {
@@ -69,6 +71,19 @@ export function POSWhatsAppCheckoutDialog({
   const [noInterestInstallments, setNoInterestInstallments] = useState("");
   const [maxInstallments, setMaxInstallments] = useState("");
   const [interestRate, setInterestRate] = useState("");
+  // Cashback da live e voucher de troca da cliente: uma consulta cada ao abrir.
+  const [cashbacks, setCashbacks] = useState<PhoneCashback[]>([]);
+  const [vouchers, setVouchers] = useState<AvailableVoucher[]>([]);
+  const [selCashback, setSelCashback] = useState<PhoneCashback | null>(null);
+  const [selVoucher, setSelVoucher] = useState<AvailableVoucher | null>(null);
+
+  useEffect(() => {
+    if (!open || phone.replace(/\D/g, "").length < 8) return;
+    let alive = true;
+    void listPhoneCashbacks(phone).then((r) => { if (alive) setCashbacks(r.filter((c) => !c.reserved_sale_id && !c.reserved_order_id)); }).catch(() => {});
+    void listAvailableVouchers({ phone }).then((r) => { if (alive) setVouchers(r.filter((v) => v.is_available && !v.reserved_sale_id && !v.reserved_order_id)); }).catch(() => {});
+    return () => { alive = false; };
+  }, [open, phone]);
 
 
   useEffect(() => {
@@ -191,13 +206,26 @@ export function POSWhatsAppCheckoutDialog({
     return discountType === "percent" ? Math.min(cartSubtotal, cartSubtotal * (val / 100)) : Math.min(cartSubtotal, val);
   })();
   const couponDiscount = couponApplied ? Math.min(cartSubtotal, couponApplied.discount) : 0;
-  const discountAmount = Math.min(cartSubtotal, manualDiscount + couponDiscount);
+  const baseDiscount = Math.min(cartSubtotal, manualDiscount + couponDiscount);
+  const productsBase = Math.max(0, cartSubtotal - baseDiscount);
+  // Prévia; o servidor recalcula ao gravar (mesma regra do modal).
+  const cashbackOk = !!selCashback && cashbackReachesMin(productsBase, selCashback.min_purchase);
+  const cashbackAmount = cashbackOk ? Math.round(Math.min(selCashback!.cashback_amount, productsBase) * 100) / 100 : 0;
+  const voucherAmount = selVoucher ? Math.round(Math.min(selVoucher.saldo, Math.max(0, productsBase - cashbackAmount)) * 100) / 100 : 0;
+  const discountAmount = Math.min(cartSubtotal, baseDiscount + cashbackAmount + voucherAmount);
   const shippingAmount = freeShipping ? 0 : parseNum(shippingValue);
-  const orderTotal = Math.max(0, cartSubtotal - discountAmount) + shippingAmount;
+  const [serverTotal, setServerTotal] = useState<number | null>(null);
+  useEffect(() => { if (!generatedLink) setServerTotal(null); }, [generatedLink]);
+  const orderTotal = serverTotal ?? (Math.max(0, cartSubtotal - discountAmount) + shippingAmount);
 
   const handleApplyCoupon = async () => {
     const code = couponCode.trim().toUpperCase();
     if (!code) return;
+    // Código de cashback da live ou voucher de troca desta cliente: usa a reserva do servidor.
+    const cb = cashbacks.find((c) => c.coupon_code.toUpperCase() === code);
+    if (cb) { setSelCashback(cb); setCouponCode(""); toast.success("Cashback selecionado"); return; }
+    const vc = vouchers.find((v) => v.codigo.toUpperCase() === code);
+    if (vc) { setSelVoucher(vc); setCouponCode(""); toast.success("Voucher selecionado"); return; }
     setValidatingCoupon(true);
     try {
       const { data, error } = await supabase.functions.invoke("pos-validate-coupon", {
@@ -216,6 +244,7 @@ export function POSWhatsAppCheckoutDialog({
 
   const handleGenerate = async () => {
     if (cart.length === 0) { toast.error("Adicione produtos"); return; }
+    if (selCashback && !cashbackOk) { toast.error(`Compra mínima de ${fmt(selCashback.min_purchase)} para este cashback`); return; }
     setGenerating(true);
     try {
       // Garante que a cliente exista em pos_customers assim que o link nasce,
@@ -234,8 +263,9 @@ export function POSWhatsAppCheckoutDialog({
       const salePayload = {
         store_id: storeId,
         subtotal: cartSubtotal,
-        discount: discountAmount > 0 ? discountAmount : 0,
-        total: orderTotal,
+        // Cashback/voucher entram depois, pelo servidor (reserva + recálculo).
+        discount: baseDiscount > 0 ? baseDiscount : 0,
+        total: Math.max(0, cartSubtotal - baseDiscount) + shippingAmount,
         status: "online_pending",
         sale_type: "online",
         payment_gateway: "store-checkout",
@@ -267,7 +297,7 @@ export function POSWhatsAppCheckoutDialog({
           customer_neighborhood: known.neighborhood || null,
           customer_city: known.city || null,
           customer_state: known.state || null,
-          discount_amount: discountAmount,
+          discount_amount: baseDiscount,
           discount_type: discountType,
           discount_value: discountValue,
           shipping_amount: shippingAmount,
@@ -287,19 +317,32 @@ export function POSWhatsAppCheckoutDialog({
       const { data: sale, error } = await supabase.from("pos_sales").insert(salePayload as any).select("id").single();
       if (error || !sale) throw new Error(error?.message || "Erro ao criar venda");
 
-      if (splitParts.length > 0) {
-        const { data: splitData, error: splitError } = await supabase.functions.invoke("split-payment", {
-          body: { action: "setup", saleId: sale.id, total: orderTotal, parts: splitParts },
-        });
-        if (splitError || splitData?.error) throw new Error(splitData?.error || splitError?.message || "Erro ao salvar divisão do pagamento");
-      }
-
       const saleItems = cart.map(c => ({
         sale_id: sale.id, sku: c.sku || null, product_name: c.title,
         variant_name: c.variantLabel || null, unit_price: c.price,
         quantity: c.quantity, total_price: c.price * c.quantity,
       }));
       await supabase.from("pos_sale_items").insert(saleItems as any);
+
+      let finalTotal = Math.max(0, cartSubtotal - baseDiscount) + shippingAmount;
+      if (selCashback || selVoucher) {
+        try {
+          if (selCashback) finalTotal = (await setSaleCashback(sale.id, selCashback.id)).total;
+          if (selVoucher) finalTotal = (await setTargetVoucher({ saleId: sale.id }, selVoucher.id)).total;
+        } catch (e: any) {
+          await supabase.from("pos_sales").update({ status: "cancelled", cashback_id: null, cashback_amount: 0, voucher_id: null, voucher_amount: 0 } as any).eq("id", sale.id);
+          throw new Error(`Não foi possível abater: ${e?.message || "erro"}. Nenhum link foi criado.`);
+        }
+      }
+      setServerTotal(finalTotal);
+
+      if (splitParts.length > 0) {
+        const { data: splitData, error: splitError } = await supabase.functions.invoke("split-payment", {
+          body: { action: "setup", saleId: sale.id, total: finalTotal, parts: splitParts },
+        });
+        if (splitError || splitData?.error) throw new Error(splitData?.error || splitError?.message || "Erro ao salvar divisão do pagamento");
+      }
+
 
       const link = `https://checkout.bananacalcados.com.br/checkout-loja/${storeId}/${sale.id}`;
       setGeneratedLink(link);
@@ -353,6 +396,9 @@ export function POSWhatsAppCheckoutDialog({
       setDiscountValue("");
       setCouponApplied(null);
       setCouponCode("");
+      setSelCashback(null); setSelVoucher(null); setServerTotal(null);
+      setCashbacks((l) => l.filter((c) => c.id !== selCashback?.id));
+      setVouchers((l) => l.filter((v) => v.id !== selVoucher?.id));
       setShippingValue("");
       setNoInterestInstallments("");
     } catch {
@@ -459,7 +505,7 @@ export function POSWhatsAppCheckoutDialog({
 
                 {/* Coupon */}
                 <div className="border-t pt-2 space-y-1">
-                  <Label className="text-[10px]">Cupom (INDICA / Cashback)</Label>
+                  <Label className="text-[10px]">Cupom (INDICA / Cashback / Voucher de troca)</Label>
                   {couponApplied ? (
                     <div className="flex items-center justify-between gap-1 px-2 py-1 rounded bg-emerald-500/10 border border-emerald-500/30">
                       <div className="min-w-0">
@@ -477,6 +523,45 @@ export function POSWhatsAppCheckoutDialog({
                     </div>
                   )}
                 </div>
+
+                {(cashbacks.length > 0 || vouchers.length > 0) && (
+                  <div className="space-y-2">
+                    {cashbacks.map((cb) => {
+                      const on = selCashback?.id === cb.id;
+                      const reach = cashbackReachesMin(productsBase, cb.min_purchase);
+                      return (
+                        <div key={cb.id} className="rounded-lg border-2 border-cashback bg-cashback p-2.5 text-cashback-foreground">
+                          <p className="text-xs font-extrabold">💰 Cashback da live</p>
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="text-xl font-black">{fmt(cb.cashback_amount)}</span>
+                            <span className="rounded bg-background px-1.5 py-0.5 font-mono text-xs font-bold text-foreground">{cb.coupon_code}</span>
+                          </div>
+                          <p className="text-[11px] font-semibold">Mín. {fmt(cb.min_purchase)} · até {new Date(cb.expires_at).toLocaleDateString("pt-BR")} · fora de promoção</p>
+                          {!reach && !on && <p className="text-[11px] font-bold">Carrinho abaixo do mínimo</p>}
+                          {on && !cashbackOk && <p className="text-[11px] font-bold">Carrinho abaixo do mínimo — não será abatido</p>}
+                          <Button size="sm" variant={on ? "outline" : "secondary"} className="mt-1 h-7 w-full text-xs font-bold text-foreground" disabled={!on && (!reach || (!!selCashback && !on))}
+                            onClick={() => setSelCashback(on ? null : cb)}>{on ? `Abatendo ${fmt(cashbackAmount)} · remover` : "Abater neste carrinho"}</Button>
+                        </div>
+                      );
+                    })}
+                    {vouchers.map((v) => {
+                      const on = selVoucher?.id === v.id;
+                      return (
+                        <div key={v.id} className="rounded-lg border-2 border-accent bg-accent p-2.5 text-accent-foreground">
+                          <p className="text-xs font-extrabold">🎟️ Voucher de troca</p>
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="text-xl font-black">{fmt(v.saldo)}</span>
+                            <span className="rounded bg-background px-1.5 py-0.5 font-mono text-xs font-bold text-foreground">{v.codigo}</span>
+                          </div>
+                          <p className="text-[11px] font-semibold">{v.validade ? `até ${new Date(`${v.validade}T12:00:00`).toLocaleDateString("pt-BR")}` : "sem validade"} · uso único</p>
+                          <Button size="sm" variant={on ? "outline" : "secondary"} className="mt-1 h-7 w-full text-xs font-bold text-foreground" disabled={!!selVoucher && !on}
+                            onClick={() => setSelVoucher(on ? null : v)}>{on ? `Abatendo ${fmt(voucherAmount)} · remover` : "Abater neste carrinho"}</Button>
+                        </div>
+                      );
+                    })}
+                    <p className="text-[10px] text-muted-foreground">Fica reservado ao gerar o link e só é usado quando a cliente paga.</p>
+                  </div>
+                )}
 
                 {/* Discount & Shipping */}
                 <div className="space-y-4 border-t pt-4">

@@ -20280,6 +20280,8 @@ export type Database = {
           attribution_source: string | null
           austpay_transaction_id: string | null
           cash_register_id: string | null
+          cashback_amount: number
+          cashback_id: string | null
           checkout_step: number | null
           conditional_signed_at: string | null
           conditional_status: string | null
@@ -20393,6 +20395,8 @@ export type Database = {
           attribution_source?: string | null
           austpay_transaction_id?: string | null
           cash_register_id?: string | null
+          cashback_amount?: number
+          cashback_id?: string | null
           checkout_step?: number | null
           conditional_signed_at?: string | null
           conditional_status?: string | null
@@ -20506,6 +20510,8 @@ export type Database = {
           attribution_source?: string | null
           austpay_transaction_id?: string | null
           cash_register_id?: string | null
+          cashback_amount?: number
+          cashback_id?: string | null
           checkout_step?: number | null
           conditional_signed_at?: string | null
           conditional_status?: string | null
@@ -31318,6 +31324,18 @@ export type Database = {
           min_purchase: number
         }[]
       }
+      available_cashbacks_for_phone: {
+        Args: { p_phone: string }
+        Returns: {
+          cashback_amount: number
+          coupon_code: string
+          expires_at: string
+          id: string
+          min_purchase: number
+          reserved_order_id: string
+          reserved_sale_id: string
+        }[]
+      }
       available_vouchers_for_target: {
         Args: {
           p_limit?: number
@@ -34741,6 +34759,15 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      set_sale_cashback: {
+        Args: { p_cashback_id: string; p_sale_id: string }
+        Returns: {
+          cashback_amount: number
+          cashback_id: string
+          discount: number
+          total: number
+        }[]
       }
       set_target_voucher: {
         Args: { p_order_id?: string; p_sale_id?: string; p_voucher_id?: string }

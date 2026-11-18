@@ -49,17 +49,20 @@ export function POSVoucherPanel({ phone, sales, onChanged }: {
   if (!loading && !list.length) return null;
 
   return (
-    <section className="rounded-lg border border-primary/30 bg-primary/5 p-3 text-xs space-y-2">
-      <p className="flex items-center gap-1.5 font-bold text-foreground"><Ticket className="h-4 w-4 text-primary" /> Voucher de troca disponível</p>
+    <section className="rounded-lg border-2 border-accent bg-accent p-3 text-sm text-accent-foreground space-y-2 shadow-md">
+      <p className="flex items-center gap-1.5 text-base font-extrabold"><Ticket className="h-5 w-5" /> Voucher de troca disponível</p>
       {loading ? <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" /> : list.map((voucher) => {
         const reservedSale = voucher.reserved_sale_id ? sales.find((s) => s.id === voucher.reserved_sale_id) : null;
         const reservedElsewhere = !!(voucher.reserved_order_id || (voucher.reserved_sale_id && !reservedSale));
         const saleId = selectedSale[voucher.id] || (sales.length === 1 ? sales[0].id : "");
         return (
-          <div key={voucher.id} className="rounded-md border bg-background/60 p-2 space-y-2">
+          <div key={voucher.id} className="rounded-md bg-background p-2.5 text-foreground space-y-2">
             <div className="flex items-center justify-between gap-2">
-              <span className="font-bold">{voucherBrl(voucher.saldo)}</span>
-              <span className="text-muted-foreground">{voucher.codigo} · {voucher.validade ? `até ${new Date(`${voucher.validade}T12:00:00`).toLocaleDateString("pt-BR")}` : "sem validade"}</span>
+              <span className="text-2xl font-black text-accent">{voucherBrl(voucher.saldo)}</span>
+              <span className="rounded bg-foreground px-2 py-0.5 font-mono text-sm font-bold text-background">{voucher.codigo}</span>
+            </div>
+            <div className="text-xs font-semibold">
+              <span>{voucher.validade ? `até ${new Date(`${voucher.validade}T12:00:00`).toLocaleDateString("pt-BR")}` : "sem validade"}</span>
             </div>
             {reservedSale ? (
               <div className="flex items-center justify-between gap-2">
@@ -86,7 +89,7 @@ export function POSVoucherPanel({ phone, sales, onChanged }: {
           </div>
         );
       })}
-      <p className="text-[10px] text-muted-foreground">A baixa acontece quando a venda é paga. Depois disso o voucher não fica disponível novamente.</p>
+      <p className="text-xs font-medium">A baixa acontece quando a venda é paga. Depois disso o voucher não fica disponível novamente.</p>
     </section>
   );
 }

@@ -1870,6 +1870,13 @@
       "when": 1795010382720,
       "tag": "0266_exchange_swap_replacement_fix",
       "breakpoints": true
+    },
+    {
+      "idx": 267,
+      "version": "7",
+      "when": 1795011148589,
+      "tag": "0267_pos_sale_live_cashback",
+      "breakpoints": true
     }
   ]
 }

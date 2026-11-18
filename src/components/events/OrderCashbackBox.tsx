@@ -80,27 +80,27 @@ export function OrderCashbackBox({ order, phone }: { order: DbOrder; phone: stri
   if (!loading && list.length === 0 && !appliedId) return null;
 
   return (
-    <div className="mb-3 rounded-md border border-primary/30 bg-primary/5 px-3 py-2 text-xs space-y-1.5">
-      <p className="font-semibold text-foreground flex items-center gap-1"><Gift className="h-3.5 w-3.5" /> Cashback</p>
+    <div className="mb-3 rounded-lg border-2 border-cashback bg-cashback p-3 text-sm text-cashback-foreground space-y-2 shadow-md">
+      <p className="text-base font-extrabold flex items-center gap-1.5"><Gift className="h-5 w-5" /> Cashback</p>
       {loading && <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />}
       {list.map((cb) => {
         const isApplied = cb.id === appliedId;
         const reachesMin = baseForMin >= cb.min_purchase;
         return (
-          <div key={cb.id} className="flex items-center justify-between gap-2">
+          <div key={cb.id} className="flex items-center justify-between gap-2 rounded-md bg-background p-2.5 text-foreground">
             <div className="min-w-0">
-              <span className="font-semibold">{brl(cb.cashback_amount)}</span>
-              <span className="text-muted-foreground"> · mín. {brl(cb.min_purchase)} · até {new Date(cb.expires_at).toLocaleDateString("pt-BR")}</span>
+              <span className="block text-2xl font-black text-cashback">{brl(cb.cashback_amount)}</span>
+              <span className="block text-xs font-semibold"> mín. {brl(cb.min_purchase)} · até {new Date(cb.expires_at).toLocaleDateString("pt-BR")}</span>
               {!reachesMin && !isApplied && <span className="block text-destructive">Pedido abaixo do mínimo</span>}
             </div>
             {order.is_paid ? (
               isApplied ? <span className="text-muted-foreground">Usado</span> : null
             ) : isApplied ? (
-              <Button size="sm" variant="outline" className="h-6 px-2 text-[11px]" onClick={remove} disabled={!!busy}>
+              <Button size="sm" variant="outline" className="h-8 px-3 text-sm font-bold" onClick={remove} disabled={!!busy}>
                 {busy === "remove" ? <Loader2 className="h-3 w-3 animate-spin" /> : "Remover"}
               </Button>
             ) : (
-              <Button size="sm" className="h-6 px-2 text-[11px]" onClick={() => apply(cb)} disabled={!!busy || !!appliedId || !reachesMin}>
+              <Button size="sm" className="h-8 px-3 text-sm font-bold" onClick={() => apply(cb)} disabled={!!busy || !!appliedId || !reachesMin}>
                 {busy === cb.id ? <Loader2 className="h-3 w-3 animate-spin" /> : "Abater"}
               </Button>
             )}
@@ -111,11 +111,11 @@ export function OrderCashbackBox({ order, phone }: { order: DbOrder; phone: stri
         <div className="flex items-center justify-between gap-2">
           <span>Cashback de {brl(appliedAmount)} {order.is_paid ? "usado neste pedido" : "abatido"}</span>
           {!order.is_paid && (
-            <Button size="sm" variant="outline" className="h-6 px-2 text-[11px]" onClick={remove} disabled={!!busy}>Remover</Button>
+            <Button size="sm" variant="outline" className="h-8 px-3 text-sm font-bold" onClick={remove} disabled={!!busy}>Remover</Button>
           )}
         </div>
       )}
-      <p className="text-[10px] text-muted-foreground">1 cashback por pedido. Só fica marcado como usado quando o pedido é pago.</p>
+      <p className="text-xs font-medium">1 cashback por pedido. Só fica marcado como usado quando o pedido é pago.</p>
     </div>
   );
 }
