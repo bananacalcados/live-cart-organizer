@@ -9,8 +9,9 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { CheckCircle2, ScanBarcode, Camera, Package, Loader2, PackageCheck, PackageMinus, PackageX, Search, Users, Gift, Truck, FileText, AlertTriangle } from 'lucide-react';
 import { EmitNfeButton } from '@/components/fiscal/EmitNfeButton';
-import { resolveStockLabelCode } from '@/lib/inventoryStockCode';
+import { resolveStockLabelCode, type ResolvedStockCode } from '@/lib/inventoryStockCode';
 import { itemMatchesResolvedStockLabel } from '@/lib/stockLabelMatch';
+import { logExpeditionScan } from '@/lib/expeditionScanLog';
 
 const Barcode = lazy(() => import('react-barcode'));
 
@@ -167,9 +168,10 @@ export function BetaPackingStation({ orders, searchTerm, onRefresh }: Props) {
   const handleBarcodeScan = useCallback(async (barcode: string) => {
     if (!selectedGroup || !barcode.trim()) return;
     let matchedItem = items.find((item: any) => item.barcode === barcode.trim() || item.sku === barcode.trim());
+    let resolved: ResolvedStockCode | null = null;
     if (!matchedItem) {
       try {
-        const resolved = await resolveStockLabelCode(barcode.trim(), null);
+        resolved = await resolveStockLabelCode(barcode.trim(), null);
         if (resolved) matchedItem = items.find((item: any) => itemMatchesResolvedStockLabel(item, resolved));
       } catch {
         // Falha na etiqueta nova segue o aviso atual de código não encontrado.
@@ -180,6 +182,14 @@ export function BetaPackingStation({ orders, searchTerm, onRefresh }: Props) {
       const current = scannedItems[key] || 0;
       if (current < matchedItem.quantity) {
         setScannedItems(prev => ({ ...prev, [key]: current + 1 }));
+        logExpeditionScan({
+          flow: 'beta', stage: 'embalagem', method: resolved ? 'etiqueta_nova' : 'codigo_antigo',
+          code_read: barcode, variant_code: resolved?.code || null, variant_id: resolved?.variant_id || null,
+          expedition_order_id: selectedGroup.orders.find(o => (o.expedition_beta_order_items || []).some((i: any) => i.id === matchedItem.id))?.id,
+          expedition_order_item_id: matchedItem.id, product_name: matchedItem.product_name,
+          variant_name: matchedItem.variant_name || null, sku: matchedItem.sku || null, barcode: matchedItem.barcode || null,
+          quantity: 1,
+        });
         toast.success(`✓ ${matchedItem.product_name} (${current + 1}/${matchedItem.quantity})`);
       } else {
         toast.warning(`${matchedItem.product_name} já bipado!`);

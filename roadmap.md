@@ -22,3 +22,9 @@
 - [x] Aceitar códigos novos em transferências, trocas e entrada por grade
 - [x] Testar todas as telas com RPC simulada e auditar a conferência na prévia
 - [x] Responder como a conferência pode ser concluída, o que é registrado e quais itens não têm etiqueta
+
+# Registro silencioso da conferência — passo 1
+- [x] Registrar método, código e quantidade nos cinco fluxos de conferência
+- [x] Garantir que falha do registro não interfira na conferência
+- [x] Testar todos os métodos com inserção simulada e manter os testes anteriores
+- [x] Conferir na prévia sem gravar registros ou concluir pedidos reais

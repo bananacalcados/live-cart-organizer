@@ -30,6 +30,7 @@ import { attachRealTracking, getPublicTrackingCode, publicTrackingUrl } from "@/
 import { TrackingVarValues, formatShippingAddress, renderTrackingMessage } from "@/lib/pos/trackingMessage";
 import { isNewStockLabelCode, resolveStockLabelCode, type ResolvedStockCode } from "@/lib/inventoryStockCode";
 import { itemMatchesResolvedStockLabel } from "@/lib/stockLabelMatch";
+import { logExpeditionScan, type ExpeditionScanMethod } from "@/lib/expeditionScanLog";
 
 
 interface Props {
@@ -229,8 +230,33 @@ export function ExpConferenceDialog({ order, storeId, open, onOpenChange, onFini
     [order.items, checks],
   );
 
-  const handleScan = async (raw?: string) => {
-    const code = (raw ?? scanInput).replace(/\s/g, "");
+  const logPosScan = (
+    item: ExpOrder["items"][number],
+    method: ExpeditionScanMethod,
+    codeRead: string | null,
+    resolved: ResolvedStockCode | null = null,
+  ) => {
+    logExpeditionScan({
+      flow: "pos",
+      stage: "conferencia",
+      method,
+      code_read: codeRead,
+      variant_code: resolved?.code || null,
+      variant_id: resolved?.variant_id || null,
+      sale_id: item.sale_id || order.id,
+      sale_item_id: item.id,
+      product_name: item.product_name,
+      variant_name: item.variant_name,
+      sku: item.sku,
+      barcode: item.barcode,
+      quantity: Math.max(1, Number(item.expedition_conference_qty) || Number(item.quantity) || 1),
+      store_id: storeId || order.store_id || null,
+    });
+  };
+
+  const handleScan = async (raw?: string, methodOverride?: ExpeditionScanMethod) => {
+    const rawCode = raw ?? scanInput;
+    const code = rawCode.replace(/\s/g, "");
     if (!code) return;
     let item = order.items.find((i) => i.barcode === code && !checks[i.id]?.scanned);
     let resolved: ResolvedStockCode | null = null;
@@ -249,6 +275,7 @@ export function ExpConferenceDialog({ order, storeId, open, onOpenChange, onFini
 
     if (item) {
       setChecks((p) => ({ ...p, [item.id]: { ...p[item.id], scanned: true } }));
+      logPosScan(item, methodOverride || (resolved ? "etiqueta_nova" : "codigo_antigo"), methodOverride === "manual" ? null : rawCode, methodOverride ? null : resolved);
       setScanInput("");
       toast.success(`Bipado: ${item.product_name}`);
       return;
@@ -293,7 +320,10 @@ export function ExpConferenceDialog({ order, storeId, open, onOpenChange, onFini
         .eq("id", linkItemId);
       if (error) throw error;
       const it = order.items.find((i) => i.id === linkItemId);
-      if (it) it.barcode = linkCode;
+      if (it) {
+        it.barcode = linkCode;
+        logPosScan(it, "vincular", linkCode);
+      }
       setChecks((p) => ({ ...p, [linkItemId]: { ...p[linkItemId], scanned: true } }));
       toast.success("Código vinculado ao item e bipado");
       setLinkCode(null);
@@ -559,7 +589,7 @@ export function ExpConferenceDialog({ order, storeId, open, onOpenChange, onFini
                         {c?.scanned ? (
                           <Badge className="bg-exp-done text-white text-sm font-bold">BIPADO</Badge>
                         ) : (
-                          <Button size="sm" variant="outline" onClick={() => handleScan(it.barcode || "")}>
+                          <Button size="sm" variant="outline" onClick={() => handleScan(it.barcode || "", "manual")}>
                             Marcar manual
                           </Button>
                         )}

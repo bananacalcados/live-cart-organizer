@@ -11,8 +11,9 @@ import { ExpeditionBarcodeScanner } from '@/components/expedition/ExpeditionBarc
 import { StockCheckRequestDialog } from '@/components/expedition/StockCheckRequestDialog';
 import { StockCorrectionDialog } from '@/components/expedition-beta/StockCorrectionDialog';
 import { EmitNfeButton } from '@/components/fiscal/EmitNfeButton';
-import { resolveStockLabelCode } from '@/lib/inventoryStockCode';
+import { resolveStockLabelCode, type ResolvedStockCode } from '@/lib/inventoryStockCode';
 import { itemMatchesResolvedStockLabel } from '@/lib/stockLabelMatch';
+import { logExpeditionScan, type ExpeditionScanMethod } from '@/lib/expeditionScanLog';
 
 interface Props {
   orders: any[];
@@ -49,6 +50,8 @@ export function BetaPickingList({ orders, searchTerm, showChecking, onRefresh }:
   const [pendingConfirm, setPendingConfirm] = useState<{
     key: string; name: string; variant: string; sku: string;
     itemId: string; orderName: string; isRecheck: boolean; isManual: boolean;
+    scanMethod: ExpeditionScanMethod; codeRead: string | null;
+    variantCode: string | null; variantId: string | null;
   } | null>(null);
   const [qualityChecks, setQualityChecks] = useState({ feet_correct: false, no_defects: false });
   const [showCameraScanner, setShowCameraScanner] = useState(false);
@@ -230,9 +233,10 @@ export function BetaPickingList({ orders, searchTerm, showChecking, onRefresh }:
       item.sku === trimmed || item.barcodes.includes(trimmed)
     );
 
+    let resolved: ResolvedStockCode | null = null;
     if (!matched) {
       try {
-        const resolved = await resolveStockLabelCode(trimmed, null);
+        resolved = await resolveStockLabelCode(trimmed, null);
         if (resolved) matched = sortedItems.find(([, item]) => itemMatchesResolvedStockLabel(item, resolved));
       } catch {
         // Falha na etiqueta nova segue o aviso atual de produto não encontrado.
@@ -256,7 +260,7 @@ export function BetaPickingList({ orders, searchTerm, showChecking, onRefresh }:
       return;
     }
 
-    setPendingConfirm({ key, name: item.name, variant: item.variant, sku: item.sku, itemId: pendingLine.id, orderName: pendingLine.orderName, isRecheck: false, isManual: false });
+    setPendingConfirm({ key, name: item.name, variant: item.variant, sku: item.sku, itemId: pendingLine.id, orderName: pendingLine.orderName, isRecheck: false, isManual: false, scanMethod: resolved ? 'etiqueta_nova' : 'codigo_antigo', codeRead: code, variantCode: resolved?.code || null, variantId: resolved?.variant_id || null });
     setQualityChecks({ feet_correct: false, no_defects: false });
     setBarcodeInput('');
   }, [sortedItems]);
@@ -285,6 +289,17 @@ export function BetaPickingList({ orders, searchTerm, showChecking, onRefresh }:
       if (error) { localUpdatedIdsRef.current.delete(pendingConfirm.itemId); throw error; }
 
       const item = allItems.get(pendingConfirm.key);
+      const lineItem = item?.lineItems.find(li => li.id === pendingConfirm.itemId);
+      const confirmedQuantity = Math.max(0, newPickedQty - currentPicked);
+      if (item && lineItem && confirmedQuantity > 0) {
+        logExpeditionScan({
+          flow: 'beta', stage: 'separacao', method: pendingConfirm.scanMethod,
+          code_read: pendingConfirm.codeRead, variant_code: pendingConfirm.variantCode, variant_id: pendingConfirm.variantId,
+          expedition_order_id: lineItem.orderId, expedition_order_item_id: pendingConfirm.itemId,
+          product_name: item.name, variant_name: item.variant || null, sku: item.sku || null,
+          barcode: item.barcodes?.[0] || null, quantity: confirmedQuantity,
+        });
+      }
       toast.success(`✓ ${item?.name} conferido (${(item?.pickedQty || 0) + 1}/${item?.totalQty})`);
       setPendingConfirm(null);
       onRefresh();
@@ -301,7 +316,7 @@ export function BetaPickingList({ orders, searchTerm, showChecking, onRefresh }:
     if (!item) return;
     const pendingLine = item.lineItems.find(li => li.pickedQty < li.quantity);
     if (!pendingLine) { toast.warning(`${item.name} já conferido!`); return; }
-    setPendingConfirm({ key, name: item.name, variant: item.variant, sku: item.sku, itemId: pendingLine.id, orderName: pendingLine.orderName, isRecheck: false, isManual: true });
+    setPendingConfirm({ key, name: item.name, variant: item.variant, sku: item.sku, itemId: pendingLine.id, orderName: pendingLine.orderName, isRecheck: false, isManual: true, scanMethod: 'manual', codeRead: null, variantCode: null, variantId: null });
     setQualityChecks({ feet_correct: false, no_defects: false });
     setShowProductSearch(false);
   }, [allItems]);

@@ -8,8 +8,9 @@ import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { CheckCircle2, ScanBarcode, Camera, Keyboard, Package, ShieldCheck, AlertTriangle, Gift, ArrowRightLeft, Loader2, MapPin, Clock, Play, PackageCheck, PackageX, PackageMinus, Search, Filter, Users } from 'lucide-react';
-import { resolveStockLabelCode } from '@/lib/inventoryStockCode';
+import { resolveStockLabelCode, type ResolvedStockCode } from '@/lib/inventoryStockCode';
 import { itemMatchesResolvedStockLabel } from '@/lib/stockLabelMatch';
+import { logExpeditionScan } from '@/lib/expeditionScanLog';
 
 interface Props {
   orders: any[];
@@ -229,9 +230,10 @@ export function ExpeditionPackingStation({ orders, searchTerm, onRefresh }: Prop
   const handleBarcodeScan = useCallback(async (barcode: string) => {
     if (!selectedGroup || !barcode.trim()) return;
     let matchedItem = items.find((item: any) => item.barcode === barcode.trim() || item.sku === barcode.trim());
+    let resolved: ResolvedStockCode | null = null;
     if (!matchedItem) {
       try {
-        const resolved = await resolveStockLabelCode(barcode.trim(), null);
+        resolved = await resolveStockLabelCode(barcode.trim(), null);
         if (resolved) matchedItem = items.find((item: any) => itemMatchesResolvedStockLabel(item, resolved));
       } catch {
         // Falha na etiqueta nova segue o aviso atual de código não encontrado.
@@ -242,6 +244,14 @@ export function ExpeditionPackingStation({ orders, searchTerm, onRefresh }: Prop
       const current = scannedItems[key] || 0;
       if (current < matchedItem.quantity) {
         setScannedItems(prev => ({ ...prev, [key]: current + 1 }));
+        logExpeditionScan({
+          flow: 'classica', stage: 'embalagem', method: resolved ? 'etiqueta_nova' : 'codigo_antigo',
+          code_read: barcode, variant_code: resolved?.code || null, variant_id: resolved?.variant_id || null,
+          expedition_order_id: selectedGroup.orders.find(o => (o.expedition_order_items || []).some((i: any) => i.id === matchedItem.id))?.id,
+          expedition_order_item_id: matchedItem.id, product_name: matchedItem.product_name,
+          variant_name: matchedItem.variant_name || null, sku: matchedItem.sku || null, barcode: matchedItem.barcode || null,
+          quantity: 1, store_id: SITE_STORE_ID,
+        });
         toast.success(`✓ ${matchedItem.product_name} (${current + 1}/${matchedItem.quantity})`);
         await transferStockIfNeeded(matchedItem);
       } else {
@@ -612,6 +622,12 @@ export function ExpeditionPackingStation({ orders, searchTerm, onRefresh }: Prop
                               const current = scannedItems[item.id] || 0;
                               if (current < item.quantity) {
                                 setScannedItems(prev => ({ ...prev, [item.id]: current + 1 }));
+                                logExpeditionScan({
+                                  flow: 'classica', stage: 'embalagem', method: 'manual', code_read: null,
+                                  expedition_order_id: order.id, expedition_order_item_id: item.id,
+                                  product_name: item.product_name, variant_name: item.variant_name || null,
+                                  sku: item.sku || null, barcode: item.barcode || null, quantity: 1, store_id: SITE_STORE_ID,
+                                });
                                 toast.success(`✓ ${item.product_name} confirmado manualmente (${current + 1}/${item.quantity})`);
                                 supabase.from('expedition_unscannable_items').insert({
                                   expedition_order_id: order.id,

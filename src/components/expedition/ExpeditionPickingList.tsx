@@ -9,8 +9,9 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { CheckCircle2, XCircle, Printer, MapPin, Loader2, RefreshCw, ScanBarcode, Clock, ShieldCheck, Camera, X, Users, Search, AlertTriangle, Hand, Store } from 'lucide-react';
 import { ExpeditionBarcodeScanner } from '@/components/expedition/ExpeditionBarcodeScanner';
 import { StockCheckRequestDialog } from '@/components/expedition/StockCheckRequestDialog';
-import { resolveStockLabelCode } from '@/lib/inventoryStockCode';
+import { resolveStockLabelCode, type ResolvedStockCode } from '@/lib/inventoryStockCode';
 import { itemMatchesResolvedStockLabel } from '@/lib/stockLabelMatch';
+import { logExpeditionScan, type ExpeditionScanMethod } from '@/lib/expeditionScanLog';
 
 interface Props {
   orders: any[];
@@ -36,6 +37,10 @@ interface PendingConfirm {
   tinyOrderId: string | null;
   isRecheck: boolean;
   isManualOverride: boolean;
+  scanMethod: ExpeditionScanMethod;
+  codeRead: string | null;
+  variantCode: string | null;
+  variantId: string | null;
 }
 
 export function ExpeditionPickingList({ orders, searchTerm, showChecking, onRefresh }: Props) {
@@ -302,9 +307,10 @@ export function ExpeditionPickingList({ orders, searchTerm, showChecking, onRefr
       matched = sortedItems.find(([key]) => key === mappedKey);
     }
 
+    let resolved: ResolvedStockCode | null = null;
     if (!matched) {
       try {
-        const resolved = await resolveStockLabelCode(trimmed, null);
+        resolved = await resolveStockLabelCode(trimmed, null);
         if (resolved) matched = sortedItems.find(([, item]) => itemMatchesResolvedStockLabel(item, resolved));
       } catch {
         // Falha na etiqueta nova segue o aviso atual de produto não encontrado.
@@ -328,7 +334,7 @@ export function ExpeditionPickingList({ orders, searchTerm, showChecking, onRefr
       const lastCheckedLine = item.lineItems.find(li => li.pickedQty > 0);
       if (lastCheckedLine) {
         toast.info(`${item.name} já conferido (${item.pickedQty}/${item.totalQty}). Re-verificando...`);
-        setPendingConfirm({ key, name: item.name, variant: item.variant, sku: item.sku, itemId: lastCheckedLine.id, orderName: lastCheckedLine.orderName, tinyOrderId: lastCheckedLine.tinyOrderId, isRecheck: true, isManualOverride: false });
+        setPendingConfirm({ key, name: item.name, variant: item.variant, sku: item.sku, itemId: lastCheckedLine.id, orderName: lastCheckedLine.orderName, tinyOrderId: lastCheckedLine.tinyOrderId, isRecheck: true, isManualOverride: false, scanMethod: resolved ? 'etiqueta_nova' : 'codigo_antigo', codeRead: code, variantCode: resolved?.code || null, variantId: resolved?.variant_id || null });
         setQualityChecks({ feet_correct: false, no_defects: false });
         setBarcodeInput('');
         return;
@@ -340,7 +346,7 @@ export function ExpeditionPickingList({ orders, searchTerm, showChecking, onRefr
     }
 
     // Show quality confirmation
-    setPendingConfirm({ key, name: item.name, variant: item.variant, sku: item.sku, itemId: pendingLine.id, orderName: pendingLine.orderName, tinyOrderId: pendingLine.tinyOrderId, isRecheck: false, isManualOverride: false });
+    setPendingConfirm({ key, name: item.name, variant: item.variant, sku: item.sku, itemId: pendingLine.id, orderName: pendingLine.orderName, tinyOrderId: pendingLine.tinyOrderId, isRecheck: false, isManualOverride: false, scanMethod: resolved ? 'etiqueta_nova' : 'codigo_antigo', codeRead: code, variantCode: resolved?.code || null, variantId: resolved?.variant_id || null });
     setQualityChecks({ feet_correct: false, no_defects: false });
     setBarcodeInput('');
   }, [sortedItems, enrichedBarcodes, gtinToKeyMap]);
@@ -386,6 +392,17 @@ export function ExpeditionPickingList({ orders, searchTerm, showChecking, onRefr
         throw error;
       }
 
+      const confirmedQuantity = Math.max(0, newPickedQty - currentPicked);
+      if (confirmedQuantity > 0) {
+        logExpeditionScan({
+          flow: 'classica', stage: 'separacao', method: pendingConfirm.scanMethod,
+          code_read: pendingConfirm.codeRead, variant_code: pendingConfirm.variantCode, variant_id: pendingConfirm.variantId,
+          expedition_order_id: lineItem.orderId, expedition_order_item_id: pendingConfirm.itemId,
+          product_name: item.name, variant_name: item.variant || null, sku: item.sku || null,
+          barcode: item.barcodes?.[0] || null, quantity: confirmedQuantity,
+        });
+      }
+
       // If manual override, log to unscannable items table
       if (pendingConfirm.isManualOverride) {
         const { data: { user } } = await supabase.auth.getUser();
@@ -425,7 +442,7 @@ export function ExpeditionPickingList({ orders, searchTerm, showChecking, onRefr
     if (!pendingLine) {
       const lastCheckedLine = item.lineItems.find(li => li.pickedQty > 0);
       if (lastCheckedLine) {
-        setPendingConfirm({ key, name: item.name, variant: item.variant, sku: item.sku, itemId: lastCheckedLine.id, orderName: lastCheckedLine.orderName, tinyOrderId: lastCheckedLine.tinyOrderId, isRecheck: true, isManualOverride: true });
+        setPendingConfirm({ key, name: item.name, variant: item.variant, sku: item.sku, itemId: lastCheckedLine.id, orderName: lastCheckedLine.orderName, tinyOrderId: lastCheckedLine.tinyOrderId, isRecheck: true, isManualOverride: true, scanMethod: 'manual', codeRead: null, variantCode: null, variantId: null });
         setQualityChecks({ feet_correct: false, no_defects: false });
         return;
       }
@@ -433,7 +450,7 @@ export function ExpeditionPickingList({ orders, searchTerm, showChecking, onRefr
       return;
     }
 
-    setPendingConfirm({ key, name: item.name, variant: item.variant, sku: item.sku, itemId: pendingLine.id, orderName: pendingLine.orderName, tinyOrderId: pendingLine.tinyOrderId, isRecheck: false, isManualOverride: true });
+    setPendingConfirm({ key, name: item.name, variant: item.variant, sku: item.sku, itemId: pendingLine.id, orderName: pendingLine.orderName, tinyOrderId: pendingLine.tinyOrderId, isRecheck: false, isManualOverride: true, scanMethod: 'manual', codeRead: null, variantCode: null, variantId: null });
     setQualityChecks({ feet_correct: false, no_defects: false });
     setShowProductSearch(false);
     setProductSearchQuery('');
