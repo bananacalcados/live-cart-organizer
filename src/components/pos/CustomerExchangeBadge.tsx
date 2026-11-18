@@ -2,6 +2,8 @@ import { useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { RotateCcw } from "lucide-react";
+import { ExchangeInProgressCard } from "./ExchangeInProgressCard";
+import { OPEN_EXCHANGE_STATUSES } from "@/lib/pos/exchangeInProgress";
 import {
   EXCHANGE_MOTIVO_LABELS,
   EXCHANGE_STATUS_LABELS,
@@ -76,6 +78,8 @@ export function CustomerExchangeBadge({ exchanges, size = "lg", className }: Pro
                 </p>
               </div>
             ))}
+            {[...new Set(exchanges.filter((e) => e.tipo === "troca" && OPEN_EXCHANGE_STATUSES.includes(e.status) && e.pedido_original_id).map((e) => e.pedido_original_id as string))]
+              .map((sid) => <ExchangeInProgressCard key={sid} saleId={sid} />)}
           </div>
         </DialogContent>
       </Dialog>

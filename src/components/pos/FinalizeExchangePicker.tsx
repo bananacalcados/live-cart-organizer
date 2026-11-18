@@ -16,6 +16,7 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { ExchangeInProgressCard } from "./ExchangeInProgressCard";
 import { finalizeExchange, type ConferItemInput } from "@/lib/pos/finalizeExchange";
 import { loadExchangeNfes } from "@/lib/pos/exchangeNfe";
 import { WhatsAppNumberSelector } from "@/components/WhatsAppNumberSelector";
@@ -641,8 +642,20 @@ export function FinalizeExchangePicker({ open, sellerId, sellerName, onCancel, o
                   <p className="text-[11px] text-pos-white/70">
                     {selected.pedido_novo_id
                       ? "O produto da troca que está na Expedição (tag TROCA) será liberado para concluir o envio ao concluir aqui."
-                      : "Sem produto de troca na Expedição. Para usar o novo envio, adicione o produto pelo cartão \"Troca em andamento\" no WhatsApp."}
+                      : "Sem produto de troca na Expedição. Adicione abaixo o produto que a cliente vai ficar para usar o novo envio."}
                   </p>
+                  {!selected.pedido_novo_id && selected.pedido_original_id && (
+                    <div className="rounded-md bg-background text-foreground p-1">
+                      <ExchangeInProgressCard
+                        saleId={selected.pedido_original_id}
+                        onChanged={async () => {
+                          const { data: refreshed } = await supabase
+                            .from("trocas_devolucoes").select("*").eq("id", selected.id).maybeSingle();
+                          if (refreshed) await selectEvent({ ...selected, ...(refreshed as any) } as EventRow);
+                        }}
+                      />
+                    </div>
+                  )}
                 </div>
               )}
 
