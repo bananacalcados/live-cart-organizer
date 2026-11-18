@@ -123,6 +123,7 @@ export function POSExpedition({ storeId, storeName, focusSaleId }: Props) {
     if (!canRefund) return;
     let alive = true;
     let timer: ReturnType<typeof setTimeout> | null = null;
+    let lastTick = 0;
     const loadCount = async () => {
       const { count } = await supabase.from("gateway_refunds").select("id", { count: "exact", head: true }).eq("status", "aguardando_aprovacao");
       if (alive) setRefundPending((prev) => (prev === (count || 0) ? prev : count || 0));
@@ -131,7 +132,9 @@ export function POSExpedition({ storeId, storeName, focusSaleId }: Props) {
     const ch = supabase.channel("exp-gateway-refunds")
       .on("postgres_changes", { event: "*", schema: "public", table: "gateway_refunds" }, () => {
         if (timer) clearTimeout(timer);
-        timer = setTimeout(() => { void loadCount(); setRefundTick((t) => t + 1); }, 1500);
+        // Junta rajadas de alterações: no máximo 1 recarga da lista a cada 30 s.
+        const wait = Math.max(1500, 30000 - (Date.now() - lastTick));
+        timer = setTimeout(() => { lastTick = Date.now(); void loadCount(); setRefundTick((t) => t + 1); }, wait);
       })
       .subscribe();
     return () => { alive = false; if (timer) clearTimeout(timer); supabase.removeChannel(ch); };

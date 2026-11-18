@@ -60,9 +60,12 @@ export function ExpRefundsPanel({ refreshKey = 0, storeId }: { refreshKey?: numb
   }), [status, channel, search, period, from, to,showFailures]);
 
   const reqId = useRef(0);
-  const loadAll = useCallback(async () => {
+  const loadedOnce = useRef(false);
+  const lastKey = useRef("");
+  const loadAll = useCallback(async (silent = false) => {
     const id = ++reqId.current;
-    setLoading(true); setError(null);
+    if (!silent || !loadedOnce.current) setLoading(true);
+    setError(null);
     try {
       const [p, a, h, f] = await Promise.all([
         refundApi.listScope({ scope: "pending", limit: PAGE }),
@@ -71,6 +74,10 @@ export function ExpRefundsPanel({ refreshKey = 0, storeId }: { refreshKey?: numb
         refundApi.listScope({ scope: "failed", limit: PAGE }),
       ]);
       if (id !== reqId.current) return;
+      const key = JSON.stringify([p.isAdmin, p.rows, a.rows, f.rows, h.rows, h.hasMore]);
+      loadedOnce.current = true;
+      if (silent && key === lastKey.current) return;
+      lastKey.current = key;
       setIsAdmin(p.isAdmin);
       setPending(p.rows); setActive(a.rows); setFailed(f.rows); setHistory(h.rows); setHasMore(h.hasMore); setPage(0);
     } catch (e: any) {
@@ -78,7 +85,9 @@ export function ExpRefundsPanel({ refreshKey = 0, storeId }: { refreshKey?: numb
     } finally { if (id === reqId.current) setLoading(false); }
   }, [historyParams]);
 
-  useEffect(() => { void loadAll(); }, [loadAll, refreshKey]);
+  useEffect(() => { void loadAll(); }, [loadAll]);
+  // Atualizações em tempo real recarregam em silêncio (sem spinner/piscar).
+  useEffect(() => { if (refreshKey > 0) void loadAll(true); }, [refreshKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const loadMore = async () => {
     setLoadingMore(true);
@@ -93,9 +102,6 @@ export function ExpRefundsPanel({ refreshKey = 0, storeId }: { refreshKey?: numb
   return (
     <div className="space-y-6">
       <div className="flex justify-end"><RefundRequestDialog onDone={reload} /></div>
-      <RefundFiscalPendingPanel refreshKey={refreshKey + fiscalRefresh} />
-      {error && <p className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">{error}</p>}
-
       <section>
         <h3 className="mb-2 text-lg font-black uppercase text-pos-text">Aguardando aprovação ({pending.length})</h3>
         {loading ? <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /> : pending.length === 0 ? (
@@ -108,6 +114,9 @@ export function ExpRefundsPanel({ refreshKey = 0, storeId }: { refreshKey?: numb
           </div>
         )}
       </section>
+
+      <RefundFiscalPendingPanel refreshKey={refreshKey + fiscalRefresh} />
+      {error && <p className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">{error}</p>}
 
       {failed.length > 0 && (
         <section>
