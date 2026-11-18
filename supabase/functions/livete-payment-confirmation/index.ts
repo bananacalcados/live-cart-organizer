@@ -141,7 +141,7 @@ serve(withAccessLog("livete-payment-confirmation", async (req) => {
     let cashbackLine = '';
     try {
       if (selfserviceCb?.applicable) {
-        cashbackLine = selfserviceCb.pending ? '\n\n💰 Seu cashback está em conferência.' : `\n\n💰 *Você ganhou ${fmt(Number(selfserviceCb.cashback_amount))} de cashback* para sua próxima compra acima de *${fmt(Number(selfserviceCb.min_purchase))}*. Pode usar ainda nesta live. Válido até *${new Date(selfserviceCb.expires_at).toLocaleDateString("pt-BR")}*`;
+        cashbackLine = selfserviceCb.pending ? '\n\n💰 Seu cashback está em conferência.' : `\n\n💰 *Você ganhou ${fmt(Number(selfserviceCb.cashback_amount))} de cashback* para sua próxima compra acima de *${fmt(Number(selfserviceCb.min_purchase))}* em *PRODUTOS FORA DE PROMOÇÃO*. Pode usar ainda nesta live. Válido até *${new Date(selfserviceCb.expires_at).toLocaleDateString("pt-BR")}*`;
       } else {
       // Já existe cashback ativo recente? Não duplica.
       const { data: existingCb } = await supabase
@@ -193,7 +193,7 @@ serve(withAccessLog("livete-payment-confirmation", async (req) => {
 
       if (cb) {
         cashbackLine =
-          `\n\n💰 *Você ganhou ${fmt(Number(cb.cashback_amount))} de cashback* para sua próxima compra acima de *${fmt(Number(cb.min_purchase))}*. Válido até *${new Date(cb.expires_at).toLocaleDateString("pt-BR")}*`;
+          `\n\n💰 *Você ganhou ${fmt(Number(cb.cashback_amount))} de cashback* para sua próxima compra acima de *${fmt(Number(cb.min_purchase))}* em *PRODUTOS FORA DE PROMOÇÃO*. Válido até *${new Date(cb.expires_at).toLocaleDateString("pt-BR")}*`;
       }
       }
     } catch (err) {

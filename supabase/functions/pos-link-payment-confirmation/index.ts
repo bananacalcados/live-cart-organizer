@@ -88,7 +88,7 @@ Deno.serve(withAccessLog("pos-link-payment-confirmation", async (req) => {
       .limit(1)
       .maybeSingle();
     if (cb) {
-      cashbackLine = `\n\n💰 *Você ganhou ${fmt(Number(cb.cashback_amount))} de cashback* para sua próxima compra acima de *${fmt(Number(cb.min_purchase))}*. Válido até *${new Date(cb.expires_at).toLocaleDateString("pt-BR")}*`;
+      cashbackLine = `\n\n💰 *Você ganhou ${fmt(Number(cb.cashback_amount))} de cashback* para sua próxima compra acima de *${fmt(Number(cb.min_purchase))}* em *PRODUTOS FORA DE PROMOÇÃO*. Válido até *${new Date(cb.expires_at).toLocaleDateString("pt-BR")}*`;
     }
 
     let trackingLine = "";
