@@ -8966,6 +8966,75 @@ export type Database = {
           },
         ]
       }
+      expedition_scan_log: {
+        Row: {
+          barcode: string | null
+          code_read: string | null
+          created_at: string
+          expedition_order_id: string | null
+          expedition_order_item_id: string | null
+          flow: string
+          id: string
+          method: string
+          operator_id: string | null
+          operator_name: string | null
+          product_name: string | null
+          quantity: number
+          sale_id: string | null
+          sale_item_id: string | null
+          sku: string | null
+          stage: string
+          store_id: string | null
+          variant_code: string | null
+          variant_id: string | null
+          variant_name: string | null
+        }
+        Insert: {
+          barcode?: string | null
+          code_read?: string | null
+          created_at?: string
+          expedition_order_id?: string | null
+          expedition_order_item_id?: string | null
+          flow: string
+          id?: string
+          method: string
+          operator_id?: string | null
+          operator_name?: string | null
+          product_name?: string | null
+          quantity?: number
+          sale_id?: string | null
+          sale_item_id?: string | null
+          sku?: string | null
+          stage: string
+          store_id?: string | null
+          variant_code?: string | null
+          variant_id?: string | null
+          variant_name?: string | null
+        }
+        Update: {
+          barcode?: string | null
+          code_read?: string | null
+          created_at?: string
+          expedition_order_id?: string | null
+          expedition_order_item_id?: string | null
+          flow?: string
+          id?: string
+          method?: string
+          operator_id?: string | null
+          operator_name?: string | null
+          product_name?: string | null
+          quantity?: number
+          sale_id?: string | null
+          sale_item_id?: string | null
+          sku?: string | null
+          stage?: string
+          store_id?: string | null
+          variant_code?: string | null
+          variant_id?: string | null
+          variant_name?: string | null
+        }
+        Relationships: []
+      }
       expedition_stock_requests: {
         Row: {
           courier_name: string | null
