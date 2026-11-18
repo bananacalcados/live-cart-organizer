@@ -7,6 +7,7 @@ const { invoke } = vi.hoisted(() => ({ invoke: vi.fn(async (name: string): Promi
 vi.mock("@/integrations/supabase/client", () => ({
   supabase: {
     functions: { invoke },
+    rpc: async () => ({ data: false, error: null }),
     from: () => ({ select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: null }), single: async () => ({ data: null }) }) }) }),
   },
 }));

@@ -28,3 +28,8 @@
 - [x] Garantir que falha do registro não interfira na conferência
 - [x] Testar todos os métodos com inserção simulada e manter os testes anteriores
 - [x] Conferir na prévia sem gravar registros ou concluir pedidos reais
+
+# Voucher da troca na live e nos modais de WhatsApp
+- [x] Mostrar voucher disponível e permitir aplicar o desconto nos modais do PDV e da live
+- [x] Aplicar voucher na live com validação e baixa transacional de uso único no servidor
+- [x] Impedir reutilização, preservar cashback/regras de pagamento e testar sem cobrança real

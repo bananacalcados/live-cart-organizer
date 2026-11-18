@@ -19,8 +19,11 @@ import { SplitPartsSummary } from "@/components/checkout/SplitPartsSummary";
 import { getOrderFinalValue } from "@/lib/orderTotal";
 import { posSendText } from "@/lib/pos/posWhatsappSend";
 import { OrderCashbackBox } from "@/components/events/OrderCashbackBox";
+import { OrderVoucherBox } from "@/components/events/OrderVoucherBox";
 import { CustomerActivePrizesBox } from "@/components/prizes/CustomerActivePrizes";
 import { useEventStore } from "@/stores/eventStore";
+import { useDbOrderStore } from "@/stores/dbOrderStore";
+import type { VoucherWriteResult } from "@/lib/vouchers";
 import { liveStaffCartLink, mergeSelfServiceDraft, selfServiceDraftPhoneKey } from "@/lib/selfServiceStaff";
 
 /** Envia pela instância configurada na Live (nunca pela Z-API padrão, que pode estar vencida). */
@@ -698,6 +701,15 @@ export function CustomerFichaPanel({ order, onClose, className, getPixChannel }:
         {isRealOrder && (
           <>
             <OrderCashbackBox order={order} phone={form.whatsapp || order.customer?.whatsapp || ""} />
+            <OrderVoucherBox order={order} onChanged={(result: VoucherWriteResult) => {
+              useDbOrderStore.getState().upsertOrderRealtime({
+                ...order,
+                voucher_id: result.voucher_id,
+                voucher_amount: result.voucher_amount,
+                discount_type: result.discount_type || undefined,
+                discount_value: result.discount_value,
+              });
+            }} />
             <CustomerActivePrizesBox phone={form.whatsapp || order.customer?.whatsapp || ""} />
           </>
         )}

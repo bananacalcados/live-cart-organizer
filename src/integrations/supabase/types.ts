@@ -16825,6 +16825,8 @@ export type Database = {
           stage_atendimento: string | null
           updated_at: string
           vindi_transaction_id: string | null
+          voucher_amount: number
+          voucher_id: string | null
         }
         Insert: {
           ai_paused?: boolean | null
@@ -16911,6 +16913,8 @@ export type Database = {
           stage_atendimento?: string | null
           updated_at?: string
           vindi_transaction_id?: string | null
+          voucher_amount?: number
+          voucher_id?: string | null
         }
         Update: {
           ai_paused?: boolean | null
@@ -16997,6 +17001,8 @@ export type Database = {
           stage_atendimento?: string | null
           updated_at?: string
           vindi_transaction_id?: string | null
+          voucher_amount?: number
+          voucher_id?: string | null
         }
         Relationships: [
           {
@@ -20379,6 +20385,8 @@ export type Database = {
           utm_source: string | null
           utm_term: string | null
           vindi_transaction_id: string | null
+          voucher_amount: number
+          voucher_id: string | null
         }
         Insert: {
           appmax_order_id?: string | null
@@ -20490,6 +20498,8 @@ export type Database = {
           utm_source?: string | null
           utm_term?: string | null
           vindi_transaction_id?: string | null
+          voucher_amount?: number
+          voucher_id?: string | null
         }
         Update: {
           appmax_order_id?: string | null
@@ -20601,6 +20611,8 @@ export type Database = {
           utm_source?: string | null
           utm_term?: string | null
           vindi_transaction_id?: string | null
+          voucher_amount?: number
+          voucher_id?: string | null
         }
         Relationships: [
           {
@@ -28860,6 +28872,10 @@ export type Database = {
           status: Database["public"]["Enums"]["voucher_status"]
           troca_devolucao_id: string | null
           updated_at: string
+          used_at: string | null
+          used_exchange_id: string | null
+          used_order_id: string | null
+          used_sale_id: string | null
           validade: string | null
           valor: number
         }
@@ -28872,6 +28888,10 @@ export type Database = {
           status?: Database["public"]["Enums"]["voucher_status"]
           troca_devolucao_id?: string | null
           updated_at?: string
+          used_at?: string | null
+          used_exchange_id?: string | null
+          used_order_id?: string | null
+          used_sale_id?: string | null
           validade?: string | null
           valor?: number
         }
@@ -28884,6 +28904,10 @@ export type Database = {
           status?: Database["public"]["Enums"]["voucher_status"]
           troca_devolucao_id?: string | null
           updated_at?: string
+          used_at?: string | null
+          used_exchange_id?: string | null
+          used_order_id?: string | null
+          used_sale_id?: string | null
           validade?: string | null
           valor?: number
         }
@@ -31289,6 +31313,26 @@ export type Database = {
           expires_at: string
           id: string
           min_purchase: number
+        }[]
+      }
+      available_vouchers_for_target: {
+        Args: {
+          p_limit?: number
+          p_offset?: number
+          p_order_id?: string
+          p_phone?: string
+          p_sale_id?: string
+        }
+        Returns: {
+          applied_amount: number
+          codigo: string
+          id: string
+          is_available: boolean
+          reserved_order_id: string
+          reserved_sale_id: string
+          saldo: number
+          status: Database["public"]["Enums"]["voucher_status"]
+          validade: string
         }[]
       }
       backfill_estoque_from_pos: { Args: { p_commit?: boolean }; Returns: Json }
@@ -33755,6 +33799,10 @@ export type Database = {
           total_spent: number
         }[]
       }
+      pay_order_with_voucher: {
+        Args: { p_order_id: string }
+        Returns: undefined
+      }
       pc_gender_canon: { Args: { t: string }; Returns: string }
       pc_gender_from_text: { Args: { t: string }; Returns: string }
       pc_norm: { Args: { t: string }; Returns: string }
@@ -33993,6 +34041,14 @@ export type Database = {
           _subtotal?: number
         }
         Returns: Json
+      }
+      redeem_voucher_once: {
+        Args: {
+          p_exchange_id?: string
+          p_sale_id?: string
+          p_voucher_id: string
+        }
+        Returns: undefined
       }
       refresh_ad_first_touch: { Args: never; Returns: undefined }
       refresh_dispatch_counts: {
@@ -34678,6 +34734,16 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      set_target_voucher: {
+        Args: { p_order_id?: string; p_sale_id?: string; p_voucher_id?: string }
+        Returns: {
+          discount_type: string
+          discount_value: number
+          total: number
+          voucher_amount: number
+          voucher_id: string
+        }[]
       }
       shadow_cycle_check_big_live: { Args: never; Returns: Json }
       shadow_cycle_ready_for_report: { Args: never; Returns: Json }

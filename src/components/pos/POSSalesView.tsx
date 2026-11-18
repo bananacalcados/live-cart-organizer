@@ -1349,18 +1349,19 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
           } catch (e) { console.error('coupon redeem error', e); }
         }
 
-        // 🎟️ Vale-troca: debita saldo do voucher e marca como usado se zerou
+        // 🎟️ Vale-troca: baixa atômica e definitiva; o mesmo voucher nunca pode ser usado duas vezes.
         if (voucherApplied && valeTrocaAmountRequired > 0) {
           try {
-            const usado = Math.min(voucherApplied.saldo, valeTrocaAmountRequired);
-            const novoSaldo = Number((voucherApplied.saldo - usado).toFixed(2));
-            await supabase.from('vouchers').update({
-              saldo: Math.max(0, novoSaldo),
-              status: (novoSaldo <= 0.009 ? 'usado' : 'ativo') as any,
-              troca_devolucao_id: (voucherApplied as any).troca_devolucao_id ?? undefined,
-            } as any).eq('id', voucherApplied.id);
-            toast.success(`Voucher ${voucherApplied.codigo} debitado: R$ ${usado.toFixed(2)}`);
-          } catch (e) { console.error('[vale-troca redeem]', e); }
+            const { error } = await supabase.rpc('redeem_voucher_once' as any, {
+              p_voucher_id: voucherApplied.id,
+              p_sale_id: saleId,
+            });
+            if (error) throw error;
+            toast.success(`Voucher ${voucherApplied.codigo} utilizado e baixado.`);
+          } catch (e) {
+            console.error('[vale-troca redeem]', e);
+            toast.warning('Venda concluída, mas a baixa do voucher precisa ser conferida antes de qualquer novo uso.');
+          }
         }
 
 
@@ -3139,7 +3140,7 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
                     </div>
                   )}
                   <p className="text-[10px] text-pos-white/40">
-                    O código é gerado ao concluir uma troca/devolução com crédito ao cliente. O saldo será debitado após finalizar a venda.
+                    O código é gerado ao concluir uma troca/devolução com crédito ao cliente. Após finalizar a venda, o voucher é baixado por inteiro e não pode ser usado de novo.
                   </p>
                 </div>
               )}

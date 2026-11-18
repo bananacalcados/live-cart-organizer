@@ -10,6 +10,8 @@ import { buildInstallmentOptions, parseInstallmentRule, resolveSelfServiceInstal
 import { SelfServicePrivacy } from "@/components/live/SelfServicePrivacy";
 import { advertisingAllowed, advertisingRefused, advertisingSignals, ensureAdvertisingRegion, trackSelfservice } from "@/lib/selfServiceAdvertising";
 import { SelfServiceCashbackBanner } from "@/components/live/SelfServiceCashbackBanner";
+import { SelfServiceVoucherBox } from "@/components/live/SelfServiceVoucherBox";
+import { voucherCoversWholeOrder, type AvailableVoucher } from "@/lib/vouchers";
 import { formatMmSs } from "@/lib/liveModes";
 import { initialCartMode, selfServiceShipping } from "@/lib/selfServiceCheckout";
 
@@ -28,6 +30,7 @@ const GoogleG = () => (
 type Ord = {
   id: string; products: { title: string; variant?: string; price: number; quantity: number; image?: string | null; full_price?: number; final_price?: number }[];
   total: number; pix_total: number; payment_window_expires_at: string | null; cashback_deadline: string | null;
+  voucher_id?: string | null; voucher_amount?: number;
   shipping_cost: number; free_shipping: boolean; checkout_installment_config?: unknown;
 };
 const brl = (n: number) => n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -49,6 +52,8 @@ export default function SelfServiceCartPage() {
   const slug = eventSlug.toLowerCase();
   const [ev, setEv] = useState<Ev | null>(null);
   const [order, setOrder] = useState<Ord | null>(null);
+  const [vouchers, setVouchers] = useState<AvailableVoucher[]>([]);
+  const [voucherBusy, setVoucherBusy] = useState<string | null>(null);
   const [form, setForm] = useState<CustomerFormData | null>(null);
   const [paid, setPaid] = useState(false);
   const [notFound, setNotFound] = useState(false);
@@ -66,7 +71,7 @@ export default function SelfServiceCartPage() {
     call({ action: "cart", slug, order_id: orderId }).then((r) => {
       if (!r?.ok) { setNotFound(true); return; }
       paidValue.current = r.amount_paid ?? null;
-      setEv(r.event); setOrder(r.order); setForm(r.form); setPaid(!!r.paid);
+      setEv(r.event); setOrder(r.order); setVouchers(r.vouchers || []); setForm(r.form); setPaid(!!r.paid);
     });
   }, [slug, orderId]);
 
@@ -114,6 +119,27 @@ export default function SelfServiceCartPage() {
     window.addEventListener("selfservice-advertising-change", sync);
     return () => window.removeEventListener("selfservice-advertising-change", sync);
   }, [slug, orderId, order?.id, paid]);
+
+  const changeVoucher = async (voucherId: string | null) => {
+    setVoucherBusy(voucherId || "remove");
+    const r = await call({ action: voucherId ? "apply_voucher" : "remove_voucher", slug, order_id: orderId, voucher_id: voucherId });
+    setVoucherBusy(null);
+    if (!r?.ok) { toast.error(r?.error || "Não foi possível alterar o voucher."); return; }
+    setOrder(r.order);
+    setVouchers(r.vouchers || []);
+    setPix(null);
+    setMode("choose");
+    toast.success(voucherId ? "Voucher aplicado ao pedido." : "Voucher removido do pedido.");
+  };
+
+  const payWithVoucher = async () => {
+    setBusy(true);
+    const r = await call({ action: "voucher_pay", slug, order_id: orderId });
+    setBusy(false);
+    if (!r?.ok) { toast.error(r?.error || "Não foi possível concluir com o voucher."); return; }
+    paidValue.current = 0;
+    setPaid(true);
+  };
 
   const payPix = async () => {
     setBusy(true);
@@ -176,6 +202,14 @@ export default function SelfServiceCartPage() {
               {interestOption && <p className="text-muted-foreground">Ou até {interestOption.installments}x com juros — parcelas e total apresentados antes de pagar.</p>}
               {ev.product_notice && <p className="mt-2 text-xs text-muted-foreground">{ev.product_notice}</p>}
             </div>
+            <SelfServiceVoucherBox
+              vouchers={vouchers}
+              appliedId={order.voucher_id || null}
+              appliedAmount={Number(order.voucher_amount || 0)}
+              busy={voucherBusy}
+              onApply={(id) => void changeVoucher(id)}
+              onRemove={() => void changeVoucher(null)}
+            />
             {/* Faixa de confiança: compacta, uma linha no celular, sem empurrar os botões. */}
             <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 rounded-full border bg-muted/40 px-3 py-1.5 text-[11px] text-muted-foreground">
               <span className="font-semibold text-foreground">Banana Calçados · 10 anos · 2 lojas físicas em Gov. Valadares-MG</span>
@@ -195,7 +229,12 @@ export default function SelfServiceCartPage() {
               </span>
             </div>
             {/* Botões de pagamento ANTES do cronômetro de cashback: a cliente escolhe como pagar sem rolar. */}
-            {form && mode === "choose" && (
+            {form && voucherCoversWholeOrder(order) && (
+              <Button className="h-14 w-full text-base font-bold" onClick={payWithVoucher} disabled={busy}>
+                {busy ? <Loader2 className="h-5 w-5 animate-spin" /> : "CONCLUIR COM VOUCHER"}
+              </Button>
+            )}
+            {form && mode === "choose" && order.total > 0.009 && (
               <div className="grid gap-2">
                 <p className="text-center text-2xl font-extrabold uppercase leading-tight tracking-tight text-foreground">Escolha a forma de pagamento abaixo</p>
                 <Button className="h-14 text-base font-bold" onClick={payPix} disabled={busy}>
@@ -206,7 +245,7 @@ export default function SelfServiceCartPage() {
                 </Button>
               </div>
             )}
-            <SelfServiceCashbackBanner deadline={order.cashback_deadline} now={now} amount={Math.round((mode === "pix" && pix ? pix.amount : mode === "card" ? order.total : order.pix_total) * 10) / 100} />
+            {order.total > 0.009 && <SelfServiceCashbackBanner deadline={order.cashback_deadline} now={now} amount={Math.round((mode === "pix" && pix ? pix.amount : mode === "card" ? order.total : order.pix_total) * 10) / 100} />}
             {reserveLeft !== null && (
               <div className="flex items-center gap-2 rounded-2xl bg-muted p-3 text-sm">
                 <Clock className="h-4 w-4" />
@@ -216,7 +255,7 @@ export default function SelfServiceCartPage() {
 
             {!form ? (
               <p className="rounded-2xl border p-3 text-center text-sm text-muted-foreground">Seu cadastro ainda não chegou. Fale com a gente no WhatsApp.</p>
-            ) : mode === "choose" ? null : mode === "pix" && pix ? (
+            ) : voucherCoversWholeOrder(order) ? null : mode === "choose" ? null : mode === "pix" && pix ? (
               <div className="space-y-3 rounded-2xl border p-4 text-center">
                 <p className="text-lg font-bold">Pix de {brl(pix.amount)}</p>
                 {pix.base64 && <img src={`data:image/png;base64,${pix.base64.replace(/^data:image\/\w+;base64,/, "")}`} alt="QR code Pix" className="mx-auto h-56 w-56" />}

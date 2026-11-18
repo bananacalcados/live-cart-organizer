@@ -61,7 +61,7 @@ export async function fetchChangedEventOrders(eventId: string, ids: string[]): P
     const { data, error } = await supabase.from("orders")
       .select(`id,event_id,customer_id,cart_link,checkout_token,notes,stage,products,
         has_unread_messages,last_customer_message_at,last_sent_message_at,is_paid,paid_at,
-        paid_externally,paid_on_site,is_sedex,discount_type,discount_value,free_shipping,
+        paid_externally,paid_on_site,is_sedex,discount_type,discount_value,voucher_id,voucher_amount,free_shipping,
         shipping_cost,has_gift,gift_description,coupon_code,checkout_started_at,eligible_for_prize,
         created_at,updated_at,pagarme_order_id,mercadopago_payment_id,appmax_order_id,
         vindi_transaction_id,pos_sale_id,payment_method_label,installments,ai_paused,ai_paused_at,

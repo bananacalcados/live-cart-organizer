@@ -1814,6 +1814,41 @@
       "when": 1794952366556,
       "tag": "0258_exchange_new_shipment_autoconclude",
       "breakpoints": true
+    },
+    {
+      "idx": 259,
+      "version": "7",
+      "when": 1794966584566,
+      "tag": "0259_live_voucher_reservation_and_single_use",
+      "breakpoints": true
+    },
+    {
+      "idx": 260,
+      "version": "7",
+      "when": 1794966624711,
+      "tag": "0260_voucher_reservation_visibility_for_staff",
+      "breakpoints": true
+    },
+    {
+      "idx": 261,
+      "version": "7",
+      "when": 1794966793740,
+      "tag": "0261_atomic_single_use_voucher_redemption",
+      "breakpoints": true
+    },
+    {
+      "idx": 262,
+      "version": "7",
+      "when": 1794966854434,
+      "tag": "0262_voucher_only_live_checkout",
+      "breakpoints": true
+    },
+    {
+      "idx": 263,
+      "version": "7",
+      "when": 1794966926992,
+      "tag": "0263_protect_reserved_voucher_from_pos_redemption",
+      "breakpoints": true
     }
   ]
 }

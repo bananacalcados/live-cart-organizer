@@ -678,9 +678,9 @@ export function WhatsAppChat({ order, onBack, orderless = false, conversationNum
     const firstName = rawFirst ? rawFirst.charAt(0).toUpperCase() + rawFirst.slice(1) : '';
 
     // Pix (5% de desconto) e parcelamento conforme a regra da live.
-    // Pedido com cashback NÃO ganha os 5% de Pix (seria desconto em dobro).
-    const hasCashback = !!(dOrder?.cashback_id || Number(dOrder?.cashback_amount || 0) > 0);
-    const pixValue = hasCashback ? totalValue : totalValue * 0.95;
+    // Pedido com cashback ou voucher NÃO ganha os 5% de Pix (seria desconto em dobro).
+    const hasCredit = !!(dOrder?.cashback_id || Number(dOrder?.cashback_amount || 0) > 0 || dOrder?.voucher_id || Number(dOrder?.voucher_amount || 0) > 0);
+    const pixValue = hasCredit ? totalValue : totalValue * 0.95;
     const evMax = eventInstallment.max > 0 ? eventInstallment.max : 6;
     const maxParcelas = totalValue >= (eventInstallment.minValue || 0)
       ? Math.max(1, evMax)

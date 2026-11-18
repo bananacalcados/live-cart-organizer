@@ -6,6 +6,7 @@ import { StepPayment } from "@/components/checkout/PaymentSection";
 const { invoke } = vi.hoisted(() => ({ invoke: vi.fn(async (name: string) => ({ data: name === "pagarme-create-charge" ? { success: true, gateway: "mercadopago" } : null, error: null })) }));
 vi.mock("@/integrations/supabase/client", () => ({ supabase: {
   functions: { invoke },
+  rpc: async () => ({ data: false, error: null }),
   from: () => ({ select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: null }), single: async () => ({ data: null }) }) }) }),
 } }));
 vi.mock("@/lib/mercadopago", () => ({ initMercadoPago: async () => false, tokenizeCardMP: async () => null, getCardCapabilities: async () => null }));

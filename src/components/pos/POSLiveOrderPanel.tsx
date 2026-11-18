@@ -8,6 +8,7 @@ import { useDbOrderStore } from "@/stores/dbOrderStore";
 import { DbOrder, DbOrderProduct } from "@/types/database";
 import { OrderDialogDb } from "@/components/OrderDialogDb";
 import { MarkOrderPaidDialog } from "@/components/MarkOrderPaidDialog";
+import { OrderVoucherBox } from "@/components/events/OrderVoucherBox";
 import { Radio, RefreshCw, Check, X, Pencil, Loader2, ExternalLink, ChevronDown, ChevronUp } from "lucide-react";
 import { toast } from "sonner";
 
@@ -161,6 +162,8 @@ export function POSLiveOrderPanel({ orderId, eventId, eventName }: Props) {
             )}
           </div>
         )}
+
+        {!collapsed && <OrderVoucherBox order={order} onChanged={() => { void load(); }} />}
 
         {!collapsed && (
         <div className="flex flex-wrap items-center gap-1">

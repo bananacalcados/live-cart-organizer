@@ -453,15 +453,18 @@ export function PresentialExchangePicker({ open, sellerId, sellerName, initialSa
         toast.warning("Troca criada mas com pendência fiscal — verificar em Consultar.");
       }
 
-      // 4) Voucher redimido: debita saldo e marca como usado se zerou.
-      if (voucherAplicado && voucherDesconto > 0) {
-        const novoSaldo = Number((voucherAplicado.saldo - voucherDesconto).toFixed(2));
+      // 4) Voucher redimido: baixa atômica e definitiva, só depois da troca concluída.
+      if (result.concluded && voucherAplicado && voucherDesconto > 0) {
         try {
-          await supabase.from("vouchers").update({
-            saldo: novoSaldo,
-            status: novoSaldo <= 0.009 ? ("usado" as any) : ("ativo" as any),
-          } as any).eq("id", voucherAplicado.id);
-        } catch (e) { console.error("[Presencial] voucher debit", e); }
+          const { error } = await supabase.rpc("redeem_voucher_once" as any, {
+            p_voucher_id: voucherAplicado.id,
+            p_exchange_id: created.id,
+          });
+          if (error) throw error;
+        } catch (e) {
+          console.error("[Presencial] voucher debit", e);
+          toast.warning("Troca concluída, mas a baixa do voucher precisa ser conferida antes de qualquer novo uso.");
+        }
       }
 
       // 5) Diferença paga na hora pelo cliente → cash_flow IN + baixa no mirror sale.
@@ -748,6 +751,7 @@ export function PresentialExchangePicker({ open, sellerId, sellerName, initialSa
                     </Button>
                   </div>
                 )}
+                <p className="text-[10px] text-pos-white/45">Ao concluir, o voucher é baixado por inteiro e não poderá ser usado de novo.</p>
               </div>
 
               {/* Balanço financeiro */}

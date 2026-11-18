@@ -414,7 +414,7 @@ Deno.serve(withAccessLog("live-selfservice", async (req) => {
 
     const mapOrder = (o: any) => {
       const tot = orderTotal(o);
-      const noPix = !!o.cashback_id || Number(o.cashback_amount || 0) > 0;
+      const noPix = !!o.cashback_id || Number(o.cashback_amount || 0) > 0 || !!o.voucher_id || Number(o.voucher_amount || 0) > 0;
       return {
         id: o.id,
         products: (() => {
@@ -440,6 +440,8 @@ Deno.serve(withAccessLog("live-selfservice", async (req) => {
         payment_window_expires_at: o.payment_window_expires_at,
         registered_at: o.registered_at,
         cashback_deadline: o.selfservice_cart_sent_at ? new Date(Date.parse(o.selfservice_cart_sent_at) + 20 * 60 * 1000).toISOString() : null,
+        voucher_id: o.voucher_id || null,
+        voucher_amount: Number(o.voucher_amount || 0),
         free_shipping: !!o.free_shipping,
         shipping_cost: Number(o.shipping_cost || 0),
         registration_confirmed: o.registration_confirmed === true,
@@ -480,11 +482,17 @@ Deno.serve(withAccessLog("live-selfservice", async (req) => {
 
 
     // ───── Página do link do carrinho (pedido deste modo) ─────
-    if (action === "cart" || action === "pix" || action === "status") {
+    const cartOrderColumns = "id, event_id, customer_id, products, stage, is_paid, paid_externally, created_at, payment_window_expires_at, registered_at, discount_type, discount_value, voucher_id, voucher_amount, free_shipping, shipping_cost, checkout_installment_config, cashback_id, cashback_amount, merged_into_order_id, selfservice_cart_sent_at, selfservice_cashback_receipt";
+    const loadVouchers = async (orderId: string) => {
+      const { data, error } = await sb.rpc("available_vouchers_for_target", { p_order_id: orderId, p_limit: 20, p_offset: 0 });
+      if (error) { console.error("[live-selfservice] vouchers", error); return []; }
+      return ((data || []) as any[]).map((v) => ({ ...v, saldo: Number(v.saldo || 0), applied_amount: Number(v.applied_amount || 0), is_available: !!v.is_available }));
+    };
+    if (action === "cart" || action === "pix" || action === "status" || action === "apply_voucher" || action === "remove_voucher" || action === "voucher_pay") {
       const orderId = normOrderId(body.order_id);
       if (!orderId) return json({ ok: false, error: "not_found" }, 404);
       const { data: o } = await sb.from("orders")
-        .select("id, event_id, customer_id, products, stage, is_paid, paid_externally, created_at, payment_window_expires_at, registered_at, discount_type, discount_value, free_shipping, shipping_cost, checkout_installment_config, cashback_id, cashback_amount, merged_into_order_id, selfservice_cart_sent_at, selfservice_cashback_receipt")
+        .select(cartOrderColumns)
         .eq("id", orderId).eq("event_id", ev.id).maybeSingle();
       if (!o || (o as any).stage === "cancelled") return json({ ok: false, error: "not_found" }, 404);
       const paid = !!(o as any).is_paid || !!(o as any).paid_externally;
@@ -493,12 +501,31 @@ Deno.serve(withAccessLog("live-selfservice", async (req) => {
           .eq("event_id", ev.id).contains("order_ids", [orderId]).is("paid_at", null);
       }
       if (action === "status") return json({ ok: true, paid, amount_paid: (o as any).selfservice_cashback_receipt?.amount_paid || null });
+      if (action === "apply_voucher" || action === "remove_voucher") {
+        if (paid) return json({ ok: false, error: "Este pedido já está pago." }, 409);
+        if (!(await allow(`ss-voucher:${orderId}`, 12, 600))) return json({ ok: false, error: "Aguarde um pouco antes de alterar o voucher novamente." }, 429);
+        const { error: voucherError } = await sb.rpc("set_target_voucher", {
+          p_order_id: orderId,
+          p_voucher_id: action === "apply_voucher" ? body.voucher_id : null,
+        });
+        if (voucherError) return json({ ok: false, error: voucherError.message || "Não foi possível alterar o voucher." }, 409);
+        const { data: updated } = await sb.from("orders").select(cartOrderColumns).eq("id", orderId).eq("event_id", ev.id).maybeSingle();
+        if (!updated) return json({ ok: false, error: "Pedido não encontrado." }, 404);
+        return json({ ok: true, order: mapOrder(updated), vouchers: await loadVouchers(orderId) });
+      }
+      if (action === "voucher_pay") {
+        if (paid) return json({ ok: true, paid: true });
+        if (!(await allow(`ss-voucher-pay:${orderId}`, 4, 600))) return json({ ok: false, error: "Aguarde um pouco antes de tentar novamente." }, 429);
+        const { error: payError } = await sb.rpc("pay_order_with_voucher", { p_order_id: orderId });
+        if (payError) return json({ ok: false, error: payError.message || "Não foi possível concluir com o voucher." }, 409);
+        return json({ ok: true, paid: true, amount_paid: 0 });
+      }
       const { data: reg } = await sb.from("customer_registrations")
         .select("full_name, cpf, email, whatsapp, cep, address, address_number, complement, neighborhood, city, state").eq("order_id", orderId).maybeSingle();
       const r = reg as any;
       if (action === "cart") {
         const form = r ? { fullName: r.full_name, email: r.email, cpf: r.cpf, whatsapp: r.whatsapp, cep: r.cep, address: r.address, addressNumber: r.address_number, complement: r.complement || "", neighborhood: r.neighborhood || "", city: r.city, state: r.state } : null;
-        return json({ ok: true, event: eventInfo, order: mapOrder(o), paid, amount_paid: (o as any).selfservice_cashback_receipt?.amount_paid || null, form });
+        return json({ ok: true, event: eventInfo, order: mapOrder(o), vouchers: await loadVouchers(orderId), paid, amount_paid: (o as any).selfservice_cashback_receipt?.amount_paid || null, form });
       }
       // pix
       if (paid) return json({ ok: true, paid: true });

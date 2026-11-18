@@ -300,9 +300,9 @@ serve(withAccessLog("mercadopago-create-pix", async (req) => {
       }
     }
 
-    // Regra: pedido com cashback NÃO ganha o desconto extra de Pix (seria desconto em dobro).
-    if (order && (order.cashback_id || Number(order.cashback_amount || 0) > 0)) {
-      if (pixDiscountPct > 0) console.log("[mp-pix] Pedido com cashback — desconto PIX zerado");
+    // Regra: pedido com cashback ou voucher NÃO ganha o desconto extra de Pix (seria desconto em dobro).
+    if (order && (order.cashback_id || Number(order.cashback_amount || 0) > 0 || order.voucher_id || Number(order.voucher_amount || 0) > 0)) {
+      if (pixDiscountPct > 0) console.log("[mp-pix] Pedido com cashback/voucher — desconto PIX zerado");
       pixDiscountPct = 0;
     }
 

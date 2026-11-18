@@ -39,6 +39,7 @@ export const MANUAL_PAYMENT_METHODS: { value: string; label: string; installment
   { value: "Boleto", label: "Boleto" },
   { value: "Crediário", label: "Crediário", installments: true },
   { value: "Cashback", label: "Cashback" },
+  { value: "Vale-troca", label: "Vale-troca" },
   { value: "Cheque", label: "Cheque" },
   { value: "Transferência / TED", label: "Transferência / TED" },
   { value: "Link de pagamento", label: "Link de pagamento" },

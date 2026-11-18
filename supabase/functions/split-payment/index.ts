@@ -83,8 +83,8 @@ Deno.serve(withAccessLog("split-payment", async (req) => {
       }
       if (orderId && !hasVps) {
         // Pedido com cashback não ganha o desconto extra de Pix (desconto em dobro).
-        const { data: ord } = await sb.from("orders").select("cashback_id, cashback_amount").eq("id", orderId).maybeSingle();
-        const hasCashback = !!ord?.cashback_id || Number(ord?.cashback_amount || 0) > 0;
+        const { data: ord } = await sb.from("orders").select("cashback_id, cashback_amount, voucher_id, voucher_amount").eq("id", orderId).maybeSingle();
+        const hasCashback = !!ord?.cashback_id || Number(ord?.cashback_amount || 0) > 0 || !!ord?.voucher_id || Number(ord?.voucher_amount || 0) > 0;
         if (!hasCashback) {
           const { data: st } = await sb.from("app_settings").select("value").eq("key", "pix_discount_percent").maybeSingle();
           pix = parseFloat(String(st?.value ?? 0)) || 0;
@@ -128,8 +128,8 @@ Deno.serve(withAccessLog("split-payment", async (req) => {
       // Pedido com cashback não ganha o desconto extra de Pix (desconto em dobro).
       let pixPct = 0;
       if (orderId && !hasVps) {
-        const { data: ord } = await sb.from("orders").select("cashback_id, cashback_amount").eq("id", orderId).maybeSingle();
-        const hasCashback = !!ord?.cashback_id || Number(ord?.cashback_amount || 0) > 0;
+        const { data: ord } = await sb.from("orders").select("cashback_id, cashback_amount, voucher_id, voucher_amount").eq("id", orderId).maybeSingle();
+        const hasCashback = !!ord?.cashback_id || Number(ord?.cashback_amount || 0) > 0 || !!ord?.voucher_id || Number(ord?.voucher_amount || 0) > 0;
         if (!hasCashback) {
           const { data: st } = await sb.from("app_settings").select("value").eq("key", "pix_discount_percent").maybeSingle();
           pixPct = Math.min(20, Math.max(0, parseFloat(String(st?.value ?? 0)) || 0));

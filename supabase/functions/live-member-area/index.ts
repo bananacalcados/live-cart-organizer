@@ -416,7 +416,7 @@ Deno.serve(withAccessLog("live-member-area", async (req) => {
       const { data: orders } = await supabase
         .from("orders")
         .select(
-          "id, event_id, products, shipping_cost, free_shipping, discount_type, discount_value, is_paid, paid_at, stage, created_at",
+          "id, event_id, products, shipping_cost, free_shipping, discount_type, discount_value, voucher_id, voucher_amount, cashback_id, cashback_amount, is_paid, paid_at, stage, created_at",
         )
 
         .in("customer_id", ids)
@@ -1065,9 +1065,9 @@ Deno.serve(withAccessLog("live-member-area", async (req) => {
 
                 total: tot,
                 // Pedido com cashback não ganha o desconto extra de Pix (desconto em dobro).
-                pix_discount_percent: (order.cashback_id || Number(order.cashback_amount || 0) > 0) ? 0 : pixPct,
-                pix_discount: (order.cashback_id || Number(order.cashback_amount || 0) > 0) ? 0 : (pixPct ? Math.round(tot * (pixPct / 100) * 100) / 100 : 0),
-                pix_total: (order.cashback_id || Number(order.cashback_amount || 0) > 0) ? tot : (pixPct ? Math.round(tot * (1 - pixPct / 100) * 100) / 100 : tot),
+                pix_discount_percent: (order.cashback_id || Number(order.cashback_amount || 0) > 0 || order.voucher_id || Number(order.voucher_amount || 0) > 0) ? 0 : pixPct,
+                pix_discount: (order.cashback_id || Number(order.cashback_amount || 0) > 0 || order.voucher_id || Number(order.voucher_amount || 0) > 0) ? 0 : (pixPct ? Math.round(tot * (pixPct / 100) * 100) / 100 : 0),
+                pix_total: (order.cashback_id || Number(order.cashback_amount || 0) > 0 || order.voucher_id || Number(order.voucher_amount || 0) > 0) ? tot : (pixPct ? Math.round(tot * (1 - pixPct / 100) * 100) / 100 : tot),
                 is_paid: !!order.is_paid,
                 confirmed_at: order.customer_confirmed_at,
                 items_signature: itemsSignature(order),

@@ -73,6 +73,8 @@ export interface DbOrder {
 
   discount_type?: DiscountType;
   discount_value?: number;
+  voucher_id?: string | null;
+  voucher_amount?: number;
   free_shipping?: boolean;
   shipping_cost?: number;
   has_gift?: boolean;
