@@ -144,7 +144,7 @@ interface CrmCustomerData {
     kind?: "pos_sale" | "expedition";
     hasMpPayment?: boolean;
     mpPaymentError?: string;
-    paymentState?: "paid" | "unpaid" | "unknown";
+    paymentState?: "paid" | "unpaid" | "refunded" | "unknown";
     shipped?: boolean;
     items?: { name: string; variant?: string; size?: string; quantity?: number }[];
   }[];
