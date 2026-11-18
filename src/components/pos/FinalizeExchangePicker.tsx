@@ -88,7 +88,7 @@ export function FinalizeExchangePicker({ open, sellerId, sellerName, onCancel, o
   const [loadingItems, setLoadingItems] = useState(false);
   const [saving, setSaving] = useState(false);
   // Fase 6: resolução da diferença a favor do cliente
-  const [resolucao, setResolucao] = useState<"voucher" | "estorno_financeiro">("voucher");
+  const [resolucao, setResolucao] = useState<"voucher" | "estorno_financeiro">("estorno_financeiro");
   const [estornoForma, setEstornoForma] = useState<"pix" | "cartao" | "dinheiro">("pix");
 
   // Wizard: NF-e da reposição + rastreio
@@ -110,7 +110,7 @@ export function FinalizeExchangePicker({ open, sellerId, sellerName, onCancel, o
     if (open) {
       setPhase("list"); setSearch(""); setSelected(null);
       setDevolvidos([]); setReposicoes([]);
-      setResolucao("voucher"); setEstornoForma("pix");
+      setResolucao("estorno_financeiro"); setEstornoForma("pix");
       setPosSaleId(null); setCustomerId(null); setShipCustomer(EMPTY_CUSTOMER);
       setNfeDoc(null); setNfeObs(""); setTrackingCode(""); setTrackingCarrier("");
       setWaNumberId(null); setWaMessage("");
@@ -599,20 +599,25 @@ export function FinalizeExchangePicker({ open, sellerId, sellerName, onCancel, o
                       <span className="text-pos-white">Diferença a favor do cliente</span>
                       <span className="font-mono font-bold text-amber-300">R$ {Math.abs(diferenca).toFixed(2)}</span>
                     </div>
+                    <p className="rounded-md bg-amber-500/20 px-2 py-1.5 text-[13px] font-bold text-amber-200">
+                      ⚠️ Escolha com atenção: se a cliente vai receber o dinheiro de volta, é ESTORNO FINANCEIRO.
+                    </p>
                     <div className="grid grid-cols-2 gap-2">
                       <button
-                        onClick={() => setResolucao("voucher")}
-                        className={cn("rounded-lg border-2 p-2 text-[11px] font-medium transition-all",
-                          resolucao === "voucher" ? "border-emerald-400 bg-emerald-500/15 text-pos-white" : "border-pos-white/10 bg-pos-white/5 text-pos-white/60")}
+                        onClick={() => setResolucao("estorno_financeiro")}
+                        className={cn("rounded-lg border-4 p-3 text-[15px] font-extrabold uppercase transition-all",
+                          resolucao === "estorno_financeiro" ? "border-amber-400 bg-amber-500 text-black shadow-lg" : "border-amber-400/50 bg-pos-white/5 text-pos-white/80")}
                       >
-                        Gerar voucher
+                        {resolucao === "estorno_financeiro" ? "✓ " : ""}Estorno financeiro
+                        <span className="block text-[11px] font-semibold normal-case">Dinheiro de volta</span>
                       </button>
                       <button
-                        onClick={() => setResolucao("estorno_financeiro")}
-                        className={cn("rounded-lg border-2 p-2 text-[11px] font-medium transition-all",
-                          resolucao === "estorno_financeiro" ? "border-amber-400 bg-amber-500/15 text-pos-white" : "border-pos-white/10 bg-pos-white/5 text-pos-white/60")}
+                        onClick={() => setResolucao("voucher")}
+                        className={cn("rounded-lg border-4 p-3 text-[15px] font-extrabold uppercase transition-all",
+                          resolucao === "voucher" ? "border-emerald-400 bg-emerald-500 text-black shadow-lg" : "border-emerald-400/50 bg-pos-white/5 text-pos-white/80")}
                       >
-                        Estorno financeiro
+                        {resolucao === "voucher" ? "✓ " : ""}Gerar voucher
+                        <span className="block text-[11px] font-semibold normal-case">Crédito p/ nova compra</span>
                       </button>
                     </div>
                     {resolucao === "estorno_financeiro" && (

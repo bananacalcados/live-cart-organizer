@@ -18,3 +18,14 @@ export function isSalePaid(sale: { status?: string | null; paid_at?: string | nu
   if (sale.paid_at) return true;
   return PAID_SALE_STATUSES.has(String(sale.status || "").toLowerCase());
 }
+
+/**
+ * Estado para exibição: venda cancelada que JÁ FOI PAGA (paid_at) é "refunded"
+ * (Cancelado - Estorno), não "não paga".
+ */
+export function getSalePaymentState(sale: { status?: string | null; paid_at?: string | null } | null | undefined): "paid" | "unpaid" | "refunded" {
+  if (!sale) return "unpaid";
+  const st = String(sale.status || "").toLowerCase();
+  if ((st === "cancelled" || st === "canceled" || st === "cancelado") && sale.paid_at) return "refunded";
+  return isSalePaid(sale) ? "paid" : "unpaid";
+}

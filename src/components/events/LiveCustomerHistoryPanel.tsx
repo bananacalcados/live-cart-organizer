@@ -8,7 +8,7 @@ import { CustomerExchangeBadge } from "@/components/pos/CustomerExchangeBadge";
 import { useChargebackRegistry } from "@/hooks/useChargebackRegistry";
 import { invalidateExchangeRegistry, useExchangeRegistry } from "@/hooks/useExchangeRegistry";
 import { getOrderFinalValue } from "@/lib/orderTotal";
-import { isSalePaid } from "@/lib/salePaymentState";
+import { isSalePaid, getSalePaymentState } from "@/lib/salePaymentState";
 import { LiveInstallmentPreselect } from "@/components/events/LiveInstallmentPreselect";
 import { RefundDialog } from "@/components/refunds/RefundDialog";
 import { useCanRefund } from "@/hooks/useCanRefund";
@@ -185,7 +185,7 @@ export function LiveCustomerHistoryPanel({ order, fallbackPhone, fallbackInstagr
           kind: "pos_sale",
           hasMpPayment: !!mpPayments.get(sale.id)?.paymentId,
           mpPaymentError: mpPayments.get(sale.id)?.error ?? undefined,
-          paymentState: isSalePaid(sale) ? "paid" : "unpaid",
+          paymentState: getSalePaymentState(sale),
           shipped: !!(sale as any).shipped_at || ["shipped", "delivered"].includes(String(sale.status || "")),
           items: saleItems.get(sale.id) || [],
         }));

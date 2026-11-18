@@ -89,7 +89,7 @@ import { PixPaidGlobalAlert } from "./PixPaidGlobalAlert";
 import { usePixNotificationStore } from "@/stores/pixNotificationStore";
 import { CustomerChatNotesPanel } from "./CustomerChatNotesPanel";
 import { POSCustomerOrdersPanel } from "./POSCustomerOrdersPanel";
-import { isSalePaid } from "@/lib/salePaymentState";
+import { isSalePaid, getSalePaymentState } from "@/lib/salePaymentState";
 import { loadMpSalePayments } from "@/lib/mpSalePayment";
 
 interface Props {
@@ -1053,7 +1053,7 @@ export function POSWhatsApp({ storeId, initialFilter, initialPhone, initialWhats
           kind: "pos_sale" as const,
           hasMpPayment: !!mpPayments.get(s.id)?.paymentId,
           mpPaymentError: mpPayments.get(s.id)?.error ?? undefined,
-          paymentState: isSalePaid(s) ? ("paid" as const) : ("unpaid" as const),
+          paymentState: getSalePaymentState(s),
           shipped: !!s.shipped_at || ["shipped", "delivered"].includes(String(s.status || "")),
           items: itemsBySale.get(s.id) || [],
         };

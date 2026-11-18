@@ -23,7 +23,7 @@ export interface POSCustomerOrder {
   modality?: "Presencial" | "Online";
   kind?: "pos_sale" | "expedition";
   /** "paid" = pagamento confirmado, "unpaid" = sem pagamento (checkout/pedido em aberto) */
-  paymentState?: "paid" | "unpaid" | "unknown";
+  paymentState?: "paid" | "unpaid" | "refunded" | "unknown";
   /** Tem pagamento do Mercado Pago vinculado (habilita o botão Estorno). */
   hasMpPayment?: boolean;
   mpPaymentError?: string;
@@ -89,6 +89,7 @@ export function POSCustomerOrdersPanel({
   igLink,
 }: Props) {
   const paidOrders = (data?.orders || []).filter((order) => order.paymentState === "paid");
+  const refundedOrders = (data?.orders || []).filter((order) => order.paymentState === "refunded");
   const unpaidOrders = (data?.orders || []).filter((order) => order.paymentState === "unpaid");
   const unpaidCount = unpaidOrders.length;
   const canRefund = useCanRefund();
@@ -226,9 +227,17 @@ export function POSCustomerOrdersPanel({
                 <OrderCard key={order.id} order={order} statusLabels={statusLabels} renderOrderActions={renderOrderActions} refundBadges={badgesFor(order.id)} canRefund={canRefund} />
               ))}
             </div>
-          ) : (
+          ) : refundedOrders.length ? null : (
             <p className="rounded-lg border border-dashed py-6 text-center text-sm text-muted-foreground">Nenhum pedido pago encontrado para este cliente.</p>
           )}
+
+          {refundedOrders.length ? (
+            <div className="mt-2 space-y-2">
+              {refundedOrders.map((order) => (
+                <OrderCard key={order.id} order={order} statusLabels={statusLabels} renderOrderActions={renderOrderActions} renderUnpaidActions={renderUnpaidActions} refundBadges={badgesFor(order.id)} canRefund={canRefund} />
+              ))}
+            </div>
+          ) : null}
 
           {unpaidCount > 0 ? (
             <div className="mt-6">
@@ -266,7 +275,7 @@ function OrderCard({
 }) {
   return (
     <div
-      className={`rounded-lg border bg-card p-3 shadow-sm ${order.paymentState === "unpaid" ? "border-destructive/40 bg-destructive/5" : ""}`}
+      className={`rounded-lg border bg-card p-3 shadow-sm ${order.paymentState === "unpaid" ? "border-destructive/40 bg-destructive/5" : order.paymentState === "refunded" ? "border-2 border-yellow-500 bg-yellow-100 dark:bg-yellow-900/40" : ""}`}
     >
       <div className="flex items-start gap-3">
         <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-pos-orange/15 text-pos-orange">
@@ -277,6 +286,8 @@ function OrderCard({
             <span className="font-mono text-sm font-bold">{order.orderName || "—"}</span>
             {order.paymentState === "unpaid" ? (
               <Badge className="bg-destructive text-[10px] font-bold text-destructive-foreground hover:bg-destructive">NÃO PAGO</Badge>
+            ) : order.paymentState === "refunded" ? (
+              <Badge className="bg-yellow-500 text-[10px] font-bold text-black hover:bg-yellow-500">PAGO · CANCELADO - ESTORNO</Badge>
             ) : order.paymentState === "paid" ? (
               <Badge className="bg-emerald-600 text-[10px] font-bold text-white hover:bg-emerald-600">PAGO</Badge>
             ) : null}
@@ -307,14 +318,14 @@ function OrderCard({
               Sem pagamento confirmado — trocas, devoluções e chargeback indisponíveis.
             </p>
           ) : null}
-          {order.paymentState === "unpaid" ? (
+          {order.paymentState === "unpaid" || order.paymentState === "refunded" ? (
             renderUnpaidActions?.(order) ?? null
           ) : (
             renderOrderActions(order)
           )}
         </div>
         {order.totalPrice != null ? (
-          <span className={`whitespace-nowrap font-bold ${order.paymentState === "unpaid" ? "text-muted-foreground line-through" : "text-emerald-600"}`}>
+          <span className={`whitespace-nowrap font-bold ${order.paymentState === "unpaid" ? "text-muted-foreground line-through" : order.paymentState === "refunded" ? "text-yellow-800 dark:text-yellow-200 line-through" : "text-emerald-600"}`}>
             R$ {order.totalPrice.toFixed(2)}
           </span>
         ) : null}
