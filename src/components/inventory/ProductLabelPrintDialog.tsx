@@ -74,7 +74,8 @@ export function loadLabelFormat(): Format {
     const v = localStorage.getItem(FORMAT_KEY);
     if (v === "a4" || v === "letter30" || v === "old") return v;
   } catch { /* ignore */ }
-  return "a4";
+  // Sem preferência salva: padrão é o papel Carta de 30 etiquetas.
+  return "letter30";
 }
 function saveLabelFormat(f: Format) { try { localStorage.setItem(FORMAT_KEY, f); } catch { /* ignore */ } }
 /** Último modelo de folha usado (reimpressão); "old" cai no A4. */
@@ -514,8 +515,8 @@ export function ProductLabelPrintDialog({ masterId, masterSku, productName, item
               <Select value={format} onValueChange={(v) => setFormat(v as Format)}>
                 <SelectTrigger className="h-11 text-base font-medium"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="a4">A4 – 27 por folha (63,5 × 31 mm)</SelectItem>
                   <SelectItem value="letter30">Carta – 30 por folha (66,7 × 25,4 mm)</SelectItem>
+                  <SelectItem value="a4">A4 – 27 por folha (63,5 × 31 mm)</SelectItem>
                   <SelectItem value="old">8 × 5 cm (antigo)</SelectItem>
                 </SelectContent>
               </Select>
