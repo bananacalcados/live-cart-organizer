@@ -16,7 +16,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Loader2, Printer, Tag } from "lucide-react";
 import { toast } from "sonner";
 import JsBarcode from "jsbarcode";
-import { buildA4Pages, LABELS_PER_SHEET, type A4Layout } from "@/lib/labels/a4Sheet";
+import { buildA4Pages, sheetCount, SHEETS, A4_27, type A4Layout, type SheetId, type SheetSpec } from "@/lib/labels/a4Sheet";
 import {
   buildStockLabelItems, fillableLabelQuantity, isExpiredLabelCount,
   parseLabelQuantity, previewStockAfter, type StockLabelMode, type StockLabelScope,
@@ -47,7 +47,7 @@ interface Props {
 }
 
 type Variant = LabelItem;
-type Format = "a4" | "old";
+type Format = SheetId | "old";
 interface StorePreview {
   stock: number;
   pending: number;
@@ -67,15 +67,28 @@ const STORES = [
   { id: "4ade7b44-5043-4ab1-a124-7a6ab5468e29", name: "Loja Centro" },
   { id: "1c08a9d8-fc12-4657-8ecf-d442f0c0e9f2", name: "Loja Perola" },
 ];
-const LAYOUT_KEY = "label-a4-layout-v1";
-const DEFAULT_LAYOUT: A4Layout = { top: 9, left: 7.2, colGap: 2.5, rowGap: 0 };
+const FORMAT_KEY = "label-format-v1";
 
-export function loadLabelLayout(): A4Layout {
+export function loadLabelFormat(): Format {
   try {
-    const raw = localStorage.getItem(LAYOUT_KEY);
-    if (raw) return { ...DEFAULT_LAYOUT, ...JSON.parse(raw) };
+    const v = localStorage.getItem(FORMAT_KEY);
+    if (v === "a4" || v === "letter30" || v === "old") return v;
   } catch { /* ignore */ }
-  return DEFAULT_LAYOUT;
+  return "a4";
+}
+function saveLabelFormat(f: Format) { try { localStorage.setItem(FORMAT_KEY, f); } catch { /* ignore */ } }
+/** Último modelo de folha usado (reimpressão); "old" cai no A4. */
+export function loadLabelSheet(): SheetSpec {
+  const f = loadLabelFormat();
+  return f === "letter30" ? SHEETS.letter30 : A4_27;
+}
+
+export function loadLabelLayout(sheet: SheetSpec = A4_27): A4Layout {
+  try {
+    const raw = localStorage.getItem(sheet.layoutKey);
+    if (raw) return { ...sheet.defaultLayout, ...JSON.parse(raw) };
+  } catch { /* ignore */ }
+  return sheet.defaultLayout;
 }
 
 function makeBarcodeDataUrl(code: string, crisp = false): string {
@@ -115,8 +128,20 @@ function openPrint(html: string) {
   return true;
 }
 
-function a4Html(cells: string[], title: string, layout: A4Layout, start: number, testOutline = false) {
-  const pages = buildA4Pages(cells, start, layout, testOutline);
+const LETTER30_CSS = `
+  @page { size: 215.9mm 279.4mm; margin: 0; }
+  .page { width: 215.9mm; height: 279.4mm; }
+  .cell { width: 66.7mm; height: 25.4mm; padding: 1.5mm 2.5mm; }
+  .nm { font-size: 7.5pt; line-height: 1.15; }
+  .row2 { margin-top: 0.3mm; }
+  .cd { font-size: 14pt; }
+  .vt { font-size: 7.5pt; }
+  .row3 { gap: 1mm; }
+  .bc { height: 7.5mm; max-width: 80%; min-width: 0; }
+  .pr { font-size: 7.5pt; }`;
+
+function a4Html(cells: string[], title: string, layout: A4Layout, start: number, testOutline = false, sheet: SheetSpec = A4_27) {
+  const pages = buildA4Pages(cells, start, layout, testOutline, sheet);
   return `<!doctype html><html><head><meta charset="utf-8" /><title>${escapeHtml(title)}</title>
 <style>
   @page { size: A4; margin: 0; }
@@ -133,7 +158,7 @@ function a4Html(cells: string[], title: string, layout: A4Layout, start: number,
   .row3 { display: flex; align-items: flex-end; justify-content: space-between; margin-top: auto; }
   .bc { width: 80%; height: 9mm; image-rendering: pixelated; image-rendering: crisp-edges; display: block; }
   .pr { font-size: 8pt; font-weight: 900; white-space: nowrap; }
-  .num { font-size: 10pt; font-weight: 700; margin: auto; }
+  .num { font-size: 10pt; font-weight: 700; margin: auto; }${sheet.id === "letter30" ? LETTER30_CSS : ""}
 </style></head><body>${pages}
 <script>window.onload=function(){setTimeout(function(){window.print();},300);};<\/script></body></html>`;
 }
@@ -147,7 +172,8 @@ export function printA4VariantLabels({
   fallbackPrice = null,
   showPrice = false,
   startPos = 1,
-  layout = loadLabelLayout(),
+  sheet = loadLabelSheet(),
+  layout,
 }: {
   items: LabelItem[];
   quantities: Record<string, number>;
@@ -157,6 +183,7 @@ export function printA4VariantLabels({
   showPrice?: boolean;
   startPos?: number;
   layout?: A4Layout;
+  sheet?: SheetSpec;
 }) {
   const cells: string[] = [];
   const bcCache = new Map<string, string>();
@@ -173,7 +200,7 @@ export function printA4VariantLabels({
     for (let i = 0; i < n; i++) cells.push(html);
   }
   if (!cells.length) { toast.error("Nenhuma etiqueta com código para imprimir."); return false; }
-  return openPrint(a4Html(cells, title, layout, startPos));
+  return openPrint(a4Html(cells, title, layout ?? loadLabelLayout(sheet), startPos, false, sheet));
 }
 
 export function ProductLabelPrintDialog({ masterId, masterSku, productName, items, open, onOpenChange }: Props) {
@@ -182,14 +209,23 @@ export function ProductLabelPrintDialog({ masterId, masterSku, productName, item
   const [master, setMaster] = useState<{ name: string; sku_root: string; sale_price: number | null } | null>(null);
   const [variants, setVariants] = useState<Variant[]>([]);
   const [qty, setQty] = useState<Record<string, string>>({});
-  const [format, setFormat] = useState<Format>("a4");
+  const [format, setFormatState] = useState<Format>(loadLabelFormat);
+  const sheet: SheetSpec = format === "letter30" ? SHEETS.letter30 : A4_27;
+  const isSheet = format !== "old";
   const [storeId, setStoreId] = useState("");
   const [openedAt, setOpenedAt] = useState<string | null>(null);
   const [storePreview, setStorePreview] = useState<Record<string, StorePreview> | null>(null);
   const [filling, setFilling] = useState(false);
   const [startPos, setStartPos] = useState(1);
   const [showPrice, setShowPrice] = useState(false);
-  const [layout, setLayout] = useState<A4Layout>(loadLabelLayout);
+  const [layout, setLayout] = useState<A4Layout>(() => loadLabelLayout(loadLabelSheet()));
+  const setFormat = (f: Format) => {
+    setFormatState(f);
+    saveLabelFormat(f);
+    const sp = f === "letter30" ? SHEETS.letter30 : A4_27;
+    setLayout(loadLabelLayout(sp));
+    setStartPos((p) => Math.min(sp.perSheet, p));
+  };
   const [mode, setMode] = useState<StockLabelMode>("print_only");
   const [scope, setScope] = useState<StockLabelScope>("selected");
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -199,7 +235,7 @@ export function ProductLabelPrintDialog({ masterId, masterSku, productName, item
   const updateLayout = (k: keyof A4Layout, v: number) => {
     setLayout((p) => {
       const next = { ...p, [k]: Number.isFinite(v) ? v : 0 };
-      try { localStorage.setItem(LAYOUT_KEY, JSON.stringify(next)); } catch { /* ignore */ }
+      try { localStorage.setItem(sheet.layoutKey, JSON.stringify(next)); } catch { /* ignore */ }
       return next;
     });
   };
@@ -300,7 +336,7 @@ export function ProductLabelPrintDialog({ masterId, masterSku, productName, item
     Object.entries(qty).map(([id, value]) => [id, parseLabelQuantity(value) || 0])
   ), [qty]);
   const totalLabels = Object.values(numericQty).reduce((a, b) => a + b, 0);
-  const totalSheets = totalLabels > 0 ? Math.ceil((totalLabels + startPos - 1) / LABELS_PER_SHEET) : 0;
+  const totalSheets = sheetCount(totalLabels, startPos, sheet);
   const variantIds = useMemo(() => variants.map((v) => v.id), [variants]);
   const masterIds = useMemo(() => Array.from(new Set(variants.map((v) => v.masterId).filter(Boolean))) as string[], [variants]);
   const singleProduct = masterIds.length === 1;
@@ -346,12 +382,13 @@ export function ProductLabelPrintDialog({ masterId, masterSku, productName, item
       showPrice,
       startPos,
       layout,
+      sheet,
     });
   }
 
   function printTest() {
-    const cells = Array.from({ length: LABELS_PER_SHEET }, (_, i) => `<div class="num">${i + 1}</div>`);
-    openPrint(a4Html(cells, "Folha de teste", layout, 1, true));
+    const cells = Array.from({ length: sheet.perSheet }, (_, i) => `<div class="num">${i + 1}</div>`);
+    openPrint(a4Html(cells, "Folha de teste", layout, 1, true, sheet));
   }
 
   function printOld() {
@@ -385,7 +422,7 @@ export function ProductLabelPrintDialog({ masterId, masterSku, productName, item
   }
 
   function printNow() {
-    if (format === "a4") printA4();
+    if (isSheet) printA4();
     else printOld();
   }
 
@@ -478,6 +515,7 @@ export function ProductLabelPrintDialog({ masterId, masterSku, productName, item
                 <SelectTrigger className="h-11 text-base font-medium"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="a4">A4 – 27 por folha (63,5 × 31 mm)</SelectItem>
+                  <SelectItem value="letter30">Carta – 30 por folha (66,7 × 25,4 mm)</SelectItem>
                   <SelectItem value="old">8 × 5 cm (antigo)</SelectItem>
                 </SelectContent>
               </Select>
@@ -534,12 +572,12 @@ export function ProductLabelPrintDialog({ masterId, masterSku, productName, item
             </div>
           )}
 
-          {format === "a4" && (
+          {isSheet && (
             <div className="grid gap-3 grid-cols-2 sm:grid-cols-6 items-end">
               <div className="space-y-1">
                 <Label className="text-sm font-semibold text-foreground">Começar na posição</Label>
-                <Input type="number" min={1} max={27} className="h-11 text-base font-semibold" value={startPos}
-                  onChange={(e) => setStartPos(Math.min(27, Math.max(1, parseInt(e.target.value) || 1)))} />
+                <Input type="number" min={1} max={sheet.perSheet} className="h-11 text-base font-semibold" value={startPos}
+                  onChange={(e) => setStartPos(Math.min(sheet.perSheet, Math.max(1, parseInt(e.target.value) || 1)))} />
               </div>
               {([["top", "Margem sup. (mm)"], ["left", "Margem esq. (mm)"], ["colGap", "Entre colunas"], ["rowGap", "Entre linhas"]] as const).map(([k, l]) => (
                 <div key={k} className="space-y-1">
@@ -595,14 +633,20 @@ export function ProductLabelPrintDialog({ masterId, masterSku, productName, item
             </div>
           )}
 
+          {format === "letter30" && (
+            <p className="rounded-md border-2 border-primary/60 bg-primary/10 p-2 text-sm font-semibold text-foreground">
+              No diálogo de impressão escolha papel Carta (Letter), escala 100% e margens Nenhuma.
+            </p>
+          )}
+
           <DialogFooter className="flex-col sm:flex-row gap-2 items-stretch sm:items-center sm:justify-between">
             <span className="text-base font-semibold text-foreground">
               Total: <strong className="text-lg">{totalLabels}</strong> etiqueta(s)
-              {format === "a4" && <> · <strong className="text-lg">{totalSheets}</strong> folha(s)</>}
+              {isSheet && <> · <strong className="text-lg">{totalSheets}</strong> folha(s)</>}
             </span>
             <div className="flex gap-2 flex-wrap">
               <Button variant="outline" onClick={() => setQty(Object.fromEntries(variants.map((v) => [v.id, ""])))}>Limpar campos</Button>
-              {format === "a4" && <Button variant="outline" onClick={printTest}>Imprimir folha de teste</Button>}
+              {isSheet && <Button variant="outline" onClick={printTest}>Imprimir folha de teste</Button>}
               <Button onClick={handlePrint} disabled={totalLabels === 0 || applying || filling}>
                 {applying ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Printer className="h-4 w-4 mr-1" />}
                 {mode === "print_only" ? "Imprimir" : "Conferir e imprimir"}
