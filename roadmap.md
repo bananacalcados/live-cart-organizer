@@ -1,4 +1,9 @@
 # Fase 3 do estoque — Inventário
+## Pares disponíveis no painel da apresentadora
+- [x] Auditar estoque compartilhado e baixas anteriores ao balanço
+- [x] Criar leitura agregada por evento e mostrar pares sem limitar venda
+- [x] Testar cálculo, desempenho e tela; informar exemplos sem publicar
+
 - [x] Criar a aba Inventário com abertura, histórico, resumo e relatório paginado
 - [x] Adicionar exportação CSV, zeramento sequencial com parada e encerramento
 - [x] Exibir lotes de zeramento no histórico, sem reimpressão

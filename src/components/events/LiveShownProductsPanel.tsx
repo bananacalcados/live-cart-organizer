@@ -1,5 +1,6 @@
 import { LiveCodeSettingsSection } from "./LiveCodeSettingsSection";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { usePresenterAvailablePairs } from "@/hooks/usePresenterAvailablePairs";
 import { Loader2, Search, Radio, Play, Square, Pencil, Printer, ListChecks, X } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Input } from "@/components/ui/input";
@@ -89,7 +90,10 @@ async function currentUserName(): Promise<string> {
   return (u?.user_metadata?.full_name || u?.user_metadata?.name || u?.email || "Equipe") as string;
 }
 
-export function LiveShownProductsPanel({ eventId, compact = false }: { eventId: string; compact?: boolean }) {
+export function LiveShownProductsPanel({ eventId, compact = false, showAvailablePairs = false }: { eventId: string; compact?: boolean; showAvailablePairs?: boolean }) {
+  const pairRows = usePresenterAvailablePairs(eventId, showAvailablePairs);
+  const pairsByCode = useMemo(() => new Map(pairRows.map((row) => [row.code,
+    new Map(row.sizes.map((item) => [item.size.trim().toLocaleUpperCase("pt-BR"), item.available_pairs]))])), [pairRows]);
   const [rows, setRows] = useState<BoardRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [q, setQ] = useState("");
@@ -548,13 +552,17 @@ export function LiveShownProductsPanel({ eventId, compact = false }: { eventId: 
                       <div className="flex flex-wrap gap-1">
                         {r.sizes.map((size) => {
                           const allowed = isPresenterSizeAllowed(r.available_sizes, size);
+                          const pairs = pairsByCode.get(r.code)?.get(size.trim().toLocaleUpperCase("pt-BR"));
+                          const empty = showAvailablePairs && pairs === 0;
                           return (
-                            <button key={size} type="button" aria-pressed={allowed} aria-label={`${allowed ? "Bloquear" : "Liberar"} numeração ${size} de ${r.code}`}
+                            <Button key={size} type="button" variant="outline" aria-pressed={allowed} aria-label={`${allowed ? "Bloquear" : "Liberar"} numeração ${size} de ${r.code}`}
                               disabled={busy === `sizes:${r.code}`} onClick={() => toggleSize(r, size)}
-                              className={cn("min-w-9 rounded-md border px-1.5 py-1 text-sm font-extrabold leading-none transition-colors",
-                                allowed ? "border-primary/40 bg-primary/15 text-foreground" : "border-border bg-muted text-muted-foreground line-through opacity-50")}>
+                              className={cn("h-auto min-w-9 gap-1 rounded-md border px-1.5 py-1 text-sm font-extrabold leading-none transition-colors",
+                                allowed && !empty ? "border-primary/40 bg-primary/15 text-foreground" : "border-border bg-muted text-muted-foreground line-through",
+                                !allowed && "opacity-50")}>
                               {size}
-                            </button>
+                              {showAvailablePairs && <span className="whitespace-nowrap text-xs font-semibold tabular-nums">· {pairs ?? "—"} {pairs === 1 ? "par" : "pares"}</span>}
+                            </Button>
                           );
                         })}
                       </div>

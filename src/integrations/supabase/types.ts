@@ -33605,6 +33605,13 @@ export type Database = {
         Args: { _key: string; _limit: number; _window_seconds: number }
         Returns: boolean
       }
+      live_presenter_available_pairs: {
+        Args: { p_event_id: string; p_limit?: number; p_offset?: number }
+        Returns: {
+          code: string
+          sizes: Json
+        }[]
+      }
       live_repurchase_cohorts: {
         Args: { p_filter?: string }
         Returns: {

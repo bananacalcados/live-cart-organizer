@@ -1877,6 +1877,20 @@
       "when": 1795011148589,
       "tag": "0267_pos_sale_live_cashback",
       "breakpoints": true
+    },
+    {
+      "idx": 268,
+      "version": "7",
+      "when": 1795271345472,
+      "tag": "0268_presenter_available_pairs",
+      "breakpoints": true
+    },
+    {
+      "idx": 269,
+      "version": "7",
+      "when": 1795271422187,
+      "tag": "0269_presenter_pairs_batch_plan",
+      "breakpoints": true
     }
   ]
 }

@@ -674,7 +674,7 @@ export default function PresenterDashboard() {
             <h2 className="text-lg font-bold mb-3 flex items-center gap-2">
               <Package className="h-5 w-5 text-primary" /> Produtos da live
             </h2>
-            <LiveShownProductsPanel eventId={eventId} />
+            <LiveShownProductsPanel eventId={eventId} showAvailablePairs />
           </CardContent>
         </Card>
       )}
