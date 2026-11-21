@@ -29,7 +29,8 @@ type Ord = {
   total: number; pix_total: number; created_at: string; payment_window_expires_at: string | null; registered_at: string | null;
   registration_confirmed: boolean; shipping_cost: number; free_shipping: boolean; checkout_installment_config?: unknown;
 };
-type Screen = "identify" | "product" | "no_order" | "code" | "register" | "confirm_wa";
+type OrderCandidate = Pick<Ord, "id" | "products" | "total"> & { instagram: string | null };
+type Screen = "identify" | "choose_order" | "product" | "no_order" | "code" | "register" | "confirm_wa";
 
 const brl = (n: number) => n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
@@ -76,6 +77,8 @@ export default function SelfServiceOrderPage() {
   const [instagram, setInstagram] = useState("");
   const [accessId, setAccessId] = useState<string | null>(null);
   const [orders, setOrders] = useState<Ord[]>([]);
+  const [candidates, setCandidates] = useState<OrderCandidate[]>([]);
+  const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
   const [known, setKnown] = useState(false);
   const [code, setCode] = useState("");
   const [now, setNow] = useState(Date.now());
@@ -155,14 +158,21 @@ export default function SelfServiceOrderPage() {
     return () => { cancelled = true; };
   }, [ev, primary?.id, primary?.total]);
 
-  const identify = async () => {
+  const identify = async (selectedId?: string) => {
     const d = digitsOnly(phone);
     if (d.length < 10 || d.length > 13) { toast.error("Digite o WhatsApp completo com DDD."); return; }
     setBusy(true);
-    const r = await call({ action: "identify", slug, phone: d, instagram, invite, access_id: captured.current?.phone === completeInitialPhone(d) ? captured.current.accessId : null });
+    const r = await call({ action: "identify", slug, phone: d, instagram, invite, selected_order_id: selectedId || null, access_id: captured.current?.phone === completeInitialPhone(d) ? captured.current.accessId : accessId });
     setBusy(false);
     if (!r?.ok) { toast.error(r?.error || "Não foi possível buscar agora."); return; }
     setAccessId(r.access_id); setKnown(!!r.known); setOrders(r.orders || []);
+    setSelectedOrderId(r.selected_order_id || null);
+    if (r.needs_order_choice) {
+      setCandidates(r.candidates || []);
+      setScreen("choose_order");
+      return;
+    }
+    setCandidates([]);
     // @ do Instagram descoberto pelo WhatsApp (o pedido da live já tem o @ anexado).
     if (r.instagram_hint) setInstagram(String(r.instagram_hint));
     const sd = r.details;
@@ -275,10 +285,14 @@ export default function SelfServiceOrderPage() {
     setBusy(true);
     const r = await call({
       action: "register", slug, phone: digitsOnly(phone), code, access_id: accessId, instagram: instagram || null, invite,
+      selected_order_id: selectedOrderId,
       order_ids: orders.map((o) => o.id), signals: advertisingSignals(), details: form, alt_address: useAlt ? alt : null,
     });
     setBusy(false);
     if (!r?.ok) {
+      if (r.needs_order_choice) {
+        setOrders([]); setSelectedOrderId(null); setScreen("identify");
+      }
       toast.error(r?.error || "Não foi possível salvar."); return;
     }
     // Fim do cadastro = confirmação no WhatsApp (mesmo deep link do /zap).
@@ -329,10 +343,39 @@ export default function SelfServiceOrderPage() {
               <Label>@ do Instagram (opcional)</Label>
               <Input placeholder="@seuinsta" value={instagram} onChange={(e) => setInstagram(e.target.value)} />
             </div>
-            <Button className="h-14 w-full text-base font-bold" onClick={identify} disabled={busy}>
+            <Button className="h-14 w-full text-base font-bold" onClick={() => identify()} disabled={busy}>
               {busy ? <Loader2 className="h-5 w-5 animate-spin" /> : "Continuar para preencher meus dados"}
             </Button>
           </div>
+        )}
+
+        {screen === "choose_order" && (
+          <section className="space-y-4 py-4" aria-label="Escolha seu pedido">
+            <div className="space-y-2">
+              <h2 className="text-xl font-bold">Qual destes pedidos é o seu?</h2>
+              <p className="text-sm">Mais de uma pessoa informou o final <strong>{digitsOnly(phone).slice(-4)}</strong> nesta live. Confira seu @, os produtos e o valor antes de escolher.</p>
+            </div>
+            {candidates.map((candidate) => (
+              <article key={candidate.id} className="space-y-3 rounded-lg border p-4">
+                <h3 className="break-words text-xl font-bold text-primary">{candidate.instagram ? `@${candidate.instagram}` : "Pedido sem @ informado"}</h3>
+                {candidate.products.map((p, i) => (
+                  <div key={i} className="flex gap-3">
+                    {p.image && <img src={p.image} alt={p.title} className="h-20 w-20 shrink-0 rounded-md object-cover" />}
+                    <div className="min-w-0 flex-1">
+                      <p className="break-words font-semibold">{p.title}</p>
+                      {p.variant && <p className="text-sm text-muted-foreground">{p.variant}</p>}
+                      <p className="text-sm">{p.quantity} par{p.quantity === 1 ? "" : "es"} · {brl(p.final_price ?? p.price)}</p>
+                    </div>
+                  </div>
+                ))}
+                <p className="text-lg font-bold">Total: {brl(candidate.total)}</p>
+                <Button className="min-h-12 w-full whitespace-normal text-base font-bold" disabled={busy} onClick={() => identify(candidate.id)}>
+                  {busy ? <Loader2 className="h-5 w-5 animate-spin" /> : "Este é meu pedido"}
+                </Button>
+              </article>
+            ))}
+            <Button variant="outline" className="min-h-12 w-full" disabled={busy} onClick={() => { setCandidates([]); setSelectedOrderId(null); setScreen("identify"); }}>Voltar e conferir meu WhatsApp</Button>
+          </section>
         )}
 
         {screen === "product" && primary && (

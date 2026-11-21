@@ -1,4 +1,9 @@
 # Fase 3 do estoque — Inventário
+## Identificação segura do cadastro da live
+- [x] Resolver pedidos incompletos pelo final do WhatsApp, preservando o @ da equipe
+- [x] Exibir escolha com @, produtos, foto e valor quando houver pessoas diferentes
+- [x] Revalidar seleção no cadastro e testar sem mensagens ou mudanças em clientes reais
+
 ## Pares disponíveis no painel da apresentadora
 - [x] Auditar estoque compartilhado e baixas anteriores ao balanço
 - [x] Criar leitura agregada por evento e mostrar pares sem limitar venda

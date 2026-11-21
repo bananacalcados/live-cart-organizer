@@ -12,6 +12,7 @@ import { sendAccessCode, verifyAccessCode, normalizeBrPhone } from "../_shared/a
 import { isAuthorizedCron } from "../_shared/cron-guard.ts";
 import { loadSelfserviceAdvertising, cleanSelfserviceSignals, resolveSelfserviceAdvertising, ordinaryAllowed } from "../_shared/selfservice-advertising.ts";
 import { orderInstagram, selfservicePhoneKey } from "../_shared/selfservice-identity.ts";
+import { resolveOrderChoice, choiceIdentity } from "../_shared/selfservice-order-choice.ts";
 import { resolveEventNumber } from "../_shared/event-sender.ts";
 import { registrationAddressFieldError } from "../_shared/registration-address.ts";
 import { registrationCustomerIds } from "../_shared/registration-customer.ts";
@@ -352,7 +353,7 @@ Deno.serve(withAccessLog("live-selfservice", async (req) => {
       else if (cardPhone && cardPhone !== cp && cardPhone === normalizeBrPhone(a.metadata?.entered_phone_original || a.entered_phone || "")) {
         await sb.from("customers").update({ whatsapp: cp, updated_at: new Date().toISOString() }).eq("id", o.customer_id);
       }
-      await sb.from("live_selfservice_accesses").update({ order_ids: Array.from(new Set([...(a.order_ids || []), orderId])), updated_at: new Date().toISOString() }).eq("id", a.id);
+      await sb.from("live_selfservice_accesses").update({ order_ids: Array.from(new Set([...(a.order_ids || []), orderId])), instagram: (c as any)?.instagram_handle || a.instagram, updated_at: new Date().toISOString() }).eq("id", a.id);
       if (o.selfservice_cart_sent_at) return json({ ok: true, sent: false, already: true });
       const cbOne = await cashbackHint(orderTotal(o));
       const toPhone = a.confirmed_phone || cp;
@@ -588,6 +589,8 @@ Deno.serve(withAccessLog("live-selfservice", async (req) => {
     const phone = normalizeBrPhone(body.phone);
     if (!phone) return json({ ok: false, error: "Digite o WhatsApp completo com DDD." }, 400);
 
+    let selectedOrderId = String(body.selected_order_id || "") || null;
+
     // Disparo em massa (?d=): liga o acesso ao destinatário e carimba os pedidos. Best-effort.
     async function linkDispatch(accessId: string | null | undefined) {
       if (!accessId) return;
@@ -597,15 +600,45 @@ Deno.serve(withAccessLog("live-selfservice", async (req) => {
       } catch (e) { console.error("[dispatch link]", e); }
     }
 
+    // One indexed event/suffix read plus one batched confirmed-claim read; cached per request.
+    let suffixResolution: ReturnType<typeof resolveOrderChoice<any>> | null = null;
+    async function resolveSuffixOrders() {
+      if (suffixResolution) return suffixResolution;
+      const { data, error } = await sb.from("orders")
+        .select("id, customer_id, phone_last4, products, stage, is_paid, paid_externally, created_at, payment_window_expires_at, registered_at, discount_type, discount_value, voucher_id, voucher_amount, free_shipping, shipping_cost, checkout_installment_config, cashback_id, cashback_amount, merged_into_order_id, customer:customers(instagram_handle,whatsapp), registration:customer_registrations(whatsapp)")
+        .eq("event_id", ev.id).eq("phone_last4", phone.slice(-4)).neq("stage", "cancelled")
+        .eq("is_paid", false).is("merged_into_order_id", null).order("created_at").order("id").limit(101);
+      if (error) throw new Error("Falha ao verificar os pedidos desta live.");
+      if ((data || []).length > 100) throw new Error("Há muitos pedidos com esse final. Fale com a equipe para identificar o seu.");
+      const rows = (data || []).filter((o: any) => !o.paid_externally && Array.isArray(o.products) && o.products.length);
+      let claims: any[] = [];
+      if (rows.length) {
+        const result = await sb.from("live_selfservice_accesses").select("order_ids, confirmed_phone")
+          .eq("event_id", ev.id).not("whatsapp_confirmed_at", "is", null).overlaps("order_ids", rows.map((o: any) => o.id)).limit(101);
+        if (result.error || (result.data || []).length > 100) throw new Error("Não foi possível verificar a confirmação dos pedidos. Tente novamente.");
+        claims = result.data || [];
+      }
+      suffixResolution = resolveOrderChoice(rows.map((o: any) => ({ ...o,
+        claimedPhones: claims.filter((a) => (a.order_ids || []).includes(o.id)).map((a) => a.confirmed_phone).filter(Boolean),
+      })), phone, selectedOrderId);
+      return suffixResolution;
+    }
+
     if (action === "capture") {
       if (!(await allow(`ss-id-ip:${ip}`, 40, 600))) return json({ ok: false, error: "Aguarde alguns minutos." }, 429);
+      const resolved = await resolveSuffixOrders();
+      const hint = resolved.ambiguous ? null : orderInstagram(resolved.orders, String(body.instagram || ""));
       const { data, error } = await sb.rpc("selfservice_capture_initial", {
-        p_event_id: ev.id, p_phone: phone, p_instagram: String(body.instagram || "").slice(0, 60) || null,
+        p_event_id: ev.id, p_phone: phone, p_instagram: hint,
         p_access_id: /^[0-9a-f-]{36}$/i.test(String(body.access_id || "")) ? body.access_id : null,
       });
       if (error) return json({ ok: false, error: "Não foi possível guardar o contato agora." }, 400);
+      if (data?.access_id && (resolved.hasCandidates || resolved.ambiguous)) {
+        await sb.from("live_selfservice_accesses").update({ order_ids: resolved.orders.map((o: any) => o.id), instagram: hint })
+          .eq("id", data.access_id).eq("event_id", ev.id).is("whatsapp_confirmed_at", null).is("registered_at", null);
+      }
       await linkDispatch((data as any)?.access_id);
-      return json({ ok: true, ...data });
+      return json({ ok: true, ...data, order_ids: resolved.hasCandidates || resolved.ambiguous ? resolved.orders.map((o: any) => o.id) : data?.order_ids });
     }
 
     // Pedidos do @ que recebeu o link único (mesmo sem os 4 últimos dígitos).
@@ -618,20 +651,35 @@ Deno.serve(withAccessLog("live-selfservice", async (req) => {
       const { data: base } = await sb.from("orders").select("customer_id").eq("id", n.order_id).eq("event_id", ev.id).maybeSingle();
       if (!base?.customer_id) return [];
       const { data } = await sb.from("orders")
-        .select("id, customer_id, products, stage, is_paid, paid_externally, created_at, payment_window_expires_at, registered_at, discount_type, discount_value, free_shipping, shipping_cost, checkout_installment_config, cashback_id, cashback_amount, merged_into_order_id, customer:customers(instagram_handle)")
+        .select("id, customer_id, products, stage, is_paid, paid_externally, created_at, payment_window_expires_at, registered_at, discount_type, discount_value, free_shipping, shipping_cost, checkout_installment_config, cashback_id, cashback_amount, merged_into_order_id, customer:customers(instagram_handle,whatsapp), registration:customer_registrations(whatsapp)")
         .eq("event_id", ev.id).eq("customer_id", base.customer_id).neq("stage", "cancelled").eq("is_paid", false)
         .order("created_at", { ascending: true }).limit(10);
       return (data || []).filter((o: any) => !o.paid_externally && !o.merged_into_order_id && Array.isArray(o.products) && o.products.length > 0);
     }
 
     async function openOrders() {
+      const resolved = await resolveSuffixOrders();
+      if (resolved.hasCandidates || resolved.ambiguous) return resolved.orders;
+      // Preserve unique invite/Instagram fallback only when suffix matching found no eligible order.
       const byPhone = await openOrdersByPhone();
       const extra = await inviteOrders();
       const byIg = await openOrdersByInstagram();
-      const seen = new Set(byPhone.map((o: any) => o.id));
-      const out = [...byPhone];
-      for (const o of [...extra, ...byIg]) if (!seen.has(o.id)) { seen.add(o.id); out.push(o); }
-      return out;
+      const rawFallback = extra.length ? extra : byIg.length ? byIg : byPhone;
+      const fallback = rawFallback.filter((o: any) => {
+        const registrations = Array.isArray(o.registration) ? o.registration : o.registration ? [o.registration] : [];
+        const full = [o.customer?.whatsapp, ...registrations.map((r: any) => r.whatsapp)].filter((p) => digits(p).length >= 10);
+        return full.every((p) => normalizeBrPhone(p) === phone);
+      });
+      const selectedId = selectedOrderId || "";
+      const selected = selectedId ? fallback.find((o: any) => o.id === selectedId) : null;
+      const identities = new Set(fallback.map(choiceIdentity));
+      if (selectedId && !selected) return [];
+      if (identities.size > 1 && !selected) {
+        resolved.ambiguous = true;
+        resolved.candidates = fallback;
+        return [];
+      }
+      return selected ? fallback.filter((o: any) => choiceIdentity(o) === choiceIdentity(selected)) : fallback;
     }
 
     // Pedido criado por comentário "quero" ainda não tem WhatsApp no cliente:
@@ -643,7 +691,7 @@ Deno.serve(withAccessLog("live-selfservice", async (req) => {
       if (error) { console.error("[live-selfservice] ig match", error.message); return []; }
       if (!Array.isArray(ids) || !ids.length) return [];
       const { data } = await sb.from("orders")
-        .select("id, customer_id, products, stage, is_paid, paid_externally, created_at, payment_window_expires_at, registered_at, discount_type, discount_value, free_shipping, shipping_cost, checkout_installment_config, cashback_id, cashback_amount, merged_into_order_id, customer:customers(instagram_handle)")
+        .select("id, customer_id, products, stage, is_paid, paid_externally, created_at, payment_window_expires_at, registered_at, discount_type, discount_value, free_shipping, shipping_cost, checkout_installment_config, cashback_id, cashback_amount, merged_into_order_id, customer:customers(instagram_handle,whatsapp), registration:customer_registrations(whatsapp)")
         .eq("event_id", ev.id).in("id", ids.slice(0, 10));
       return (data || []).filter((o: any) => Array.isArray(o.products) && o.products.length > 0).map((o: any) => ({ ...o, _ig_customer_id: o.customer_id }));
     }
@@ -655,13 +703,13 @@ Deno.serve(withAccessLog("live-selfservice", async (req) => {
         const { data: matches } = await sb.rpc("selfservice_match_initial_order", { p_event_id: ev.id, p_phone: phone });
         if (!matches?.length) return [];
         const { data: matched } = await sb.from("orders")
-          .select("id, customer_id, products, stage, is_paid, paid_externally, created_at, payment_window_expires_at, registered_at, discount_type, discount_value, free_shipping, shipping_cost, checkout_installment_config, cashback_id, cashback_amount, merged_into_order_id, customer:customers(instagram_handle)")
+          .select("id, customer_id, products, stage, is_paid, paid_externally, created_at, payment_window_expires_at, registered_at, discount_type, discount_value, free_shipping, shipping_cost, checkout_installment_config, cashback_id, cashback_amount, merged_into_order_id, customer:customers(instagram_handle,whatsapp), registration:customer_registrations(whatsapp)")
           .eq("event_id", ev.id).in("id", matches);
         return matched || [];
       }
       const { data } = await sb
         .from("orders")
-        .select("id, customer_id, products, stage, is_paid, paid_externally, created_at, payment_window_expires_at, registered_at, discount_type, discount_value, free_shipping, shipping_cost, checkout_installment_config, cashback_id, cashback_amount, merged_into_order_id, customer:customers(instagram_handle)")
+        .select("id, customer_id, products, stage, is_paid, paid_externally, created_at, payment_window_expires_at, registered_at, discount_type, discount_value, free_shipping, shipping_cost, checkout_installment_config, cashback_id, cashback_amount, merged_into_order_id, customer:customers(instagram_handle,whatsapp), registration:customer_registrations(whatsapp)")
         .eq("event_id", ev.id)
         .in("customer_id", ids)
         .neq("stage", "cancelled")
@@ -673,7 +721,7 @@ Deno.serve(withAccessLog("live-selfservice", async (req) => {
       const { data: matches } = await sb.rpc("selfservice_match_initial_order", { p_event_id: ev.id, p_phone: phone });
       if (!matches?.length) return [];
       const { data: matched } = await sb.from("orders")
-        .select("id, customer_id, products, stage, is_paid, paid_externally, created_at, payment_window_expires_at, registered_at, discount_type, discount_value, free_shipping, shipping_cost, checkout_installment_config, cashback_id, cashback_amount, merged_into_order_id, customer:customers(instagram_handle)")
+        .select("id, customer_id, products, stage, is_paid, paid_externally, created_at, payment_window_expires_at, registered_at, discount_type, discount_value, free_shipping, shipping_cost, checkout_installment_config, cashback_id, cashback_amount, merged_into_order_id, customer:customers(instagram_handle,whatsapp), registration:customer_registrations(whatsapp)")
         .eq("event_id", ev.id).in("id", matches);
       return matched || [];
     }
@@ -703,32 +751,41 @@ Deno.serve(withAccessLog("live-selfservice", async (req) => {
 
     if (action === "identify") {
       if (!(await allow(`ss-id-ip:${ip}`, 40, 600))) return json({ ok: false, error: "Muitas tentativas. Aguarde alguns minutos." }, 429);
+      const orders = await openOrders();
+      const resolved = await resolveSuffixOrders();
+      if (String(body.selected_order_id || "") && !orders.length) return json({ ok: false, error: "Esse pedido mudou. Volte e escolha seu pedido novamente." }, 409);
+      const igHint = resolved.ambiguous ? null : orderInstagram(orders, String(body.instagram || ""));
       const { data: capture, error: captureError } = await sb.rpc("selfservice_capture_initial", {
-        p_event_id: ev.id, p_phone: phone, p_instagram: String(body.instagram || "").slice(0, 60) || null,
+        p_event_id: ev.id, p_phone: phone, p_instagram: igHint,
         p_access_id: /^[0-9a-f-]{36}$/i.test(String(body.access_id || "")) ? body.access_id : null,
       });
       if (captureError || !capture?.access_id) return json({ ok: false, error: "Não foi possível identificar agora." }, 400);
-      const orders = await openOrders();
-      const known = await knownCustomer();
-      const instagram = String(body.instagram || "").trim().replace(/^@/, "").slice(0, 60) || null;
-      const igHint = orderInstagram(orders as any[], instagram);
       const acc = { id: capture.access_id };
-      await sb.from("live_selfservice_accesses").update({
+      const { data: currentAccess } = await sb.from("live_selfservice_accesses").select("metadata, entered_phone")
+        .eq("id", acc.id).eq("event_id", ev.id).maybeSingle();
+      if (!currentAccess || normalizeBrPhone(currentAccess.entered_phone) !== phone) return json({ ok: false, error: "Identifique seu WhatsApp novamente." }, 409);
+      const selectedId = orders[0]?.id || null;
+      const { error: saveError } = await sb.from("live_selfservice_accesses").update({
         instagram: igHint, order_ids: orders.map((o: any) => o.id),
-      }).eq("id", acc.id).is("whatsapp_confirmed_at", null);
+        metadata: { ...(currentAccess.metadata || {}), order_choice: selectedId ? { order_id: selectedId, instagram: igHint, entered_instagram: String(body.instagram || "").slice(0, 60) } : null },
+      }).eq("id", acc.id).eq("event_id", ev.id).is("whatsapp_confirmed_at", null);
+      if (saveError) return json({ ok: false, error: "Não foi possível guardar sua escolha. Tente novamente." }, 503);
       await linkDispatch(acc.id);
+      if (resolved.ambiguous) return json({ ok: true, event: eventInfo, access_id: acc.id, needs_order_choice: true,
+        orders: [], candidates: resolved.candidates.map((o: any) => ({ id: o.id, instagram: orderInstagram([o]),
+          products: mapOrder(o).products, total: mapOrder(o).total })) });
+      const known = await knownCustomer();
       const details = known ? await savedDetails() : null;
       // Rascunho deixado numa visita anterior (mesmo WhatsApp neste evento):
       // a cliente continua o cadastro de onde parou.
-      const { data: prevDraft } = await sb.from("live_selfservice_accesses")
-        .select("form_draft")
-        .eq("event_id", ev.id).eq("phone_key", phoneKey(phone))
-        .not("form_draft", "is", null)
-        .order("updated_at", { ascending: false }).limit(1).maybeSingle();
+      let draftQuery = sb.from("live_selfservice_accesses").select("form_draft")
+        .eq("event_id", ev.id).eq("phone_key", phoneKey(phone)).not("form_draft", "is", null);
+      if (orders.length && igHint) draftQuery = draftQuery.eq("instagram", igHint);
+      const { data: prevDraft } = await draftQuery.order("updated_at", { ascending: false }).limit(1).maybeSingle();
       const { data: confirmedAccess } = await sb.from("live_selfservice_accesses").select("order_ids")
         .eq("event_id", ev.id).eq("confirmed_phone_key", phoneKey(phone)).not("whatsapp_confirmed_at", "is", null).limit(100);
       const confirmedIds = new Set((confirmedAccess || []).flatMap((a: any) => a.order_ids || []));
-      return json({ ok: true, event: eventInfo, access_id: acc?.id || null, known, details, instagram_hint: igHint, draft: (prevDraft as any)?.form_draft || null, orders: orders.map((o: any) => mapOrder({ ...o, registration_confirmed: confirmedIds.has(o.id) })) });
+      return json({ ok: true, event: eventInfo, access_id: acc?.id || null, known, details, instagram_hint: igHint, selected_order_id: selectedId, draft: (prevDraft as any)?.form_draft || null, orders: orders.map((o: any) => mapOrder({ ...o, registration_confirmed: confirmedIds.has(o.id) })) });
     }
 
     // Rascunho do formulário: salvo enquanto a cliente digita (espelhado na ficha do chat).
@@ -801,18 +858,29 @@ Deno.serve(withAccessLog("live-selfservice", async (req) => {
         const error = registrationAddressFieldError(field, value);
         if (error) return json({ ok: false, error }, 400);
       }
+      const { data: access } = await sb.from("live_selfservice_accesses").select("id, metadata, entered_phone")
+        .eq("id", String(body.access_id || "")).eq("event_id", ev.id).maybeSingle();
+      if (!access || normalizeBrPhone(access.entered_phone) !== phone) return json({ ok: false, error: "Identifique seu WhatsApp novamente." }, 400);
+      const savedChoice = access.metadata?.order_choice;
+      if (selectedOrderId && (savedChoice?.order_id || null) !== selectedOrderId) {
+        return json({ ok: false, error: "Volte e escolha seu pedido novamente." }, 409);
+      }
+      selectedOrderId = savedChoice?.order_id || null;
+      const orders = await openOrders();
+      const resolved = await resolveSuffixOrders();
+      if (resolved.ambiguous || (savedChoice?.order_id && !orders.some((o: any) => o.id === savedChoice.order_id))) {
+        return json({ ok: false, error: "Os pedidos mudaram. Volte e escolha qual é o seu.", needs_order_choice: true }, 409);
+      }
+      const reqIds: string[] = Array.isArray(body.order_ids) ? body.order_ids.map(String) : [];
+      const target = orders.filter((o: any) => reqIds.includes(o.id) || (!reqIds.length && o._ig_customer_id));
+      if (reqIds.length && (new Set(reqIds).size !== reqIds.length || target.length !== reqIds.length)) return json({ ok: false, error: "Seu pedido mudou. Volte e identifique novamente." }, 409);
+      if (orders.length && !target.length) return json({ ok: false, error: "Escolha seu pedido antes de confirmar." }, 409);
+      const igReg = orderInstagram(target, String(body.instagram || ""));
+      if (savedChoice?.instagram && savedChoice.instagram !== igReg) return json({ ok: false, error: "O perfil do pedido mudou. Identifique novamente." }, 409);
       const adv = await resolveSelfserviceAdvertising(sb, body.signals);
       const allowed = adv && adv.mode !== "refused";
       const signals = allowed ? cleanSelfserviceSignals(body.signals, req) : {};
       const now = new Date().toISOString();
-      const orders = await openOrders();
-      const reqIds: string[] = Array.isArray(body.order_ids) ? body.order_ids.map(String) : [];
-      const target = orders.filter((o: any) => reqIds.includes(o.id) || (!reqIds.length && o._ig_customer_id));
-      if (reqIds.length && target.length !== reqIds.length) return json({ ok: false, error: "Seu pedido mudou. Volte e identifique novamente." }, 409);
-      const igReg = orderInstagram(target as any[], String(body.instagram || ""));
-      const { data: access } = await sb.from("live_selfservice_accesses").select("id, metadata, entered_phone")
-        .eq("id", String(body.access_id || "")).eq("event_id", ev.id).maybeSingle();
-      if (!access || normalizeBrPhone(access.entered_phone) !== phone) return json({ ok: false, error: "Identifique seu WhatsApp novamente." }, 400);
 
       // CRM unificado
       const { error: uErr } = await sb.rpc("find_or_create_unified_customer", {
@@ -844,7 +912,13 @@ Deno.serve(withAccessLog("live-selfservice", async (req) => {
       if (target.length) {
         // Qualquer pedido identificado recebe o telefone validado, sem sobrescrever a ficha.
         for (const cid of registrationCustomerIds(target)) {
-          await sb.from("customers").update({ whatsapp: phone }).eq("id", cid).or("whatsapp.is.null,whatsapp.eq.");
+          const previousPhone = target.find((o: any) => o.customer_id === cid)?.customer?.whatsapp;
+          const partial = digits(previousPhone);
+          if (partial.length === 4 && partial === phone.slice(-4)) {
+            await sb.from("customers").update({ whatsapp: phone }).eq("id", cid).eq("whatsapp", previousPhone);
+          } else {
+            await sb.from("customers").update({ whatsapp: phone }).eq("id", cid).or("whatsapp.is.null,whatsapp.eq.");
+          }
         }
         for (const o of target) {
           const payload = { order_id: o.id, whatsapp: phone, full_name: fullName, cpf, email, ...orderAddr, ...signals, selfservice_advertising_consent_id: adv?.consentId || null, selfservice_advertising_snapshot: adv?.snapshot || null };
