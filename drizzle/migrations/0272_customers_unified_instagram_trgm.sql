@@ -1,0 +1,1 @@
+CREATE INDEX IF NOT EXISTS idx_customers_unified_instagram_trgm ON public.customers_unified USING gin (instagram_handle gin_trgm_ops) WHERE instagram_handle IS NOT NULL;

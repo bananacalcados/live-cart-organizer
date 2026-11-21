@@ -171,7 +171,7 @@ serve(withAccessLog("mercadopago-check-payment", async (req) => {
       const mpAmount = Number(mpPayment.transaction_amount || 0);
       let gateOk = true;
       if (existingOrder && !existingOrder.is_paid) {
-        const exp = await expectedOrderAmounts(supabase, orderId);
+        const exp = await expectedOrderAmounts(supabase, orderId, String(paymentId));
         const byStoredId = String(existingOrder.mercadopago_payment_id || "") === String(paymentId);
         const verdict = exp
           ? paymentMatchesOrder({ reference: byStoredId ? orderId : String(mpPayment.external_reference || ""), metadataOrderId: mpPayment.metadata?.order_id ?? null, amount: mpAmount }, orderId, exp.min, exp.base)
@@ -183,6 +183,7 @@ serve(withAccessLog("mercadopago-check-payment", async (req) => {
           old_decision: "confirm", new_decision: gateOk ? "confirm" : (verdict === "amount" ? "reject_amount" : "reject_unverified"),
           reason: gateOk ? "" : verdict, strict_mode: strict, applied: strict ? gateOk : true, details: { ip, fn: "mercadopago-check-payment" },
         });
+        if (gateOk && exp?.cartGrew) await flagReview(supabase, "orders", orderId);
         if (!gateOk) {
           await securityEvent(supabase, verdict === "amount" ? "amount_mismatch" : "webhook_unverified", ip, { provider: "mercadopago", fn: "mercadopago-check-payment", order_id: orderId, payment_id: String(paymentId), api_amount: mpAmount, expected: exp?.min });
           if (strict) {

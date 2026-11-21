@@ -406,12 +406,13 @@ async function handleMercadoPago(req: Request, supabase: any, supabaseUrl: strin
     const expected = Math.max(0, subtotal - disc + shipping);
     const mpAmount = Number(mpPayment.transaction_amount || 0);
     const extRef = String(mpPayment.external_reference || "");
-    const amountOk = expected > 0 && Math.abs(mpAmount - expected) < 0.01;
+    let amountOk = expected > 0 && Math.abs(mpAmount - expected) < 0.01;
     const refOk = extRef === order.id || (!!mergedFromId && extRef === mergedFromId);
 
     // Regra nova: valor (tolerância do pedido) E referência/ID.
     const idOk = refOk || foundByMpId;
-    const exp = await expectedOrderAmounts(supabase, order.id);
+    const exp = await expectedOrderAmounts(supabase, order.id, mpIdStr);
+    if (exp?.snapshot && orderAmountOk(mpAmount, exp)) amountOk = true;
     const newAmountOk = !!exp && orderAmountOk(mpAmount, exp);
     const newDecision: Decision = idOk && newAmountOk ? "confirm" : (idOk ? "reject_amount" : "reject_unverified");
     const oldDecision = amountOk || refOk ? "confirm" : "reject";
@@ -422,6 +423,8 @@ async function handleMercadoPago(req: Request, supabase: any, supabaseUrl: strin
       reason: newDecision === "confirm" ? "" : `api=${mpAmount} esperado>=${exp?.min} idOk=${idOk}`,
       strict_mode: strict, applied: strict ? newDecision === "confirm" : oldDecision === "confirm", details: { ip: whIp, foundByMpId },
     });
+    // Pago pelo valor da cobrança, mas a equipe adicionou itens depois: confirma e marca para conferir a diferença.
+    if (newDecision === "confirm" && exp?.cartGrew) await flagReview(supabase, "orders", order.id);
     if (newDecision !== "confirm") {
       await securityEvent(supabase, newDecision === "reject_amount" ? "amount_mismatch" : "webhook_unverified", whIp, {
         provider: "mercadopago", order_id: order.id, payment_id: mpIdStr, api_amount: mpAmount, expected: exp?.min, strict,

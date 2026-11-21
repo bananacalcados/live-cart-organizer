@@ -111,11 +111,24 @@ function round2(n: number) { return Math.round(n * 100) / 100; }
  * (mesmas regras do checkout: produtos - desconto + frete, prêmio da roleta,
  * desconto Pix só sem cashback). Pagar a mais nunca é recusado (juros de cartão).
  */
-export async function expectedOrderAmounts(supabase: any, orderId: string): Promise<{ base: number; min: number; pixPct: number } | null> {
+export async function expectedOrderAmounts(supabase: any, orderId: string, paymentId?: string | null): Promise<{ base: number; min: number; pixPct: number; snapshot?: boolean; cartGrew?: boolean } | null> {
   const { data: o } = await supabase.from("orders")
-    .select("id, products, discount_type, discount_value, shipping_cost, free_shipping, cashback_id, cashback_amount")
+    .select("id, products, discount_type, discount_value, shipping_cost, free_shipping, cashback_id, cashback_amount, gateway_amount, gateway_snapshot")
     .eq("id", orderId).maybeSingle();
   if (!o) return null;
+  const cur = await currentOrderAmounts(supabase, o);
+  // Cobrança gerada pelo servidor (snapshot gravado na criação do Pix) com o MESMO id de pagamento:
+  // o valor esperado é o que foi cobrado, mesmo que a equipe tenha mexido no carrinho depois.
+  const snap = o.gateway_snapshot as any;
+  const snapAmt = Number(o.gateway_amount ?? snap?.amount ?? 0);
+  if (paymentId && snap?.payment_id && String(snap.payment_id) === String(paymentId) && snapAmt > 0) {
+    return { base: snapAmt, min: snapAmt, pixPct: 0, snapshot: true, cartGrew: cur.min > snapAmt + orderTolerance(snapAmt) };
+  }
+  return cur;
+}
+
+async function currentOrderAmounts(supabase: any, o: any): Promise<{ base: number; min: number; pixPct: number }> {
+  const orderId = o.id;
   const items = Array.isArray(o.products) ? o.products : [];
   const subtotal = items.reduce((s: number, p: any) => s + (Number(p?.price) || 0) * (Number(p?.quantity) || 0), 0);
   const disc = o.discount_type && o.discount_value
