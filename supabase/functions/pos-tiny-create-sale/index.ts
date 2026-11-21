@@ -373,25 +373,7 @@ serve(withAccessLog("pos-tiny-create-sale", async (req) => {
         console.warn(`[pos-tiny-create-sale] items insert reported error but ${count} rows persisted for sale ${saleId}`);
       }
 
-      // Update local stock cache (pos_products)
-      for (const item of items) {
-        if (item.sku) {
-          const { data: product } = await supabase
-            .from('pos_products')
-            .select('id, stock')
-            .eq('store_id', store_id)
-            .eq('sku', item.sku)
-            .maybeSingle();
-
-          if (product) {
-            const newStock = Math.max(0, (product.stock || 0) - item.quantity);
-            await supabase
-              .from('pos_products')
-              .update({ stock: newStock, synced_at: new Date().toISOString() })
-              .eq('id', product.id);
-          }
-        }
-      }
+      // NÃO baixar estoque aqui: a baixa é feita uma única vez pelos triggers do banco (process_pos_sale_sale_event). Remoção em 21/11/2026 após baixa dupla confirmada.
 
       // Award gamification points to seller
       if (seller_id) {
