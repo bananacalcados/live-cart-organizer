@@ -24,8 +24,6 @@ const NewCampaign = lazy(() => import("./pages/NewCampaign"));
 const Checkout = lazy(() => import("./pages/Checkout"));
 const CustomerRegister = lazy(() => import("./pages/CustomerRegister"));
 const TransparentCheckout = lazy(() => import("./pages/TransparentCheckout"));
-const Expedition = lazy(() => import("./pages/Expedition"));
-const ExpeditionBeta = lazy(() => import("./pages/ExpeditionBeta"));
 const POS = lazy(() => import("./pages/POS"));
 const Inventory = lazy(() => import("./pages/Inventory"));
 const InventoryCategories = lazy(() => import("./pages/InventoryCategories"));
@@ -179,8 +177,8 @@ const App = () => (
               <Route path="/marketing/new" element={<ProtectedRoute requiredModule="marketing"><NewCampaign /></ProtectedRoute>} />
               <Route path="/marketing/email-marketing" element={<ProtectedRoute requiredModule="marketing"><EmailMarketing /></ProtectedRoute>} />
               <Route path="/marketing/publicos-meta" element={<ProtectedRoute requiredModule="marketing"><MetaAudiences /></ProtectedRoute>} />
-              <Route path="/expedition" element={<ProtectedRoute requiredModule="expedition"><Expedition /></ProtectedRoute>} />
-              <Route path="/expedition-beta" element={<ProtectedRoute requiredModule="expedition"><ExpeditionBeta /></ProtectedRoute>} />
+              <Route path="/expedition" element={<ProtectedRoute requiredModule="expedition"><Navigate to="/pos?section=expedition" replace /></ProtectedRoute>} />
+              <Route path="/expedition-beta" element={<ProtectedRoute requiredModule="expedition"><Navigate to="/pos?section=expedition" replace /></ProtectedRoute>} />
               <Route path="/pos" element={<ProtectedRoute requiredModule={["pos", "expedition"]}><POS /></ProtectedRoute>} />
               <Route path="/inventory" element={<ProtectedRoute requiredModule="inventory"><Inventory /></ProtectedRoute>} />
               <Route path="/inventory/categorias" element={<ProtectedRoute requiredModule="inventory"><InventoryCategories /></ProtectedRoute>} />

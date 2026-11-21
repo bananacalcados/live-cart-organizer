@@ -5,7 +5,6 @@ import {
   Calendar,
   MessageSquare,
   Megaphone,
-  Truck,
   LogOut,
   Store,
   Package,
@@ -50,13 +49,6 @@ const modules = [
     icon: Megaphone,
     path: "/marketing",
     module: "marketing",
-  },
-  {
-    title: "Expedição Beta",
-    description: "Auto-sync Shopify + código de barras",
-    icon: Truck,
-    path: "/expedition-beta",
-    module: "expedition",
   },
   {
     title: "Frente de Caixa",

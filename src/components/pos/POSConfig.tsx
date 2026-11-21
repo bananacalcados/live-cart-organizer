@@ -1011,14 +1011,6 @@ export function POSConfig({ storeId }: Props) {
                 <p className="text-sm text-pos-white">Produtos no banco local</p>
                 <p className="text-2xl font-bold text-pos-orange">{productCount}</p>
               </div>
-              <Button
-                className="bg-pos-orange text-pos-black hover:bg-pos-orange-muted font-bold gap-2 h-12 px-6"
-                onClick={syncProducts}
-                disabled={syncing}
-              >
-                {syncing ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
-                {syncing ? 'Sincronizando...' : 'Sincronizar Agora'}
-              </Button>
             </div>
 
             {/* Progress Bar */}
@@ -1121,26 +1113,6 @@ export function POSConfig({ storeId }: Props) {
             <CardTitle className="text-sm flex items-center justify-between text-pos-white">
               <span className="flex items-center gap-2"><Users className="h-4 w-4 text-pos-orange" /> Vendedoras</span>
               <div className="flex items-center gap-2">
-                <Button size="sm" variant="outline" className="border-pos-orange/30 text-pos-orange hover:bg-pos-orange/10 font-bold gap-1 text-xs" onClick={async () => {
-                  setSyncing(true);
-                  try {
-                    const resp = await fetch(`${SUPABASE_URL}/functions/v1/pos-tiny-sellers`, {
-                      method: 'POST',
-                      headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` },
-                      body: JSON.stringify({ store_id: storeId }),
-                    });
-                    const data = await resp.json();
-                    if (data.success) {
-                      toast.success(`${data.sellers?.length || 0} vendedoras sincronizadas do Tiny!`);
-                      loadSellers();
-                    } else {
-                      toast.error(data.error || "Erro ao sincronizar");
-                    }
-                  } catch { toast.error("Erro de conexão"); }
-                  finally { setSyncing(false); }
-                }} disabled={syncing}>
-                  {syncing ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />} Sincronizar Tiny
-                </Button>
                 <Button size="sm" className="bg-pos-orange text-pos-black hover:bg-pos-orange-muted font-bold gap-1" onClick={() => setShowAddSeller(true)}>
                   <Plus className="h-3 w-3" /> Adicionar
                 </Button>
