@@ -1,12 +1,13 @@
 import { withAccessLog } from "../_shared/withAccessLog.ts";
-// Sincroniza o estoque atual (product_variants.initial_stock) com:
-//  - pos_products.stock (todas as lojas, agrupadas por barcode)
-//  - Shopify (inventory_levels.set para cada variante)
-//
-// Body: { master_id, target?: 'pos' | 'shopify' | 'both' (default), distribute_pos?: 'replicate' | 'split' (default replicate) }
-//
-// Estratégia POS: por padrão replica o estoque do master em todas as lojas
-// (cada loja recebe o mesmo valor). Use 'split' para dividir igualmente.
+import { loadRealStoreIds, sharedStockByBarcode } from "../_shared/shopify-shared-stock.ts";
+// =====================================================================
+// NUNCA alterar pos_products aqui. Direção única ERP → Shopify.
+// Decisão do dono em 21/11/2026 após incidente que apagou contagem física.
+// =====================================================================
+// Envia o produto para a Shopify: cria/vincula variações novas e envia o
+// saldo do ERP calculado pela mesma regra de shopify-mirror-stock.
+// Body: { master_id, target?: 'shopify' (padrão) | 'both' (= shopify) }
+// target 'pos' => 400.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
@@ -21,7 +22,15 @@ Deno.serve(withAccessLog("sync-master-product-stock", async (req) => {
   }
 
   try {
-    const { master_id, target = "both", store_id: body_store_id = null } = await req.json();
+    const body = await req.json().catch(() => ({}));
+    const master_id = body?.master_id;
+    const rawTarget = body?.target ?? "shopify";
+    if (rawTarget === "pos") {
+      return new Response(JSON.stringify({
+        error: "Esta função só envia para a Shopify; o estoque do ERP não é alterado por aqui.",
+      }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+    const target = "shopify";
     if (!master_id) {
       return new Response(JSON.stringify({ error: "master_id required" }), {
         status: 400,
@@ -48,71 +57,8 @@ Deno.serve(withAccessLog("sync-master-product-stock", async (req) => {
 
     const result: Record<string, unknown> = {};
 
-    // ====================== POS ======================
-    // ATENÇÃO: nunca replica estoque em todas as lojas. store_id é OBRIGATÓRIO
-    // quando target inclui 'pos'. Apenas a loja indicada recebe o estoque das
-    // variantes; as demais lojas não são tocadas.
-    if (target === "pos" || target === "both") {
-      const store_id: string | null = body_store_id;
-      if (!store_id) {
-        return new Response(JSON.stringify({
-          error: "store_id obrigatório para sincronizar estoque no PDV",
-        }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-      }
-
-      // Bloqueia lojas simulação e buckets online (Site/Live, Site + Centro, Lojas + Live)
-      const { data: store } = await supabase
-        .from("pos_stores")
-        .select("id, name, is_simulation")
-        .eq("id", store_id)
-        .maybeSingle();
-      if (!store || store.is_simulation) {
-        return new Response(JSON.stringify({
-          error: "Loja inválida ou de simulação",
-        }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-      }
-      const nameNorm = String(store.name || "").toLowerCase();
-      const isOnlineBucket = ["site/live", "site + centro", "lojas + live"].some(n => nameNorm.includes(n));
-      if (isOnlineBucket) {
-        return new Response(JSON.stringify({
-          error: `A loja "${store.name}" é um agregador online e não recebe estoque via sincronização.`,
-        }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-      }
-
-      let posUpdated = 0;
-      let posMissing = 0;
-
-      for (const v of variants) {
-        if (!v.gtin) continue;
-        const stockMaster = Number(v.initial_stock || 0);
-
-        const { data: existing } = await supabase
-          .from("pos_products")
-          .select("id")
-          .eq("store_id", store_id)
-          .eq("barcode", v.gtin)
-          .maybeSingle();
-
-        if (existing) {
-          const { error } = await supabase
-            .from("pos_products")
-            .update({ stock: stockMaster })
-            .eq("id", existing.id);
-          if (!error) posUpdated++;
-        } else {
-          posMissing++;
-        }
-      }
-      result.pos = {
-        updated: posUpdated,
-        missing: posMissing,
-        store_id,
-        store_name: store.name,
-      };
-    }
-
-    // ====================== Shopify ======================
-    if (target === "shopify" || target === "both") {
+        // ====================== Shopify ======================
+    if (target === "shopify" && (rawTarget === "shopify" || rawTarget === "both")) {
       const SHOPIFY_DOMAIN = Deno.env.get("SHOPIFY_STORE_DOMAIN") || Deno.env.get("SHOPIFY_DOMAIN");
       const SHOPIFY_TOKEN = Deno.env.get("SHOPIFY_ACCESS_TOKEN");
 
@@ -442,19 +388,23 @@ Deno.serve(withAccessLog("sync-master-product-stock", async (req) => {
           let shopUpdated = 0;
           let shopErrors = 0;
 
-          // ESTOQUE COMPARTILHADO: soma do estoque de TODAS as lojas do PDV por GTIN
-          const gtins = variants.map((v: any) => v.gtin).filter(Boolean);
-          const sharedStockByGtin: Record<string, number> = {};
-          if (gtins.length) {
-            const { data: posRows } = await supabase
+          // Saldo = mesma regra do shopify-mirror-stock (helper comum). Somente leitura.
+          const gtins = Array.from(new Set(variants.map((v: any) => v.gtin).filter(Boolean).map(String)));
+          const realStoreIds = await loadRealStoreIds(supabase);
+          let posRows: any[] = [];
+          if (gtins.length && realStoreIds.length) {
+            const { data } = await supabase
               .from("pos_products")
-              .select("barcode, stock")
-              .in("barcode", gtins);
-            for (const row of posRows || []) {
-              const code = String(row.barcode);
-              sharedStockByGtin[code] = (sharedStockByGtin[code] || 0) + (Number(row.stock) || 0);
-            }
+              .select("barcode, store_id, stock")
+              .in("barcode", gtins)
+              .in("store_id", realStoreIds);
+            posRows = data || [];
           }
+          const shared = sharedStockByBarcode(posRows, realStoreIds, gtins);
+          const missingSet = new Set(shared.missing);
+          const semEstoqueNoErp: string[] = (variants as any[])
+            .filter((v) => !v.gtin || missingSet.has(String(v.gtin)))
+            .map((v) => String(v.sku || v.gtin || v.id));
 
           for (const v of variants) {
             if (!v.shopify_variant_id) continue;
@@ -506,9 +456,7 @@ Deno.serve(withAccessLog("sync-master-product-stock", async (req) => {
             }
 
             // Define o estoque (compartilhado entre todas as lojas)
-            const sharedStock = v.gtin && sharedStockByGtin[String(v.gtin)] !== undefined
-              ? sharedStockByGtin[String(v.gtin)]
-              : Number(v.initial_stock || 0);
+            const sharedStock = v.gtin ? (shared.stock[String(v.gtin)] ?? 0) : 0;
             const setRes = await shopFetch(
               `https://${SHOPIFY_DOMAIN}/admin/api/${apiVer}/inventory_levels/set.json`,
               {
@@ -537,6 +485,7 @@ Deno.serve(withAccessLog("sync-master-product-stock", async (req) => {
             variants_created: variantsCreated,
             variants_linked: variantsLinked,
             variant_create_errors: variantCreateErrors,
+            sem_estoque_no_erp: semEstoqueNoErp,
           };
         }
       }
@@ -545,7 +494,7 @@ Deno.serve(withAccessLog("sync-master-product-stock", async (req) => {
     return new Response(
       JSON.stringify({
         success: true,
-        message: "Estoque sincronizado",
+        message: "Produto enviado para a Shopify",
         result,
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } },

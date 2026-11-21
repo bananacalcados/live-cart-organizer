@@ -95,7 +95,6 @@ export function LegacyProductsList() {
   const [merging, setMerging] = useState(false);
 
   // Diálogo de sync-estoque-PDV (loja obrigatória)
-  const [syncStockDialog, setSyncStockDialog] = useState<{ masterId: string; storeId: string } | null>(null);
   const [physicalStores, setPhysicalStores] = useState<Array<{ id: string; name: string }>>([]);
 
   // Exclusão em massa
@@ -386,48 +385,31 @@ export function LegacyProductsList() {
     } finally { setSendingTo(null); }
   }
 
-  async function syncStock(masterId: string, target: "pos" | "shopify") {
-    if (target === "pos") {
-      // Estoque no PDV agora exige loja de origem para não replicar em todas as lojas
-      setSyncStockDialog({ masterId, storeId: "" });
-      return;
-    }
+  async function syncStock(masterId: string) {
     setSendingTo(masterId);
     try {
-      const { data, error } = await supabase.functions.invoke("sync-master-product-stock", { body: { master_id: masterId, target } });
-      if (error) throw error;
-      const r = data?.result || {};
-      const parts: string[] = [];
-      if (r.pos) parts.push(`PDV: ${r.pos.updated} atualizados em ${r.pos.store_name}`);
-      if (r.shopify) {
-        const s = r.shopify;
-        let txt = `Shopify: ${s.updated || 0} variantes`;
-        if (s.variants_created) txt += ` · ${s.variants_created} novas criadas`;
-        if (s.variants_linked) txt += ` · ${s.variants_linked} vinculadas`;
-        parts.push(txt);
-        const errs: string[] = s.variant_create_errors || [];
-        if (errs.length) toast.error(`Não consegui criar ${errs.length} variação(ões): ${errs[0]}`);
+      // Só envia para a Shopify. Nunca altera o estoque do ERP.
+      const { data, error } = await supabase.functions.invoke("sync-master-product-stock", { body: { master_id: masterId, target: "shopify" } });
+      if (error) {
+        let detail = error.message;
+        try { const b = await (error as any).context?.json?.(); detail = b?.error || detail; } catch { /* keep */ }
+        throw new Error(detail);
       }
-      toast.success("Estoque sincronizado — " + parts.join(" · "));
+      const s = data?.result?.shopify || {};
+      if (s.skipped || s.error) throw new Error(s.skipped || s.error);
+      const errs: string[] = s.variant_create_errors || [];
+      const sem: string[] = s.sem_estoque_no_erp || [];
+      toast.success(
+        `Enviado para a Shopify: ${s.variants_created || 0} criadas · ${s.variants_linked || 0} vinculadas · ${s.updated || 0} atualizadas · ${(s.errors || 0) + errs.length} erros`,
+        { duration: 10000 },
+      );
+      if (errs.length) toast.error(`Não consegui criar ${errs.length} variação(ões): ${errs[0]}`, { duration: 10000 });
+      if (sem.length) toast.warning(
+        `Sem estoque no ERP (enviado 0): ${sem.join(", ")}. Dê entrada desses pares pela tela de etiquetas (Adicionar) ou pela nota.`,
+        { duration: 20000 },
+      );
     } catch (err: any) {
-      toast.error("Erro ao sincronizar estoque: " + err.message);
-    } finally { setSendingTo(null); }
-  }
-
-  async function confirmSyncStockPos() {
-    if (!syncStockDialog?.storeId) { toast.error("Selecione a loja de origem"); return; }
-    const { masterId, storeId } = syncStockDialog;
-    setSyncStockDialog(null);
-    setSendingTo(masterId);
-    try {
-      const { data, error } = await supabase.functions.invoke("sync-master-product-stock", {
-        body: { master_id: masterId, target: "pos", store_id: storeId },
-      });
-      if (error) throw error;
-      const r = data?.result || data || {};
-      toast.success(`PDV: ${r.pos?.updated ?? 0} atualizados em ${r.pos?.store_name ?? "loja"}`);
-    } catch (err: any) {
-      toast.error("Erro ao sincronizar estoque: " + err.message);
+      toast.error("Erro ao enviar para a Shopify: " + err.message);
     } finally { setSendingTo(null); }
   }
 
@@ -742,9 +724,6 @@ export function LegacyProductsList() {
                                 <DropdownMenuItem onClick={() => sendToPos(p.id)}>
                                   <RefreshCw className="h-3.5 w-3.5 mr-2" /> Atualizar dados (nome/preço)
                                 </DropdownMenuItem>
-                                <DropdownMenuItem onClick={() => syncStock(p.id, "pos")}>
-                                  <Boxes className="h-3.5 w-3.5 mr-2" /> Sincronizar estoque
-                                </DropdownMenuItem>
                               </DropdownMenuSubContent>
                             </DropdownMenuPortal>
                           </DropdownMenuSub>
@@ -764,8 +743,8 @@ export function LegacyProductsList() {
                                     <DropdownMenuItem onClick={() => updateShopify(p.id)}>
                                       <RefreshCw className="h-3.5 w-3.5 mr-2" /> Atualizar dados
                                     </DropdownMenuItem>
-                                    <DropdownMenuItem onClick={() => syncStock(p.id, "shopify")}>
-                                      <Boxes className="h-3.5 w-3.5 mr-2" /> Sincronizar estoque
+                                    <DropdownMenuItem onClick={() => syncStock(p.id)}>
+                                      <Boxes className="h-3.5 w-3.5 mr-2" /> Enviar para a Shopify (cria cores/tamanhos novos e envia o saldo atual do ERP)
                                     </DropdownMenuItem>
                                     <DropdownMenuSeparator />
                                     <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => unlinkShopify(p.id)}>
@@ -954,37 +933,6 @@ export function LegacyProductsList() {
         onClose={() => setEditingVariant(null)}
         onSaved={async (masterId) => { setEditingVariant(null); await refreshVariants(masterId); }}
       />
-
-      {/* Diálogo: sincronizar estoque no PDV — exige loja */}
-      <Dialog open={!!syncStockDialog} onOpenChange={(v) => !v && setSyncStockDialog(null)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Sincronizar estoque no PDV</DialogTitle>
-            <DialogDescription>
-              Escolha a loja física que receberá o estoque das variações. As demais lojas não serão tocadas.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-2">
-            <Label>Loja de destino</Label>
-            <select
-              className="w-full border rounded h-9 px-2 bg-background"
-              value={syncStockDialog?.storeId || ""}
-              onChange={(e) => setSyncStockDialog((p) => p ? { ...p, storeId: e.target.value } : p)}
-            >
-              <option value="">Selecione uma loja física...</option>
-              {physicalStores.map((s) => (
-                <option key={s.id} value={s.id}>{s.name}</option>
-              ))}
-            </select>
-          </div>
-          <DialogFooter>
-            <Button variant="ghost" onClick={() => setSyncStockDialog(null)}>Cancelar</Button>
-            <Button onClick={confirmSyncStockPos} disabled={!syncStockDialog?.storeId}>
-              Sincronizar
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
 
       {/* Diálogo: exclusão em massa */}
       <Dialog open={bulkDeleteOpen} onOpenChange={(v) => !bulkDeleting && setBulkDeleteOpen(v)}>

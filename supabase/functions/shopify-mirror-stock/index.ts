@@ -11,6 +11,7 @@ import { withAccessLog } from "../_shared/withAccessLog.ts";
 //
 // Body: { items: [{ barcode?, sku? }], sale_id?, sale_event? }
 
+import { loadRealStoreIds, sumSharedStock } from "../_shared/shopify-shared-stock.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
@@ -122,12 +123,7 @@ Deno.serve(withAccessLog("shopify-mirror-stock", async (req) => {
     const results: any[] = [];
 
     // Somar estoque APENAS das lojas reais (exclui simulações do Gestão > Formação de Margem)
-    const { data: realStores } = await supabase
-      .from("pos_stores")
-      .select("id")
-      .eq("is_active", true)
-      .eq("is_simulation", false);
-    const realStoreIds = (realStores || []).map((s: any) => s.id);
+    const realStoreIds = await loadRealStoreIds(supabase);
 
     for (const [key, v] of variantMap.entries()) {
       try {
@@ -137,12 +133,11 @@ Deno.serve(withAccessLog("shopify-mirror-stock", async (req) => {
         if (barcode && realStoreIds.length > 0) {
           const { data: posRows } = await supabase
             .from("pos_products")
-            .select("stock")
+            .select("store_id, stock")
             .eq("barcode", barcode)
             .in("store_id", realStoreIds);
-          shared = (posRows || []).reduce((acc: number, r: any) => acc + (Number(r.stock) || 0), 0);
+          shared = sumSharedStock(posRows || [], realStoreIds);
         }
-        if (shared < 0) shared = 0;
 
         // inventory_item_id da variante
         const varRes = await fetch(
