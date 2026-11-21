@@ -1898,6 +1898,13 @@
       "when": 1795279069553,
       "tag": "0270_selfservice_late_incomplete_identity",
       "breakpoints": true
+    },
+    {
+      "idx": 271,
+      "version": "7",
+      "when": 1795281723829,
+      "tag": "0271_fast_event_live_repurchase",
+      "breakpoints": true
     }
   ]
 }
