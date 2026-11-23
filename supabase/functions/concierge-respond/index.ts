@@ -11,51 +11,16 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
 };
 
-// ─── Tiny ERP search helpers ─────────────────────────────────────────────────
+// ─── Tiny ERP (desativado; helpers inertes, sem chamadas externas) ─────────────────────────────────────────────────
 
-async function searchTinyContactByCpf(token: string, cpf: string): Promise<{ name: string; id: string } | null> {
-  try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 15000);
-    const resp = await fetch('https://api.tiny.com.br/api2/contatos.pesquisa.php', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: `token=${token}&formato=json&cpf_cnpj=${encodeURIComponent(cpf)}`,
-      signal: controller.signal,
-    });
-    clearTimeout(timeout);
-    const data = JSON.parse(await resp.text());
-    if (data.retorno?.status === 'OK' && data.retorno?.contatos?.length > 0) {
-      const contato = data.retorno.contatos[0].contato;
-      return { name: contato.nome || '', id: String(contato.id || '') };
-    }
-    return null;
-  } catch (e) {
-    console.error('[concierge] Tiny contact search error:', e);
-    return null;
-  }
+async function searchTinyContactByCpf(_token: string, _cpf: string): Promise<{ name: string; id: string } | null> {
+  // Tiny ERP removido: nenhuma consulta externa. O sistema não usa mais o Tiny.
+  return null;
 }
 
 async function searchTinyOrders(token: string, searchTerm: string): Promise<any[]> {
-  try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 15000);
-    const resp = await fetch('https://api.tiny.com.br/api2/pedidos.pesquisa.php', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: `token=${token}&formato=json&pesquisa=${encodeURIComponent(searchTerm)}&sort=DESC`,
-      signal: controller.signal,
-    });
-    clearTimeout(timeout);
-    const data = JSON.parse(await resp.text());
-    if (data.retorno?.status === 'OK' && data.retorno?.pedidos) {
-      return data.retorno.pedidos.map((p: any) => p.pedido).filter(Boolean);
-    }
-    return [];
-  } catch (e) {
-    console.error('[concierge] Tiny search error:', e);
-    return [];
-  }
+  // Tiny ERP removido: nenhuma consulta externa. O sistema não usa mais o Tiny.
+  return [];
 }
 
 function normalizeSearchTerm(raw: string): { normalized: string; digitsOnly: string; isCpf: boolean } {
@@ -224,25 +189,8 @@ function resolveTrackingToolArgs(
 }
 
 async function getTinyOrderDetail(token: string, tinyOrderId: string): Promise<any | null> {
-  try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 15000);
-    const resp = await fetch('https://api.tiny.com.br/api2/pedido.obter.php', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: `token=${token}&formato=json&id=${tinyOrderId}`,
-      signal: controller.signal,
-    });
-    clearTimeout(timeout);
-    const data = JSON.parse(await resp.text());
-    if (data.retorno?.status === 'OK' && data.retorno?.pedido) {
-      return data.retorno.pedido;
-    }
-    return null;
-  } catch (e) {
-    console.error('[concierge] Tiny detail error:', e);
-    return null;
-  }
+  // Tiny ERP removido: nenhuma consulta externa. O sistema não usa mais o Tiny.
+  return null;
 }
 
 async function resolveTinyOrderDetail(token: string, requestedOrderRef: string): Promise<any | null> {
