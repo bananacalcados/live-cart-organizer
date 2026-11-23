@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { isSiteLiveStore, SITE_LIVE_MANUAL_ADJUST_MSG } from "@/lib/pos/siteLiveStore";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -46,6 +47,7 @@ export function MultiStoreBalanceDialog({ open, onOpenChange, productName, varia
 
   const submit = async () => {
     const changed = rows.filter((r) => {
+      if (isSiteLiveStore(r.storeId)) return false;
       const n = Number(values[r.productId]);
       return Number.isFinite(n) && n >= 0 && n !== r.currentStock;
     });
@@ -111,11 +113,17 @@ export function MultiStoreBalanceDialog({ open, onOpenChange, productName, varia
                   min={0}
                   className="w-24 h-10 text-right font-bold"
                   value={values[r.productId] ?? ""}
+                  disabled={isSiteLiveStore(r.storeId)}
+                  title={isSiteLiveStore(r.storeId) ? SITE_LIVE_MANUAL_ADJUST_MSG : undefined}
                   onChange={(e) => setValues((p) => ({ ...p, [r.productId]: e.target.value }))}
                 />
               </div>
             ))}
           </div>
+
+          {rows.some((r) => isSiteLiveStore(r.storeId)) && (
+            <p className="text-xs font-semibold text-muted-foreground">{SITE_LIVE_MANUAL_ADJUST_MSG}</p>
+          )}
 
           <div className="flex items-center justify-between text-sm border-t pt-2">
             <span className="text-muted-foreground">Total atual: <b>{currentTotal}</b></span>

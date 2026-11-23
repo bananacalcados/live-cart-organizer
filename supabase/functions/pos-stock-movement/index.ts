@@ -59,59 +59,51 @@ serve(withAccessLog("pos-stock-movement", async (req) => {
       } catch (_) { /* ignore */ }
     }
 
+    const SITE_LIVE_STORE_ID = "2bd2c08d-321c-47ee-98a9-e27e936818ab";
     const { data: prod, error: prodErr } = await supabase
       .from("pos_products")
-      .select("id, stock, store_id, sku, barcode, name, tiny_id")
+      .select("id, store_id, sku, barcode")
       .eq("id", product_id)
       .maybeSingle();
     if (prodErr) throw prodErr;
     if (!prod) throw new Error("Produto não encontrado");
-
-    const previous = Number(prod.stock || 0);
-    let next: number;
-    let direction: "in" | "out";
-    let deltaQty: number;
-
-    if (movement_type === "entrada") {
-      next = previous + qty;
-      direction = "in";
-      deltaQty = qty;
-    } else if (movement_type === "saida") {
-      next = Math.max(0, previous - qty);
-      direction = "out";
-      deltaQty = qty;
-    } else {
-      // balanço → valor absoluto
-      next = qty;
-      direction = next >= previous ? "in" : "out";
-      deltaQty = Math.abs(next - previous);
+    if (prod.store_id === SITE_LIVE_STORE_ID) {
+      throw new Error("A loja Site/Live fica sempre com saldo zero. Faça o ajuste na Loja Pérola.");
     }
 
-    // 1) Grava histórico ANTES (evita trigger de blindagem duplicar)
-    const { error: adjErr } = await supabase.from("pos_stock_adjustments").insert({
-      store_id: prod.store_id,
-      product_id: prod.id,
-      tiny_id: prod.tiny_id ?? null,
-      sku: prod.sku,
-      barcode: prod.barcode,
-      product_name: prod.name ?? "—",
-      direction,
-      quantity: deltaQty,
-      previous_stock: previous,
-      new_stock: next,
-      reason: reason ?? null,
-      movement_type,
-      user_id: userId,
-      user_name: userName,
-    });
-    if (adjErr) throw adjErr;
+    // Grava SOMENTE pelas funções seguras do banco (trava a linha + histórico antes do saldo).
+    const common = {
+      p_product_id: prod.id,
+      p_reason: reason ?? null,
+      p_seller_id: null,
+      p_seller_name: null,
+      p_user_id: userId,
+      p_user_name: userName,
+    };
+    const { data: rpcRes, error: rpcErr } = movement_type === "balanco"
+      ? await supabase.rpc("pos_stock_balance_to", { ...common, p_target: qty })
+      : await supabase.rpc("pos_stock_move", {
+          ...common,
+          p_direction: movement_type === "entrada" ? "in" : "out",
+          p_quantity: qty,
+        });
+    if (rpcErr) throw rpcErr;
+    const previous = Number((rpcRes as any)?.previous_stock ?? 0);
+    const next = Number((rpcRes as any)?.new_stock ?? 0);
 
-    // 2) Atualiza estoque
-    const { error: updErr } = await supabase
-      .from("pos_products")
-      .update({ stock: next, synced_at: new Date().toISOString() })
-      .eq("id", prod.id);
-    if (updErr) throw updErr;
+    // Espelho Shopify (não há trigger em pos_products): em background, nunca falha o ajuste.
+    if (previous !== next && (prod.barcode || prod.sku)) {
+      const mirror = supabase.functions
+        .invoke("shopify-mirror-stock", {
+          body: {
+            sale_id: null,
+            sale_event: "manual_adjust",
+            items: [{ barcode: prod.barcode || undefined, sku: prod.sku || undefined }],
+          },
+        })
+        .catch((e) => console.error("[pos-stock-movement] mirror error", e));
+      try { (globalThis as any).EdgeRuntime?.waitUntil?.(mirror); } catch (_) { /* ignore */ }
+    }
 
     return new Response(
       JSON.stringify({ success: true, previous_stock: previous, new_stock: next }),

@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Loader2, Trash2, Pencil, Search, PackagePlus } from "lucide-react";
 import { toast } from "sonner";
 import { resolvePosNewCode } from "@/lib/posStockCode";
+import { isSiteLiveStore, SITE_LIVE_MANUAL_ADJUST_MSG } from "@/lib/pos/siteLiveStore";
 
 type SizeQty = { size: string; qty: number };
 interface Template { id: string; name: string; sizes: SizeQty[] }
@@ -209,7 +210,7 @@ function EntryTab({ templates, stores, onGoTemplates, onApplied }: { templates: 
   const [reason, setReason] = useState("");
   const [applying, setApplying] = useState(false);
 
-  useEffect(() => { if (!storeId && stores.length) setStoreId(stores[0].id); }, [stores, storeId]);
+  useEffect(() => { if (!storeId && stores.length) { const first = stores.find((s) => !isSiteLiveStore(s.id)); if (first) setStoreId(first.id); } }, [stores, storeId]);
 
   useEffect(() => {
     const term = search.trim();
@@ -307,7 +308,7 @@ function EntryTab({ templates, stores, onGoTemplates, onApplied }: { templates: 
           <Label>Loja que recebeu</Label>
           <Select value={storeId} onValueChange={setStoreId}>
             <SelectTrigger><SelectValue placeholder="Loja" /></SelectTrigger>
-            <SelectContent>{stores.map((s) => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}</SelectContent>
+            <SelectContent>{stores.filter((s) => !isSiteLiveStore(s.id)).map((s) => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}</SelectContent>
           </Select>
         </div>
         <div className="space-y-1 relative">

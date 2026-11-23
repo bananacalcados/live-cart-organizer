@@ -1,5 +1,6 @@
 import { useEffect, useState, useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { isSiteLiveStore, SITE_LIVE_MANUAL_ADJUST_MSG } from "@/lib/pos/siteLiveStore";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
@@ -1206,6 +1207,7 @@ function PosSkuEditDialog({
     if (!Number.isFinite(qty) || qty < 0) { toast.error("Quantidade inválida"); return; }
     if (moveType !== "balanco" && qty <= 0) { toast.error("Quantidade deve ser maior que zero"); return; }
     if (moveType === "balanco" && !moveReason.trim()) { toast.error("Informe o motivo do balanço"); return; }
+    if (isSiteLiveStore(sku.store_id)) { toast.error(SITE_LIVE_MANUAL_ADJUST_MSG); return; }
 
     setMoving(true);
     try {
@@ -1387,7 +1389,7 @@ function PosSkuEditDialog({
                   />
                 </div>
                 <div className="flex justify-end">
-                  <Button size="sm" onClick={submitMovement} disabled={moving || !moveQty}>
+                  <Button size="sm" onClick={submitMovement} disabled={moving || !moveQty || isSiteLiveStore(sku?.store_id)} title={isSiteLiveStore(sku?.store_id) ? SITE_LIVE_MANUAL_ADJUST_MSG : undefined}>
                     {moving ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Boxes className="h-4 w-4 mr-1" />}
                     Aplicar {MOVE_LABEL[moveType]?.label.toLowerCase()}
                   </Button>

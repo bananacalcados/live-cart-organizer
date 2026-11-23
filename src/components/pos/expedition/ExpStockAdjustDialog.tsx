@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { isSiteLiveStore, SITE_LIVE_MANUAL_ADJUST_MSG } from "@/lib/pos/siteLiveStore";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -61,6 +62,10 @@ export function ExpStockAdjustDialog({ open, onOpenChange, title, rows, onDone }
     const q = Number(qty);
     if (!Number.isFinite(q) || q < 0) {
       toast.error("Quantidade inválida");
+      return;
+    }
+    if (moveType !== "transferencia" && isSiteLiveStore(current.store_id)) {
+      toast.error(SITE_LIVE_MANUAL_ADJUST_MSG);
       return;
     }
     if (moveType !== "balanco" && q <= 0) {
@@ -162,6 +167,10 @@ export function ExpStockAdjustDialog({ open, onOpenChange, title, rows, onDone }
                 </SelectContent>
               </Select>
             </div>
+          )}
+
+          {moveType !== "transferencia" && isSiteLiveStore(current?.store_id) && (
+            <p className="text-sm font-bold text-destructive">{SITE_LIVE_MANUAL_ADJUST_MSG}</p>
           )}
 
           <div>
