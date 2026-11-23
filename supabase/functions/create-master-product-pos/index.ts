@@ -1,6 +1,7 @@
 import { withAccessLog } from "../_shared/withAccessLog.ts";
 import { requireStaffOrInternal } from "../_shared/staff-or-internal.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { initialStockFor, resolveStockStore } from "./stockEntry.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -89,7 +90,9 @@ Deno.serve(withAccessLog("create-master-product-pos", async (req) => {
       .eq("is_simulation", false)
       .order("name");
     const targetStoreIds: string[] = (stores || []).map((s: any) => s.id);
-    const stockStoreId: string | null = store_id || null;
+    // Site/Live fica sempre zerada: entrada vai para a Loja Pérola.
+    const stockStoreId: string | null = resolveStockStore(store_id || null);
+    let existingUnchanged = 0;
 
     if (targetStoreIds.length === 0) {
       return new Response(JSON.stringify({ error: "Nenhuma loja PDV cadastrada" }), {
@@ -127,7 +130,7 @@ Deno.serve(withAccessLog("create-master-product-pos", async (req) => {
         // Lookup existing by barcode in this store
         const { data: existing } = await supabase
           .from("pos_products")
-          .select("id, stock")
+          .select("id")
           .eq("store_id", targetStoreId)
           .eq("barcode", v.gtin)
           .maybeSingle();
@@ -144,10 +147,8 @@ Deno.serve(withAccessLog("create-master-product-pos", async (req) => {
             price: sale,
             is_active: true,
           };
-          // NF-e adiciona ao estoque existente APENAS na loja escolhida.
-          if (isStockStore) {
-            updatePayload.stock = (Number(existing.stock) || 0) + entryStock;
-          }
+          // Linha já existia: só dados cadastrais; estoque NUNCA é alterado aqui (evita somar duas vezes).
+          if (isStockStore && entryStock > 0) existingUnchanged++;
           const { error: upErr } = await supabase
             .from("pos_products")
             .update(updatePayload)
@@ -159,7 +160,7 @@ Deno.serve(withAccessLog("create-master-product-pos", async (req) => {
             updated++;
           }
         } else {
-          const { error: insErr } = await supabase
+          const { data: newRow, error: insErr } = await supabase
             .from("pos_products")
             .insert({
               store_id: targetStoreId,
@@ -172,15 +173,33 @@ Deno.serve(withAccessLog("create-master-product-pos", async (req) => {
               variant: vVariant,
               cost_price: cost,
               price: sale,
-              stock: entryStock, // NF-e: estoque inicial; demais fluxos: 0
+              stock: initialStockFor(false, entryStock) ?? 0, // só na criação
               is_active: true,
-            });
+            })
+            .select("id")
+            .single();
           if (insErr) {
             console.error(`[${store?.name}] insert error:`, insErr);
             errors++;
           } else {
             inserted++;
             totalInserted++;
+            if (entryStock > 0 && newRow?.id) {
+              const { error: adjErr } = await supabase.from("pos_stock_adjustments").insert({
+                store_id: targetStoreId,
+                product_id: newRow.id,
+                sku: v.sku,
+                barcode: v.gtin,
+                product_name: skuName,
+                direction: "in",
+                quantity: entryStock,
+                previous_stock: 0,
+                new_stock: entryStock,
+                movement_type: "entrada",
+                reason: "Entrada inicial do cadastro do produto",
+              });
+              if (adjErr) console.error(`[${store?.name}] adjustment error:`, adjErr);
+            }
           }
         }
       }
@@ -208,6 +227,7 @@ Deno.serve(withAccessLog("create-master-product-pos", async (req) => {
         success: true,
         message: `${totalVariants} variações sincronizadas em ${perStoreResults.length} loja(s) (${totalInserted} novas, ${totalUpdated} atualizadas)`,
         stores: perStoreResults,
+        existing_unchanged: existingUnchanged,
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );

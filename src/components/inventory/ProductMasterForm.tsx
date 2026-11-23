@@ -283,7 +283,7 @@ export function ProductMasterForm({ open, onOpenChange, onCreated, initial, init
 
       // Empurra ao PDV / catálogo unificado já com o estoque inicial na loja escolhida.
       // Envio SEMPRE obrigatório — replica em todas as lojas ativas (estoque zero nas outras).
-      const { error: posErr } = await supabase.functions.invoke("create-master-product-pos", {
+      const { data: posData, error: posErr } = await supabase.functions.invoke("create-master-product-pos", {
         body: { master_id: masterId, store_id: stockStoreId, stock_from_variants: true },
       });
       if (posErr) {
@@ -291,6 +291,10 @@ export function ProductMasterForm({ open, onOpenChange, onCreated, initial, init
       } else {
         const storeName = stores.find((s) => s.id === stockStoreId)?.name || "loja";
         toast.success(`Produto criado e estoque lançado em ${storeName}!`);
+        const unchanged = Number(posData?.existing_unchanged) || 0;
+        if (unchanged > 0) {
+          toast.warning(`${unchanged} numerações já existiam: estoque não alterado; use a tela de etiquetas (Adicionar) para dar entrada.`, { duration: 10000 });
+        }
       }
 
       onCreated?.(masterId);
