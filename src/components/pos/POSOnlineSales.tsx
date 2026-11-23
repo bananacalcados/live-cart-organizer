@@ -537,21 +537,7 @@ export function POSOnlineSales({ storeId, sellers }: Props) {
       // Tiny order creation is now MANUAL ONLY (via the "Enviar/Reenviar ao Tiny" button).
       // The online sale is already saved locally above; no automatic Tiny push.
 
-      // Transfer stock: source store -> Site
-      for (const item of cart) {
-        if (!item.sku) continue;
-        try {
-          await supabase.functions.invoke("expedition-transfer-stock", {
-            body: {
-              sku: item.sku,
-              source_store_id: stockStore,
-              quantity: item.quantity,
-            },
-          });
-        } catch (e) {
-          console.error(`Stock transfer failed for ${item.sku}:`, e);
-        }
-      }
+      // Transferência de estoque para Site desativada: venda online baixa direto da Loja Pérola no banco.
 
       toast.success(gateway === "pickup" ? "Retirada na loja registrada!" : gateway === "delivery" ? "Venda registrada!" : "Link gerado com sucesso!");
     } catch (e: any) {

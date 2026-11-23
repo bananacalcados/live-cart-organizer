@@ -182,50 +182,9 @@ export function ExpeditionPackingStation({ orders, searchTerm, onRefresh }: Prop
     fetchStock();
   }, [selectedGroupKey]);
 
-  const transferStockIfNeeded = useCallback(async (item: any) => {
-    const sku = item.sku;
-    if (!sku) return;
-    const locations = stockMap[sku];
-    if (!locations) return;
-    const siteLoc = locations.find(l => l.depositName === 'Site');
-    if ((siteLoc?.stock || 0) > 0) return;
-    const source = locations.find(l => l.depositName !== 'Site' && l.stock > 0);
-    if (!source) return;
-
-    const logEntry: TransferLog = { itemId: item.id, sku, from: source.depositName, to: 'Site', status: 'pending' };
-    setTransferLogs(prev => [...prev, logEntry]);
-    setTransferring(true);
-
-    try {
-      const { data, error } = await supabase.functions.invoke('expedition-transfer-stock', {
-        body: { sku, source_store_id: source.storeId, quantity: 1 },
-      });
-      if (error || !data?.success) {
-        const errMsg = data?.error || error?.message || 'Erro desconhecido';
-        setTransferLogs(prev => prev.map(l => l.itemId === item.id ? { ...l, status: 'error', message: errMsg } : l));
-        toast.error(`Falha na transferência: ${errMsg}`);
-      } else {
-        setTransferLogs(prev => prev.map(l => l.itemId === item.id ? { ...l, status: 'success', message: `${source.depositName} → Site ✓` } : l));
-        toast.success(`Estoque transferido: ${source.depositName} → Site (${item.product_name})`);
-        setStockMap(prev => {
-          const updated = { ...prev };
-          if (updated[sku]) {
-            updated[sku] = updated[sku].map(l => {
-              if (l.storeId === source.storeId) return { ...l, stock: l.stock - 1 };
-              if (l.depositName === 'Site') return { ...l, stock: l.stock + 1 };
-              return l;
-            });
-          }
-          return updated;
-        });
-      }
-    } catch (e: any) {
-      setTransferLogs(prev => prev.map(l => l.itemId === item.id ? { ...l, status: 'error', message: e.message } : l));
-      toast.error(`Erro na transferência: ${e.message}`);
-    } finally {
-      setTransferring(false);
-    }
-  }, [stockMap]);
+  // Transferência para o depósito Site desativada (23/11/2026): venda online/live
+  // baixa direto da Loja Pérola no banco. Mantido como no-op para não mudar o fluxo de bipagem.
+  const transferStockIfNeeded = useCallback(async (_item: any) => {}, []);
 
   const handleBarcodeScan = useCallback(async (barcode: string) => {
     if (!selectedGroup || !barcode.trim()) return;
