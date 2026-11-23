@@ -18,6 +18,7 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { ExchangeInProgressCard } from "./ExchangeInProgressCard";
 import { finalizeExchange, type ConferItemInput } from "@/lib/pos/finalizeExchange";
+import { initialExchangeResolution } from "@/lib/pos/exchangeResolution";
 import { loadExchangeNfes } from "@/lib/pos/exchangeNfe";
 import { WhatsAppNumberSelector } from "@/components/WhatsAppNumberSelector";
 import { useWhatsAppNumberStore } from "@/stores/whatsappNumberStore";
@@ -88,7 +89,7 @@ export function FinalizeExchangePicker({ open, sellerId, sellerName, onCancel, o
   const [loadingItems, setLoadingItems] = useState(false);
   const [saving, setSaving] = useState(false);
   // Fase 6: resolução da diferença a favor do cliente
-  const [resolucao, setResolucao] = useState<"voucher" | "estorno_financeiro">("estorno_financeiro");
+  const [resolucao, setResolucao] = useState<"voucher" | "estorno_financeiro">(() => initialExchangeResolution("devolucao"));
   const [estornoForma, setEstornoForma] = useState<"pix" | "cartao" | "dinheiro">("pix");
 
   // Wizard: NF-e da reposição + rastreio
@@ -110,7 +111,7 @@ export function FinalizeExchangePicker({ open, sellerId, sellerName, onCancel, o
     if (open) {
       setPhase("list"); setSearch(""); setSelected(null);
       setDevolvidos([]); setReposicoes([]);
-      setResolucao("estorno_financeiro"); setEstornoForma("pix");
+      setResolucao(initialExchangeResolution("devolucao")); setEstornoForma("pix");
       setPosSaleId(null); setCustomerId(null); setShipCustomer(EMPTY_CUSTOMER);
       setNfeDoc(null); setNfeObs(""); setTrackingCode(""); setTrackingCarrier("");
       setWaNumberId(null); setWaMessage("");
@@ -224,6 +225,7 @@ export function FinalizeExchangePicker({ open, sellerId, sellerName, onCancel, o
   const selectEvent = async (ev: EventRow) => {
     setLoadingItems(true);
     setSelected(ev);
+    setResolucao(initialExchangeResolution(ev.tipo, ev.resolucao_diferenca));
     try {
       const { data, error } = await supabase
         .from("trocas_devolucoes_itens")

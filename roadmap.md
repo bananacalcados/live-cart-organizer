@@ -49,3 +49,8 @@
 - [x] Mostrar voucher disponível e permitir aplicar o desconto nos modais do PDV e da live
 - [x] Aplicar voucher na live com validação e baixa transacional de uso único no servidor
 - [x] Impedir reutilização, preservar cashback/regras de pagamento e testar sem cobrança real
+
+# Ressarcimento padrão na devolução
+- [x] Devolução sem escolha começa com estorno; troca mantém o comportamento atual
+- [x] Respeitar voucher/estorno já salvo, inclusive após converter troca em devolução
+- [x] Testar a regra e conferir a prévia sem finalizar registros reais

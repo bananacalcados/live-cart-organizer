@@ -3,7 +3,7 @@
 // voucher, estorno, venda-espelho já implementados).
 // Extras deste fluxo:
 //  • Se diferença a favor da loja → cliente paga na hora (registra cash_flow IN).
-//  • Se diferença a favor do cliente → voucher (padrão) ou estorno financeiro.
+//  • Se diferença a favor do cliente → estorno financeiro (padrão) ou voucher.
 //  • Redenção de voucher existente também descontada da diferença a pagar.
 //  • Se o pedido original não tem NF → segue sem emitir devolução fiscal.
 
@@ -27,6 +27,7 @@ import {
   type ExchangeItemInput, type ReposicaoItemInput,
 } from "@/lib/pos/newExchange";
 import { finalizeExchange, type ConferItemInput } from "@/lib/pos/finalizeExchange";
+import { initialExchangeResolution } from "@/lib/pos/exchangeResolution";
 import type { Database } from "@/integrations/supabase/types";
 
 type TdMotivo = Database["public"]["Enums"]["td_motivo"];
@@ -131,7 +132,7 @@ export function PresentialExchangePicker({ open, sellerId, sellerName, initialSa
   const [repos, setRepos] = useState<ReposRow[]>([]);
 
   // Resolução de diferença
-  const [creditoResolucao, setCreditoResolucao] = useState<"voucher" | "estorno_financeiro">("estorno_financeiro");
+  const [creditoResolucao, setCreditoResolucao] = useState<"voucher" | "estorno_financeiro">(() => initialExchangeResolution("devolucao"));
   const [estornoForma, setEstornoForma] = useState<"pix" | "cartao" | "dinheiro">("pix");
   const [pagForma, setPagForma] = useState<typeof PAY_METHODS[number]["value"]>("pix");
 
@@ -149,7 +150,7 @@ export function PresentialExchangePicker({ open, sellerId, sellerName, initialSa
       setPhase("store"); setStoreId(""); setSales([]); setPage(0);
       setSearch(""); setDebounced(""); setSale(null); setChaveOriginal(null);
       setCustomer(null); setItems([]); setMotivo(""); setRepos([]);
-      setCreditoResolucao("estorno_financeiro"); setEstornoForma("pix"); setPagForma("pix");
+      setCreditoResolucao(initialExchangeResolution("devolucao")); setEstornoForma("pix"); setPagForma("pix");
       setVoucherCodigo(""); setVoucherAplicado(null);
     }
   }, [open]);
