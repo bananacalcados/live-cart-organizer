@@ -164,7 +164,7 @@ interface Props {
   showLabelOnOpen?: boolean;
 }
 
-export function POSSaleDetailDialog({ sale, onClose, customer, items, sellerName, sellers, onResend, resending, isTinyOnly, storeId, onDeleted, showLabelOnOpen }: Props) {
+export function POSSaleDetailDialog({ sale, onClose, customer, items, sellerName, sellers, isTinyOnly, storeId, onDeleted, showLabelOnOpen }: Props) {
   const [showCorreiosLabel, setShowCorreiosLabel] = useState(false);
   // Só consulta o envio quando a pessoa abre esta seção (ou chega nela pelo botão da lista).
   useEffect(() => { setShowCorreiosLabel(Boolean(sale && showLabelOnOpen)); }, [sale?.id, showLabelOnOpen]);
@@ -185,11 +185,9 @@ export function POSSaleDetailDialog({ sale, onClose, customer, items, sellerName
   const [editingSeller, setEditingSeller] = useState(false);
   const [selectedSellerId, setSelectedSellerId] = useState("");
   const [savingSeller, setSavingSeller] = useState(false);
-  const [cancelingTiny, setCancelingTiny] = useState(false);
   const [editingTotal, setEditingTotal] = useState(false);
   const [editTotalValue, setEditTotalValue] = useState("");
   const [savingTotal, setSavingTotal] = useState(false);
-  const [deletingTinyOnly, setDeletingTinyOnly] = useState(false);
   const [markingPaid, setMarkingPaid] = useState(false);
   const [showAddProduct, setShowAddProduct] = useState(false);
   const [addingProduct, setAddingProduct] = useState(false);
@@ -646,46 +644,6 @@ export function POSSaleDetailDialog({ sale, onClose, customer, items, sellerName
     }
   };
 
-  const handleCancelTinyAndResend = async () => {
-    if (!sale || !storeId || !sale.tiny_order_id) return;
-    setCancelingTiny(true);
-    try {
-      // 1. Cancel existing Tiny order
-      const delResp = await fetch(`${SUPABASE_URL}/functions/v1/pos-tiny-delete-sale`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          apikey: SUPABASE_KEY,
-          Authorization: `Bearer ${SUPABASE_KEY}`,
-        },
-        body: JSON.stringify({ store_id: storeId, sale_id: sale.id, cancel_tiny_only: true }),
-      });
-      const delData = await delResp.json();
-      if (!delData.success) {
-        toast.error(delData.error || "Erro ao cancelar pedido no Tiny");
-        return;
-      }
-
-      // 2. Clear tiny references locally
-      await supabase
-        .from('pos_sales')
-        .update({ tiny_order_id: null, tiny_order_number: null, status: 'pending_sync' } as any)
-        .eq('id', sale.id);
-
-      toast.success("Pedido cancelado no Tiny! Reenviando...");
-
-      // 3. Resend
-      if (onResend) {
-        onResend({ ...sale, tiny_order_id: null, tiny_order_number: null });
-      }
-    } catch (e) {
-      console.error(e);
-      toast.error("Erro ao cancelar/reenviar");
-    } finally {
-      setCancelingTiny(false);
-    }
-  };
-
   const handleSaveTotal = async () => {
     if (!sale) return;
     const newTotal = parseFloat(editTotalValue);
@@ -700,32 +658,6 @@ export function POSSaleDetailDialog({ sale, onClose, customer, items, sellerName
       toast.error("Erro ao alterar valor");
     } finally {
       setSavingTotal(false);
-    }
-  };
-
-  const handleDeleteTinyOnly = async () => {
-    if (!sale || !storeId || !sale.tiny_order_id) return;
-    if (!confirm("Excluir este pedido do Tiny ERP? O pedido local será mantido.")) return;
-    setDeletingTinyOnly(true);
-    try {
-      const resp = await fetch(`${SUPABASE_URL}/functions/v1/pos-tiny-delete-sale`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` },
-        body: JSON.stringify({ store_id: storeId, sale_id: sale.id, cancel_tiny_only: true }),
-      });
-      const data = await resp.json();
-      if (data.success) {
-        await supabase.from('pos_sales').update({ tiny_order_id: null, tiny_order_number: null, status: 'pending_sync' } as any).eq('id', sale.id);
-        toast.success("Pedido excluído do Tiny!");
-        onDeleted?.();
-        onClose();
-      } else {
-        toast.error(data.error || "Erro ao excluir do Tiny");
-      }
-    } catch {
-      toast.error("Erro ao excluir do Tiny");
-    } finally {
-      setDeletingTinyOnly(false);
     }
   };
 
@@ -1859,43 +1791,6 @@ export function POSSaleDetailDialog({ sale, onClose, customer, items, sellerName
 
             {/* Action Buttons */}
             <div className="space-y-2">
-              {onResend && (
-                <Button
-                  className="w-full gap-2 bg-orange-500 text-white hover:bg-orange-600 font-bold h-11 text-sm shadow-md"
-                  onClick={() => onResend(sale)}
-                  disabled={resending || cancelingTiny}
-                >
-                  {resending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-                  {sale.tiny_order_id ? "Reenviar ao Tiny" : "Enviar ao Tiny"}
-                </Button>
-              )}
-
-              {/* Cancel Tiny order and resend with updated data */}
-              {onResend && sale.tiny_order_id && !isTinyOnly && storeId && (
-                <Button
-                  variant="outline"
-                  className="w-full gap-2 font-bold h-11 text-sm border-amber-400 text-amber-700 hover:bg-amber-50"
-                  onClick={handleCancelTinyAndResend}
-                  disabled={cancelingTiny || resending}
-                >
-                  {cancelingTiny ? <Loader2 className="h-4 w-4 animate-spin" /> : <RotateCcw className="h-4 w-4" />}
-                  Cancelar no Tiny e Reenviar
-                </Button>
-              )}
-
-              {/* Delete from Tiny only */}
-              {sale.tiny_order_id && !isTinyOnly && storeId && (
-                <Button
-                  variant="outline"
-                  className="w-full gap-2 font-bold h-11 text-sm border-orange-300 text-orange-600 hover:bg-orange-50"
-                  onClick={handleDeleteTinyOnly}
-                  disabled={deletingTinyOnly || cancelingTiny}
-                >
-                  {deletingTinyOnly ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
-                  Excluir do Tiny
-                </Button>
-              )}
-
               {/* Delete button - only for local sales, not tiny-only */}
               {!isTinyOnly && storeId && (
                 <Button
@@ -1911,7 +1806,7 @@ export function POSSaleDetailDialog({ sale, onClose, customer, items, sellerName
                   ) : (
                     <Trash2 className="h-4 w-4" />
                   )}
-                  {deleting ? "Excluindo..." : confirmDelete ? "Confirmar exclusão (cancela NFC-e e pedido Tiny)" : "Excluir Venda"}
+                  {deleting ? "Excluindo..." : confirmDelete ? "Confirmar exclusão" : "Excluir Venda"}
                 </Button>
               )}
             </div>

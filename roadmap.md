@@ -1,7 +1,7 @@
 # Remoção do Tiny — Fase 2, primeiro lote
 - [x] Item 1: retirar Tiny da exclusão do PDV, manter devolução única e classificar ajustes; testar, implantar e commitar
 - [x] Item 2: validar lista guardada e vendas recentes; usar somente formas locais; testar, implantar e commitar
-- [ ] Item 3: retirar ações Tiny do detalhe da venda, preservar exclusão normal; testar e commitar
+- [x] Item 3: retirar ações Tiny do detalhe da venda, preservar exclusão normal; testar e commitar
 - [ ] Conferir prévia e registros finais, sem vendas reais nem publicação
 
 # Fase 3 do estoque — Inventário
