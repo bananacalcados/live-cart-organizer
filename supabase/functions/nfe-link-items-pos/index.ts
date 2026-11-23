@@ -1,6 +1,7 @@
 import { withAccessLog } from "../_shared/withAccessLog.ts";
 import { requireStaffOrInternal } from "../_shared/staff-or-internal.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { alreadyEntered, entryReason } from "./entryGuard.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -71,7 +72,7 @@ Deno.serve(withAccessLog("nfe-link-items-pos", async (req) => {
     // Linhas da NF a vincular
     const { data: items, error: itErr } = await supabase
       .from("purchase_invoice_items")
-      .select("id, description, ncm, quantity, unit_cost, ean, parsed_color, parsed_size")
+      .select("id, invoice_id, line_number, linked_at, description, ncm, quantity, unit_cost, ean, parsed_color, parsed_size")
       .in("id", item_ids);
     if (itErr) throw itErr;
     if (!items || items.length === 0) throw new Error("Linhas da NF não encontradas.");
@@ -108,6 +109,25 @@ Deno.serve(withAccessLog("nfe-link-items-pos", async (req) => {
       );
     }
 
+
+    // ===== Idempotência: cada item da nota só dá entrada de estoque UMA vez =====
+    const invoiceIds = [...new Set(items.map((i: any) => i.invoice_id).filter(Boolean))];
+    const { data: invs } = invoiceIds.length
+      ? await supabase.from("purchase_invoices").select("id, invoice_number, nfe_key").in("id", invoiceIds)
+      : { data: [] as any[] };
+    const invMap = new Map((invs || []).map((x: any) => [x.id, x]));
+    const reasonByItem = new Map<string, string>();
+    for (const it of items as any[]) reasonByItem.set(it.id, entryReason(invMap.get(it.invoice_id), it));
+    const { data: prevAdj } = await supabase
+      .from("pos_stock_adjustments")
+      .select("reason")
+      .eq("movement_type", "entrada")
+      .in("reason", [...reasonByItem.values()]);
+    const existingReasons = new Set<string>((prevAdj || []).map((r: any) => r.reason));
+    const skippedItems = new Set<string>();
+    for (const it of items as any[]) {
+      if (alreadyEntered(it, reasonByItem.get(it.id)!, existingReasons)) skippedItems.add(it.id);
+    }
 
     // Produto pai existente (qualquer linha desse parent_sku serve de modelo)
     const { data: template, error: tplErr } = await supabase
@@ -148,7 +168,8 @@ Deno.serve(withAccessLog("nfe-link-items-pos", async (req) => {
         const varName = `${baseName} - ${color} ${size}`.trim().replace(/\s+/g, " ");
         const barcode = (it.ean && /^\d{8,14}$/.test(it.ean)) ? it.ean : generateEan13();
         const cost = Number(it.unit_cost) || template.cost_price || 0;
-        const entryStock = isStockStore ? (Number(it.quantity) || 0) : 0;
+        const entryStock = isStockStore && !skippedItems.has(it.id) ? (Number(it.quantity) || 0) : 0;
+        const reason = reasonByItem.get(it.id)!;
 
         // Procura variação existente: primeiro por barcode, depois por parent_sku+cor+tamanho
         let existing: { id: string; stock: number } | null = null;
@@ -183,12 +204,22 @@ Deno.serve(withAccessLog("nfe-link-items-pos", async (req) => {
             cost_price: cost,
             is_active: true,
           };
-          if (isStockStore) patch.stock = (Number(existing.stock) || 0) + entryStock;
+          if (isStockStore && entryStock > 0) {
+            const prev = Number(existing.stock) || 0;
+            // Ajuste registrado ANTES do update de estoque.
+            const { error: adjErr } = await supabase.from("pos_stock_adjustments").insert({
+              store_id: store.id, product_id: existing.id, barcode, product_name: varName,
+              direction: "in", quantity: entryStock, previous_stock: prev, new_stock: prev + entryStock,
+              movement_type: "entrada", reason,
+            });
+            if (adjErr) { console.error(`[${store.name}] adjustment:`, adjErr.message); errors++; continue; }
+            patch.stock = prev + entryStock;
+          }
           const { error: upErr } = await supabase.from("pos_products").update(patch).eq("id", existing.id);
           if (upErr) { console.error(`[${store.name}] update:`, upErr.message); errors++; } else updated++;
         } else {
           const sku = `${parent_sku}-${normalizeColorForSku(color)}-${size || "U"}-${++usedSeq}`;
-          const { error: insErr } = await supabase.from("pos_products").insert({
+          const { data: newRow, error: insErr } = await supabase.from("pos_products").insert({
             store_id: store.id,
             name: varName,
             sku,
@@ -207,8 +238,18 @@ Deno.serve(withAccessLog("nfe-link-items-pos", async (req) => {
             price: template.price || 0,
             stock: entryStock,
             is_active: true,
-          });
-          if (insErr) { console.error(`[${store.name}] insert:`, insErr.message); errors++; } else inserted++;
+          }).select("id").single();
+          if (insErr) { console.error(`[${store.name}] insert:`, insErr.message); errors++; } else {
+            inserted++;
+            if (entryStock > 0 && newRow?.id) {
+              const { error: adjErr } = await supabase.from("pos_stock_adjustments").insert({
+                store_id: store.id, product_id: newRow.id, sku, barcode, product_name: varName,
+                direction: "in", quantity: entryStock, previous_stock: 0, new_stock: entryStock,
+                movement_type: "entrada", reason,
+              });
+              if (adjErr) console.error(`[${store.name}] adjustment:`, adjErr.message);
+            }
+          }
         }
       }
 
@@ -298,7 +339,9 @@ Deno.serve(withAccessLog("nfe-link-items-pos", async (req) => {
     return new Response(
       JSON.stringify({
         success: true,
-        message: `${items.length} linha(s) vinculada(s) ao pai ${parent_sku}. Estoque lançado em ${storeName} (${totalInserted} novas variações, ${totalUpdated} atualizadas).`,
+        message: `${items.length} linha(s) vinculada(s) ao pai ${parent_sku}. Estoque lançado em ${storeName} (${totalInserted} novas variações, ${totalUpdated} atualizadas).` +
+          (skippedItems.size > 0 ? ` ${skippedItems.size} item(ns) desta nota já tinham dado entrada antes: estoque NÃO somado de novo.` : ""),
+        already_entered: skippedItems.size,
         stores: perStore,
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } },

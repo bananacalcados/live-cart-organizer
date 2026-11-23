@@ -268,7 +268,11 @@ export function NfeDetailEditor({
       });
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
-      toast.success(data?.message || "Linhas vinculadas e estoque lançado.");
+      if (Number(data?.already_entered) > 0) {
+        toast.warning(data?.message || "Itens desta nota já tinham dado entrada: estoque não somado de novo.", { duration: 10000 });
+      } else {
+        toast.success(data?.message || "Linhas vinculadas e estoque lançado.");
+      }
       setLinkPreview(null);
       setShowSearch(false);
       setSelectedIds(new Set());
