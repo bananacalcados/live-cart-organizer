@@ -212,6 +212,8 @@ Deno.serve(withAccessLog("nfe-devolucao-emitir", async (req) => {
       .select("chave_acesso, modelo, company_id")
       .eq("pos_sale_id", pedidoOriginalId)
       .eq("status", "authorized")
+      // Só nota de SAÍDA: a nota de devolução anterior (entrada) também fica ligada à venda e nunca pode virar "original".
+      .eq("tipo_operacao", "saida")
       .not("chave_acesso", "is", null)
       .in("modelo", [55, 65])
       .order("created_at", { ascending: false })
@@ -220,7 +222,7 @@ Deno.serve(withAccessLog("nfe-devolucao-emitir", async (req) => {
     if (chaveOriginal && origDoc && digits((origDoc as any).chave_acesso) !== chaveOriginal) {
       // A chave gravada no evento só vale se for de nota AUTORIZADA (TD-027 apontava para uma rejeitada).
       const { data: evtKeyDoc } = await supabase.from("fiscal_documents").select("id")
-        .eq("chave_acesso", chaveOriginal).eq("status", "authorized").limit(1).maybeSingle();
+        .eq("chave_acesso", chaveOriginal).eq("status", "authorized").eq("tipo_operacao", "saida").limit(1).maybeSingle();
       if (!evtKeyDoc) chaveOriginal = digits((origDoc as any).chave_acesso);
     }
     if (origDoc) {
