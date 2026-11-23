@@ -14,6 +14,24 @@ export type Database = {
   }
   public: {
     Tables: {
+      _backup_function_defs: {
+        Row: {
+          def: string | null
+          name: string | null
+          saved_at: string | null
+        }
+        Insert: {
+          def?: string | null
+          name?: string | null
+          saved_at?: string | null
+        }
+        Update: {
+          def?: string | null
+          name?: string | null
+          saved_at?: string | null
+        }
+        Relationships: []
+      }
       _legacy_livete_followups: {
         Row: {
           completed_at: string | null
