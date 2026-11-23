@@ -46,3 +46,8 @@ export function canSwapReplacement(
 export function canConvertToReturn(e: { tipo: string; status: string; voucher_id?: string | null; gateway_refund_id?: string | null }) {
   return e.tipo === "troca" && canCancelExchange(e);
 }
+
+/** "Converter em troca": devolução aberta, sem voucher/estorno (servidor confere estorno pedido). */
+export function canConvertToExchange(e: { tipo: string; status: string; voucher_id?: string | null; gateway_refund_id?: string | null }) {
+  return e.tipo === "devolucao" && canCancelExchange(e);
+}

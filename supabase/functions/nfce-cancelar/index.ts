@@ -59,33 +59,30 @@ Deno.serve(withAccessLog("nfce-cancelar", async (req) => {
     if (!company?.brasilnfe_token) throw new Error("Empresa sem token BrasilNFe");
 
     const tipoAmbiente = doc.ambiente === "producao" ? 1 : 2;
-    const endpoint = doc.modelo === 65 ? "/nfce/cancelar" : "/nfe/cancelar";
-
-    const payload = {
-      TipoAmbiente: String(tipoAmbiente),
-      ChaveAcesso: doc.chave_acesso,
-      Justificativa: just,
-      CnpjEmissor: (company.cnpj || "").replace(/\D/g, ""),
-    };
+    // Endpoint oficial BrasilNFe (o antigo /nfe/cancelar não existe e voltava vazio).
+    const endpoint = "/Fiscal/CancelarNotaFiscal";
+    const payload = { ChaveNF: doc.chave_acesso, Justificativa: just, TipoAmbiente: tipoAmbiente };
 
     const resp = await fetch(`${BRASILNFE_BASE}${endpoint}`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "Authorization": `Bearer ${company.brasilnfe_token}`,
+        "Token": company.brasilnfe_token,
       },
       body: JSON.stringify(payload),
+      signal: AbortSignal.timeout(45000),
     });
     const respBody = await resp.json().catch(() => ({}));
 
-    const ok = resp.ok && (respBody?.Sucesso === true || respBody?.Status === "cancelado" || respBody?.CodigoStatus === 135 || respBody?.CodigoStatus === 101);
+    const cst = Number(respBody?.CodStatusRespostaSefaz);
+    const ok = resp.ok && (respBody?.Status === 1 || [101, 135, 155].includes(cst));
 
     if (ok) {
       await supabase.from("fiscal_documents").update({
         status: "cancelled",
         cancelled_at: new Date().toISOString(),
         cancellation_reason: just,
-        cancellation_protocol: respBody?.Protocolo || respBody?.NumeroProtocolo || null,
+        cancellation_protocol: respBody?.NuProtocolo || respBody?.Protocolo || null,
         cancellation_xml: respBody?.Xml || respBody?.XmlEvento || null,
       }).eq("id", fiscal_document_id);
 
@@ -97,7 +94,7 @@ Deno.serve(withAccessLog("nfce-cancelar", async (req) => {
     // Falha — registra mensagem mas não marca como cancelada
     return new Response(JSON.stringify({
       ok: false,
-      error: respBody?.Mensagem || respBody?.Erro || "Falha no cancelamento",
+      error: respBody?.Error || respBody?.DsMotivo || respBody?.Mensagem || `Falha no cancelamento (HTTP ${resp.status})`,
       response: respBody,
     }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
   } catch (e: any) {

@@ -8,8 +8,9 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { POSTinyProductPicker } from "./POSTinyProductPicker";
 import { ConvertExchangeToReturnDialog } from "./ConvertExchangeToReturnDialog";
+import { ConvertReturnToExchangeDialog } from "./ConvertReturnToExchangeDialog";
 import { invalidateExchangeRegistry } from "@/hooks/useExchangeRegistry";
-import { canAddReplacement, canSwapReplacement, canCancelExchange, canConvertToReturn, isPostingOverdue, OPEN_EXCHANGE_STATUSES, exchangeDifference, differenceLinkTotal } from "@/lib/pos/exchangeInProgress";
+import { canAddReplacement, canSwapReplacement, canCancelExchange, canConvertToReturn, canConvertToExchange, isPostingOverdue, OPEN_EXCHANGE_STATUSES, exchangeDifference, differenceLinkTotal } from "@/lib/pos/exchangeInProgress";
 
 const SITE_STORE_ID = "2bd2c08d-321c-47ee-98a9-e27e936818ab";
 const PEROLA_STORE_ID = "4ade7b44-5043-4ab1-a124-7a6ab5468e29";
@@ -31,6 +32,7 @@ export function ExchangeInProgressCard({ saleId, onChanged }: { saleId: string; 
   const [swapMotivo, setSwapMotivo] = useState("");
   const [cancelFor, setCancelFor] = useState<Ex | null>(null);
   const [convertFor, setConvertFor] = useState<Ex | null>(null);
+  const [toExchangeFor, setToExchangeFor] = useState<Ex | null>(null);
   const [picks, setPicks] = useState<Pick[]>([]);
   const [motivo, setMotivo] = useState("");
   const [saving, setSaving] = useState(false);
@@ -45,7 +47,7 @@ export function ExchangeInProgressCard({ saleId, onChanged }: { saleId: string; 
   const load = useCallback(async () => {
     const { data } = await supabase.from("trocas_devolucoes")
       .select("id, codigo_devolucao, tipo, status, pedido_novo_id, voucher_id, gateway_refund_id, created_at, diferenca_venda_id, trocas_devolucoes_itens(direcao, produto_nome, tamanho, quantidade, valor_unitario)")
-      .eq("pedido_original_id", saleId).eq("tipo", "troca").in("status", OPEN_EXCHANGE_STATUSES as any)
+      .eq("pedido_original_id", saleId).in("tipo", ["troca", "devolucao"] as any).in("status", OPEN_EXCHANGE_STATUSES as any)
       .order("created_at", { ascending: false }).limit(5);
     const list = (data as any[]) || [];
     setRows(list);
@@ -136,6 +138,19 @@ export function ExchangeInProgressCard({ saleId, onChanged }: { saleId: string; 
     <div className="mt-2 space-y-2" onClick={(e) => e.stopPropagation()}>
       {rows.map((e) => {
         const overdue = isPostingOverdue(e.status, rev?.valid_until);
+        if (e.tipo === "devolucao") return (
+          <div key={e.id} className={`rounded-lg border-2 p-3 text-sm ${overdue ? "border-destructive bg-destructive/10" : "border-amber-500 bg-amber-500/10"}`}>
+            <div className="flex items-center gap-2 flex-wrap font-bold">
+              <Undo2 className="h-4 w-4 shrink-0" /> Devolução em andamento
+              <span className="font-mono text-xs">{e.codigo_devolucao}</span>
+            </div>
+            {rev?.valid_until && <p className="text-xs mt-1">Postagem até {rev.valid_until.split("-").reverse().join("/")}{rev.codigo_objeto ? ` · ${rev.codigo_objeto}` : ""}</p>}
+            {overdue && <p className="text-xs mt-1 font-bold text-destructive flex items-center gap-1"><AlertTriangle className="h-3 w-3" /> Prazo de postagem vencido.</p>}
+            {canConvertToExchange(e) && (
+              <Button size="sm" variant="secondary" className="w-full h-auto whitespace-normal py-1.5 mt-2" onClick={() => setToExchangeFor(e)}><Repeat className="h-3 w-3 mr-1" /> Converter em troca</Button>
+            )}
+          </div>
+        );
         const repos = e.trocas_devolucoes_itens.filter((i) => i.direcao === "reposicao");
         return (
           <div key={e.id} className={`rounded-lg border-2 p-3 text-sm ${overdue ? "border-destructive bg-destructive/10" : "border-amber-500 bg-amber-500/10"}`}>
@@ -271,6 +286,7 @@ export function ExchangeInProgressCard({ saleId, onChanged }: { saleId: string; 
       </Dialog>
 
       <ConvertExchangeToReturnDialog troca={convertFor} onClose={() => setConvertFor(null)} onDone={done} />
+      <ConvertReturnToExchangeDialog troca={toExchangeFor} onClose={() => setToExchangeFor(null)} onDone={done} />
 
       <Dialog open={!!cancelFor} onOpenChange={(o) => !o && setCancelFor(null)}>
         <DialogContent className="max-w-md" onClick={(e) => e.stopPropagation()}>

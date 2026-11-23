@@ -459,7 +459,8 @@ Deno.serve(withAccessLog("nfe-devolucao-emitir", async (req) => {
       const [{ data: tdLinks }, { data: rvLinks }] = devIds.length
         ? await Promise.all([
           supabase.from("trocas_devolucoes").select("id, devolucao_doc_id, status, pedido_original_id").in("devolucao_doc_id", devIds),
-          supabase.from("correios_reverse_shipments").select("id, devolucao_doc_id").in("devolucao_doc_id", devIds),
+          // Reversa cancelada libera a nota para a reversa nova (ex.: prazo de postagem vencido).
+          supabase.from("correios_reverse_shipments").select("id, devolucao_doc_id").in("devolucao_doc_id", devIds).neq("status", "cancelada"),
         ])
         : [{ data: [] as any[] }, { data: [] as any[] }];
       const otherTroca = (d: any) => (tdLinks || []).some((t: any) => t.devolucao_doc_id === d.id && t.id !== troca_devolucao_id)

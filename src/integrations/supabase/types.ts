@@ -32143,6 +32143,10 @@ export type Database = {
         Args: { p_motivo: string; p_troca_id: string }
         Returns: undefined
       }
+      exchange_convert_return_to_exchange: {
+        Args: { p_motivo?: string; p_troca_id: string }
+        Returns: Json
+      }
       exchange_convert_to_return: {
         Args: { p_motivo?: string; p_troca_id: string }
         Returns: Json
