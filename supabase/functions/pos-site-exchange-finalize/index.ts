@@ -230,22 +230,17 @@ Deno.serve(withAccessLog("pos-site-exchange-finalize", async (req) => {
         for (const r of rows || []) {
           const prev = Number(r.stock || 0);
           if (prev !== 0) {
-            await db.from("pos_products").update({ stock: 0 }).eq("id", r.id);
-            await db.from("pos_stock_adjustments").insert({
-              store_id: r.store_id,
-              product_id: r.id,
-              tiny_id: r.tiny_id ?? null,
-              sku: r.sku ?? null,
-              barcode: r.barcode ?? null,
-              product_name: r.name || r.variant || "Produto",
-              direction: "out",
-              quantity: prev,
-              previous_stock: prev,
-              new_stock: 0,
-              reason: "Troca do Site — produto sem estoque zerado",
-              seller_id: seller_id || null,
-              seller_name: seller_name || null,
+            // Zera pela função segura (trava a linha + histórico antes do saldo).
+            const { error: balErr } = await db.rpc("pos_stock_balance_to", {
+              p_product_id: r.id,
+              p_target: 0,
+              p_reason: "Troca do Site — produto sem estoque zerado",
+              p_seller_id: seller_id || null,
+              p_seller_name: seller_name || null,
+              p_user_id: null,
+              p_user_name: null,
             });
+            if (balErr) throw balErr;
           }
           mirrorItems.push({ barcode: r.barcode || undefined, sku: r.sku || undefined });
         }
