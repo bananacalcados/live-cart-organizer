@@ -8,6 +8,9 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
 };
 
+const SITE_LIVE_STORE_ID = "2bd2c08d-321c-47ee-98a9-e27e936818ab";
+const PEROLA_STORE_ID = "1c08a9d8-fc12-4657-8ecf-d442f0c0e9f2";
+
 interface StockItem {
   sku?: string;
   barcode?: string;
@@ -35,6 +38,7 @@ serve(withAccessLog("pos-exchange-stock-adjust", withRequiredAuth(["pos"], false
 
     const results: { product_name: string; success: boolean; error?: string; currentStock?: number; newStock?: number }[] = [];
 
+    const mirrorItems: { barcode?: string; sku?: string }[] = [];
     for (const item of items) {
       try {
         if (!item.barcode && !item.sku) {
@@ -42,11 +46,13 @@ serve(withAccessLog("pos-exchange-stock-adjust", withRequiredAuth(["pos"], false
           continue;
         }
 
-        // Localiza o produto no estoque interno da loja (barcode preferencial, depois sku)
+        // Localiza o produto no estoque interno da loja (barcode preferencial, depois sku).
+        // Site/Live fica sempre zero: o ajuste vai para a Loja Pérola (mesmo código).
+        const targetStore = store_id === SITE_LIVE_STORE_ID ? PEROLA_STORE_ID : store_id;
         let query = supabase
           .from('pos_products')
-          .select('id, stock')
-          .eq('store_id', store_id);
+          .select('id, stock, sku, barcode')
+          .eq('store_id', targetStore);
         if (item.barcode) query = query.eq('barcode', item.barcode);
         else query = query.eq('sku', item.sku!);
 
@@ -61,26 +67,45 @@ serve(withAccessLog("pos-exchange-stock-adjust", withRequiredAuth(["pos"], false
           continue;
         }
 
-        const currentStock = Number(row.stock || 0);
-        const newStock = item.direction === 'in'
-          ? currentStock + item.quantity
-          : Math.max(0, currentStock - item.quantity);
+        // Grava SOMENTE pela função segura (trava a linha + histórico antes do saldo).
+        const { data: mv, error: mvErr } = await supabase.rpc('pos_stock_move', {
+          p_product_id: row.id,
+          p_direction: item.direction,
+          p_quantity: item.quantity,
+          p_reason: `Troca PDV – ${item.product_name}`,
+          p_seller_id: null,
+          p_seller_name: null,
+          p_user_id: null,
+          p_user_name: null,
+        });
 
-        const { error: updErr } = await supabase
-          .from('pos_products')
-          .update({ stock: newStock, updated_at: new Date().toISOString() })
-          .eq('id', row.id);
-
-        if (updErr) {
-          results.push({ product_name: item.product_name, success: false, error: updErr.message, currentStock, newStock });
+        if (mvErr) {
+          results.push({ product_name: item.product_name, success: false, error: mvErr.message });
         } else {
+          const currentStock = Number((mv as any)?.previous_stock ?? 0);
+          const newStock = Number((mv as any)?.new_stock ?? 0);
           results.push({ product_name: item.product_name, success: true, currentStock, newStock });
+          if (currentStock !== newStock && (row.barcode || row.sku)) {
+            mirrorItems.push({ barcode: row.barcode || undefined, sku: row.sku || undefined });
+          }
           console.log(`Troca [interno] ${item.product_name}: ${currentStock} -> ${newStock} (${item.direction})`);
         }
       } catch (e) {
         console.error(`Error adjusting stock for ${item.product_name}:`, e);
         results.push({ product_name: item.product_name, success: false, error: (e as Error).message });
       }
+    }
+
+    // Espelho Shopify (não há trigger em pos_products): uma vez por produto, em background.
+    const seen = new Set<string>();
+    for (const m of mirrorItems) {
+      const k = `${m.barcode ?? ''}|${m.sku ?? ''}`;
+      if (seen.has(k)) continue;
+      seen.add(k);
+      const p = supabase.functions
+        .invoke('shopify-mirror-stock', { body: { sale_id: null, sale_event: 'manual_adjust', items: [m] } })
+        .catch((e) => console.error('[pos-exchange-stock-adjust] mirror error', e));
+      try { (globalThis as any).EdgeRuntime?.waitUntil?.(p); } catch (_) { /* ignore */ }
     }
 
     const allOk = results.every(r => r.success);
