@@ -122,6 +122,7 @@ Deno.serve(withAccessLog("brasilnfe-webhook", async (req) => {
         .from("fiscal_documents")
         .select("*")
         .eq("pos_sale_id", saleId)
+        .eq("tipo_operacao", "saida") // POS-<venda> é só NFC-e de venda; nunca a nota de devolução
         .order("created_at", { ascending: false })
         .limit(1)
         .maybeSingle();

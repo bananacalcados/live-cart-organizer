@@ -41,7 +41,7 @@ Deno.serve(withAccessLog("correios-shipment", async (req) => {
       return data;
     };
     const loadNfes = async (saleIds: string[]) => {
-      const { data, error } = await db.from('fiscal_documents').select('pos_sale_id,company_id,chave_acesso,numero,serie,protocolo,xml_content,created_at').in('pos_sale_id', saleIds).eq('modelo', 55).eq('status', 'authorized').order('created_at', { ascending: false }).limit(200);
+      const { data, error } = await db.from('fiscal_documents').select('pos_sale_id,company_id,chave_acesso,numero,serie,protocolo,xml_content,created_at').in('pos_sale_id', saleIds).eq('modelo', 55).eq('status', 'authorized').eq('tipo_operacao', 'saida').order('created_at', { ascending: false }).limit(200);
       if (error) throw new Error('Não foi possível ler as NF-e');
       const bySale = new Map<string, any>();
       for (const d of data || []) if (!bySale.has(d.pos_sale_id)) bySale.set(d.pos_sale_id, d);

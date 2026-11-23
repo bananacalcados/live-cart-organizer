@@ -298,8 +298,11 @@ export function NewExchangePicker({ open, sellerId, initialSaleId, onCancel, onD
         .from("fiscal_documents")
         .select("chave_acesso")
         .eq("pos_sale_id", s.id)
+        .eq("status", "authorized")
+        .eq("tipo_operacao", "saida") // nunca a nota de devolução anterior
         .not("chave_acesso", "is", null)
         .neq("chave_acesso", "")
+        .order("created_at", { ascending: false })
         .limit(1)
         .maybeSingle();
       setChaveOriginal(fdoc?.chave_acesso || null);
