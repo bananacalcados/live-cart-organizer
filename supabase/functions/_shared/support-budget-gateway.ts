@@ -1,4 +1,4 @@
-import { requestTokenReservation } from "./support-cost.ts";
+import { requestTokenReservation, reserveRefusalReason } from "./support-cost.ts";
 
 // Each actual HTTP request, including SDK retries/tool continuations, needs an atomic reservation.
 export type BudgetFetch = typeof fetch & { lastError: () => string | null };
@@ -9,7 +9,7 @@ export function budgetGateway(sb: any, meta: { id: string; phone: string; number
     const body = String(init?.body ?? "{}");
     const parsed = JSON.parse(body);
     const { data: reserve, error } = await sb.rpc("support_cost_reserve", { p_suggestion: meta.id, p_phone: meta.phone, p_number: meta.number, p_kind: kind, p_model: parsed.model, p_tokens: requestTokenReservation(body) });
-    if (error || !reserve?.allowed) { lastError = `reserva_recusada: ${String(reserve?.reason ?? error?.message ?? "indisponivel")}`.slice(0, 400); throw new Error(lastError); }
+    if (error || !reserve?.allowed) { lastError = `reserva_recusada: ${reserveRefusalReason(reserve, error?.message)}`.slice(0, 400); throw new Error(lastError); }
     const settle = (i: number | null, o: number | null, ok: boolean, message: string | null, run: string | null) => sb.rpc("support_cost_settle", { p_id: reserve.id, p_input: i, p_output: o, p_ok: ok, p_error: message, p_run: run });
     try {
       const response = await fetch(input, init);

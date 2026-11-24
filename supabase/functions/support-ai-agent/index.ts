@@ -9,6 +9,7 @@ import {
 import { buildSupportContext } from "../_shared/support-context.ts";
 import { primaryInstance } from "../_shared/support-policy.ts";
 import { budgetGateway } from "../_shared/support-budget-gateway.ts";
+import { notifyBudget } from "../_shared/support-guard.ts";
 import { hasPendingCustomerRequest, humanRepliedRecently } from "../_shared/support-policy.ts";
 import { runSupportAiWithRetry, type SupportAiAttempt } from "../_shared/support-ai-retry.ts";
 import { returnFlowContinuation, type ReturnFlowContext } from "../_shared/support-return-flow.ts";
@@ -172,6 +173,11 @@ Deno.serve(withAccessLog("support-ai-agent", async (req) => {
     await flushLogs();
     const msg = String((e as Error)?.message || e);
     if (dryRun) return json({ dry_run: true, id: s.id, error: msg.slice(0, 300) }, 200);
+    if (/teto_diario/i.test(msg)) {
+      // Teto estourado: nunca ignora a cliente — vai para Em suporte com o motivo, e o alerta de 100% sai na hora.
+      try { await notifyBudget(sb); } catch (err) { console.error("support-budget-alert", (err as Error).message); }
+      return fallback(`teto diário da IA | ${msg}`.slice(0, 300));
+    }
     if (/No output generated|triagem_vazia_ou_invalida/i.test(msg) && !hasPendingCustomerRequest(conv)) {
       await sb.from("support_auto_suggestions").update({
         ai_status: "ok", ai_error: null, status: "ignorada", decision: "nada",

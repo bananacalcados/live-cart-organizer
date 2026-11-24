@@ -18,8 +18,23 @@ export function costPrefilter(input: { text: string; group?: boolean; mediaType?
 export function budgetAllows(used: number, reserved: number, requested: number, budget = DAILY_TOKEN_BUDGET): boolean {
   return requested > 0 && used + reserved + requested <= budget;
 }
-// Upper bound: UTF-8 input bytes plus schema framing, and the model's full 128k output window.
-// No existing model output cap is changed. Each tool continuation reserves separately.
+// Reserva proporcional: tokens de entrada estimados com folga (~3 bytes/token; texto PT costuma dar ~4)
+// + limite de saída esperado com margem. O acerto (settle) cobra o uso real; sem usage cobra a reserva.
+export const OUTPUT_RESERVATION_TOKENS = 16_000;
 export function requestTokenReservation(body: string): number {
-  return new TextEncoder().encode(body).length + 4096 + 128000;
+  return Math.ceil(new TextEncoder().encode(body).length / 3) + 1024 + OUTPUT_RESERVATION_TOKENS;
+}
+/** Motivo legível da recusa da reserva, gravado em support_ai_attempts. */
+export function reserveRefusalReason(r: { reason?: string; used?: number; reserved?: number; budget?: number } | null, rpcError?: string | null): string {
+  if (r?.reason === "teto_diario" || r?.reason === "teto_diario_tokens") {
+    return `teto_diario: usado ${r.used ?? "?"} (+${r.reserved ?? 0} reservado) de ${r.budget ?? "?"}`;
+  }
+  return String(r?.reason ?? rpcError ?? "indisponivel");
+}
+/** Faixa de alerta do consumo diário (80% e 100%). */
+export function budgetAlertLevel(used: number, budget: number): 80 | 100 | null {
+  if (!(budget > 0)) return null;
+  if (used >= budget) return 100;
+  if (used >= budget * 0.8) return 80;
+  return null;
 }

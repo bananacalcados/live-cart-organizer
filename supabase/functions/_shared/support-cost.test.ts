@@ -28,5 +28,5 @@ Deno.test("teto: padrão 2 milhões, reservas concorrentes e dia seguinte", () =
   assertEquals(budgetAllows(1900000, 50000, 50001), false);
   assertEquals(budgetAllows(2000000, 0, 1), false);
   assertEquals(budgetAllows(0, 0, 1), true);
-  assertEquals(requestTokenReservation("abc"), 132099);
+  assertEquals(requestTokenReservation("abc"), 17025);
 });

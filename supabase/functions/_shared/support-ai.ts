@@ -128,10 +128,16 @@ function provider(cfg: GatewayConfig) {
 const reasoningOpts = { store: false, forceReasoning: true, reasoningEffort: "low", reasoningSummary: "auto", include: ["reasoning.encrypted_content"] };
 
 /** Prefer the real provider/reservation cause over the SDK's generic "No output generated". */
-function realError(cfg: GatewayConfig, e: unknown): string {
+export function realError(cfg: GatewayConfig, e: unknown): string {
   const sdk = String((e as Error)?.message || e);
   const real = (cfg.guardedFetch as any)?.lastError?.() as string | null | undefined;
   return (real && !sdk.includes(real) ? `${real} | ${sdk}` : sdk).slice(0, 400);
+}
+/** O registro de tentativas lê a mensagem do erro lançado: troca pelo motivo real (reserva/HTTP), mantendo o objeto. */
+export function withRealError(cfg: GatewayConfig, e: unknown): unknown {
+  const msg = realError(cfg, e);
+  if (e instanceof Error) { try { e.message = msg; } catch { /* somente leitura */ } return e; }
+  return new Error(msg);
 }
 
 async function usage(result: any) {
@@ -209,7 +215,7 @@ export async function runTriage(cfg: GatewayConfig, model: string, conv: ConvMes
     return out;
   } catch (e) {
     log({ kind: "triagem", model, ok: false, error: realError(cfg, e), ms: Date.now() - t0 });
-    throw e;
+    throw withRealError(cfg, e);
   }
 }
 
@@ -551,7 +557,7 @@ CONTEXTO DO SISTEMA (não invente nada além disso):
     return out;
   } catch (e) {
     log({ kind: "agente", model, ok: false, error: realError(cfg, e), ms: Date.now() - t0 });
-    throw e;
+    throw withRealError(cfg, e);
   }
 }
 

@@ -25,6 +25,7 @@ const errorStatus = (error: unknown): number | null => {
 export function shouldRetrySupportAi(error: unknown): boolean {
   const e = error as { name?: string; message?: string; text?: unknown };
   const message = String(e?.message ?? error ?? "");
+  if (/reserva_recusada|teto_diario/i.test(message)) return false;
   if (/abort|timeout|tempo esgotado|recusa|refusal|denied/i.test(`${e?.name ?? ""} ${message}`)) return false;
   // Resposta HTTP OK porém triagem/agente inválidos: vale a 2ª tentativa no outro modelo.
   if (/triagem_vazia_ou_invalida|resposta_do_agente_invalida/i.test(message)) return true;

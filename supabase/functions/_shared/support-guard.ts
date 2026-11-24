@@ -3,6 +3,7 @@
 // aqui só há regras puras + a rotina chamada pelo cron já existente (sem cron novo).
 import { internalCallHeaders } from './requireAuth.ts';
 import { supportOutboxFunction } from './support-outbox.ts';
+import { budgetAlertLevel } from './support-cost.ts';
 
 export const RECOVER_AFTER_MS = 30 * 60_000;
 export const ALERT_MIN_INTERVAL_MS = 30 * 60_000;
@@ -73,9 +74,24 @@ async function sendAlert(supabase: any, s: GuardStatus, text: string): Promise<b
   return !res.error && !(res.data?.error || res.data?.success === false);
 }
 
+/** Alerta do teto diário: 1 por dia por faixa (80%/100%), reservado no banco antes de enviar. */
+export async function notifyBudget(supabase: any, s?: any): Promise<{ level: 80 | 100 | null; sent: boolean }> {
+  if (!s) { const r = await supabase.rpc('support_guard_status'); s = r.data; }
+  const level = s ? budgetAlertLevel(Number(s.budget_used ?? 0), Number(s.budget_limit ?? 0)) : null;
+  if (!level) return { level: null, sent: false };
+  const { data: claimed } = await supabase.rpc('support_budget_alert_claim', { p_level: level });
+  if (!claimed) return { level, sent: false };
+  const pct = Math.round((Number(s.budget_used) / Number(s.budget_limit)) * 100);
+  const text = level === 100
+    ? `🛑 Suporte automático: teto diário atingido (${Number(s.budget_used).toLocaleString('pt-BR')} de ${Number(s.budget_limit).toLocaleString('pt-BR')} tokens). Novas mensagens vão para Em suporte até a meia-noite (Brasília).`
+    : `⚠️ Suporte automático: IA já usou ${pct}% do teto diário (${Number(s.budget_used).toLocaleString('pt-BR')} de ${Number(s.budget_limit).toLocaleString('pt-BR')} tokens).`;
+  return { level, sent: await sendAlert(supabase, s, text) };
+}
+
 export async function runSupportGuardTick(supabase: any, now = Date.now()) {
   const { data: s, error } = await supabase.rpc('support_guard_status');
   if (error || !s) return { ok: false, error: error?.message };
+  try { await notifyBudget(supabase, s); } catch (e) { console.error('support-budget-alert', (e as Error).message); }
   const plan = planGuardTick(s as GuardStatus, now);
   if (plan.tryRecover) {
     // O envio interno de teste para o número de alerta é a prova de que o canal de saída funciona.

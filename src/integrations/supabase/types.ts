@@ -26355,6 +26355,8 @@ export type Database = {
       }
       support_ai_daily: {
         Row: {
+          alert_100_at: string | null
+          alert_80_at: string | null
           budget_stops: number
           calls: number
           day: string
@@ -26365,6 +26367,8 @@ export type Database = {
           tokens: number
         }
         Insert: {
+          alert_100_at?: string | null
+          alert_80_at?: string | null
           budget_stops?: number
           calls?: number
           day: string
@@ -26375,6 +26379,8 @@ export type Database = {
           tokens?: number
         }
         Update: {
+          alert_100_at?: string | null
+          alert_80_at?: string | null
           budget_stops?: number
           calls?: number
           day?: string
@@ -35356,6 +35362,10 @@ export type Database = {
         Returns: undefined
       }
       support_auto_route: { Args: { p_id: string }; Returns: boolean }
+      support_budget_alert_claim: {
+        Args: { p_level: number }
+        Returns: boolean
+      }
       support_central_link_options: { Args: { p_phone: string }; Returns: Json }
       support_classify_intent: { Args: { p: string }; Returns: string }
       support_cost_claim_direct: { Args: { p_id: string }; Returns: boolean }
