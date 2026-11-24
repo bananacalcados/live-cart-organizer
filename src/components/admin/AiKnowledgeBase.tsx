@@ -35,7 +35,6 @@ const CATEGORIES = [
 ];
 
 const AI_AGENTS = [
-  { value: "concierge", label: "Bia (Concierge)" },
   { value: "livete", label: "Livete (Live)" },
   { value: "secretary", label: "Secretária IA" },
 ];
@@ -69,7 +68,7 @@ export function AiKnowledgeBase() {
   const [category, setCategory] = useState("faq");
   const [content, setContent] = useState("");
   const [isActive, setIsActive] = useState(true);
-  const [selectedAgents, setSelectedAgents] = useState<string[]>(["concierge"]);
+  const [selectedAgents, setSelectedAgents] = useState<string[]>(["livete"]);
 
   const fetchItems = async () => {
     setLoading(true);
@@ -90,7 +89,7 @@ export function AiKnowledgeBase() {
     setCategory("faq");
     setContent("");
     setIsActive(true);
-    setSelectedAgents(["concierge"]);
+    setSelectedAgents(["livete"]);
     setDialogOpen(true);
   };
 
@@ -100,7 +99,7 @@ export function AiKnowledgeBase() {
     setCategory(item.category);
     setContent(item.content);
     setIsActive(item.is_active);
-    setSelectedAgents(item.agents || ["concierge"]);
+    setSelectedAgents((item.agents || []).filter(agent => AI_AGENTS.some(option => option.value === agent)));
     setDialogOpen(true);
   };
 

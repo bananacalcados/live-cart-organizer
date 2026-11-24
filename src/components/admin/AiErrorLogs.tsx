@@ -41,7 +41,7 @@ export function AiErrorLogs() {
   const [selectedError, setSelectedError] = useState<AiError | null>(null);
   const [resolutionNotes, setResolutionNotes] = useState("");
   const [manualOpen, setManualOpen] = useState(false);
-  const [manualAgent, setManualAgent] = useState("concierge");
+  const [manualAgent, setManualAgent] = useState("livete");
   const [manualType, setManualType] = useState("");
   const [manualMessage, setManualMessage] = useState("");
   const [manualPhone, setManualPhone] = useState("");
@@ -130,7 +130,6 @@ export function AiErrorLogs() {
             <SelectTrigger className="w-36"><SelectValue placeholder="Agente" /></SelectTrigger>
             <SelectContent>
               <SelectItem value="all">Todos agentes</SelectItem>
-              <SelectItem value="concierge">Bia (Concierge)</SelectItem>
               <SelectItem value="livete">Livete</SelectItem>
               <SelectItem value="secretary">Secretária</SelectItem>
             </SelectContent>
@@ -158,7 +157,6 @@ export function AiErrorLogs() {
                   <Select value={manualAgent} onValueChange={setManualAgent}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="concierge">Bia (Concierge)</SelectItem>
                       <SelectItem value="livete">Livete</SelectItem>
                       <SelectItem value="secretary">Secretária</SelectItem>
                     </SelectContent>

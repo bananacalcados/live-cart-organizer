@@ -18,7 +18,6 @@ import { MetaInstanceManager } from "@/components/admin/MetaInstanceManager";
 import { WaSenderInstanceManager } from "@/components/admin/WaSenderInstanceManager";
 import { UazapiInstanceManager } from "@/components/admin/UazapiInstanceManager";
 import { AiKnowledgeBase } from "@/components/admin/AiKnowledgeBase";
-import { AiTestPanel } from "@/components/admin/AiTestPanel";
 import { SecretaryChat } from "@/components/admin/SecretaryChat";
 import { AiErrorLogs } from "@/components/admin/AiErrorLogs";
 import { MercadoPagoAccountsManager } from "@/components/admin/MercadoPagoAccountsManager";
@@ -467,7 +466,6 @@ export default function Admin() {
           </TabsContent>
 
           <TabsContent value="knowledge" className="mt-4 space-y-6">
-            <AiTestPanel />
             <AiKnowledgeBase />
           </TabsContent>
 

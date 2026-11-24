@@ -569,20 +569,6 @@ serve(withAccessLog("meta-messenger-webhook", async (req) => {
             console.log(`[ig-router] ${senderId} → ${route.agent} (${route.reason})`);
 
             switch (route.agent) {
-              case 'concierge':
-                fetch(`${supabaseUrl}/functions/v1/concierge-respond`, {
-                  method: 'POST',
-                  headers: { 'Authorization': `Bearer ${supabaseKey}`, 'Content-Type': 'application/json' },
-                  body: JSON.stringify({
-                    phone: senderId,
-                    messageText,
-                    channel: 'instagram',
-                    mediaUrl,
-                    mediaType,
-                  }),
-                }).catch(err => console.error('[ig-router] concierge-respond error:', err));
-                break;
-
               case 'continue_session': {
                 const cooldownActive = await isOperatorCooldownActive(supabase, senderId);
                 if (!cooldownActive && route.session) {

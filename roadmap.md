@@ -61,7 +61,7 @@
 - [x] Explicar canais, gatilhos e fontes de pedido/rastreio dos assistentes sem alterá-los
 
 # Retirada do concierge desligado
-- [ ] Etapa 1: remover o concierge do roteador mantendo exatamente as decisões atuais
-- [ ] Comparar antes/depois com concierge desligado, humano recente e pausas; implantar e commitar
-- [ ] Etapa 2: remover função implantada/código, telas e referências mortas sem apagar histórico
-- [ ] Listar configurações/tabelas sem uso, validar e commitar separadamente
+- [x] Etapa 1: remover o concierge do roteador mantendo exatamente as decisões atuais
+- [x] Comparar antes/depois com concierge desligado, humano recente e pausas; implantar e commitar
+- [x] Etapa 2: remover função implantada/código, telas e referências mortas sem apagar histórico
+- [x] Listar configurações/tabelas sem uso, validar e commitar separadamente

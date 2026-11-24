@@ -1103,14 +1103,6 @@ serve(withAccessLog("uazapi-webhook", async (req) => {
           break;
         }
 
-        case "concierge":
-          fetch(`${SB_URL}/functions/v1/concierge-respond`, {
-            method: "POST",
-            headers: { Authorization: `Bearer ${SB_KEY}`, "Content-Type": "application/json" },
-            body: JSON.stringify({ phone, messageText: displayMessage, whatsappNumberId: numberId, channel: "uazapi", mediaUrl, mediaType: sysMediaType }),
-          }).catch((e) => console.error("concierge-respond:", e));
-          break;
-
         case "none":
           break;
 
