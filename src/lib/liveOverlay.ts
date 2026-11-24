@@ -11,6 +11,9 @@ export interface OverlayBlockStyle {
   text_color: string;
   font_weight: OverlayFontWeight;
   border_color?: string;
+  /** Dimensões do fundo em pixels no canvas 1080x1920; vazio = automático. */
+  bg_width?: number;
+  bg_height?: number;
 }
 export type OverlayStyles = Record<OverlayBlockKey, OverlayBlockStyle>;
 export interface OverlayPosition { x: number; y: number; width: number; font_size: number; align: "left" | "center" | "right" }
@@ -89,22 +92,31 @@ export const DEFAULT_OVERLAY_CONFIG: OverlayConfig = {
 const HEX_COLOR = /^#[0-9a-f]{6}$/i;
 const FONT_WEIGHTS: OverlayFontWeight[] = [400, 600, 700, 800, 900];
 const normalizeHex = (value: unknown, fallback: string) => typeof value === "string" && HEX_COLOR.test(value) ? value.toLowerCase() : fallback;
+const normalizeDimension = (value: unknown, min: number, max: number): number | undefined => {
+  if (value == null || value === "") return undefined;
+  const numeric = Number(value);
+  return Number.isFinite(numeric) && numeric > 0 ? Math.min(max, Math.max(min, Math.round(numeric))) : undefined;
+};
 
 export function normalizeOverlayStyle(raw: any, key: OverlayBlockKey): OverlayBlockStyle {
   const fallback = DEFAULT_OVERLAY_STYLES[key];
   const numericOpacity = Number(raw?.bg_opacity);
   const numericWeight = Number(raw?.font_weight) as OverlayFontWeight;
   const border = raw?.border_color == null ? undefined : normalizeHex(raw.border_color, "");
+  const width = normalizeDimension(raw?.bg_width, 40, 1080);
+  const height = normalizeDimension(raw?.bg_height, 24, 1920);
   return {
     bg_color: normalizeHex(raw?.bg_color, fallback.bg_color),
     bg_opacity: raw?.bg_opacity == null || !Number.isFinite(numericOpacity) ? fallback.bg_opacity : Math.min(1, Math.max(0, numericOpacity)),
     text_color: normalizeHex(raw?.text_color, fallback.text_color),
     font_weight: FONT_WEIGHTS.includes(numericWeight) ? numericWeight : fallback.font_weight,
     ...(border ? { border_color: border } : {}),
+    ...(width ? { bg_width: width } : {}),
+    ...(height ? { bg_height: height } : {}),
   };
 }
 
-export function overlayPanelStyle(styles: OverlayStyles, key: OverlayBlockKey, expired = false) {
+export function overlayPanelStyle(styles: OverlayStyles, key: OverlayBlockKey, expired = false, align: OverlayPosition["align"] = "left") {
   const style = normalizeOverlayStyle(styles?.[key], key);
   const hex = style.bg_color.slice(1);
   const rgb = [0, 2, 4].map((offset) => parseInt(hex.slice(offset, offset + 2), 16)).join(", ");
@@ -113,6 +125,19 @@ export function overlayPanelStyle(styles: OverlayStyles, key: OverlayBlockKey, e
     color: style.text_color,
     fontWeight: style.font_weight,
     ...(style.border_color ? { borderColor: style.border_color } : {}),
+    ...(style.bg_width ? {
+      width: style.bg_width,
+      boxSizing: "border-box" as const,
+      ...(align === "center" ? { marginInline: "auto" } : align === "right" ? { marginLeft: "auto" } : {}),
+    } : {}),
+    ...(style.bg_height ? {
+      height: style.bg_height,
+      boxSizing: "border-box" as const,
+      display: "flex" as const,
+      flexDirection: "column" as const,
+      justifyContent: "center" as const,
+      overflow: "hidden" as const,
+    } : {}),
   };
 }
 

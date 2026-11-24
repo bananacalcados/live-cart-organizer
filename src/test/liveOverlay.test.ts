@@ -98,6 +98,23 @@ describe("overlay block styles", () => {
     expect(config.styles.shown_product.font_weight).toBe(400);
     expect(overlayPanelStyle(config.styles, "ticker")).toMatchObject({ background: "rgba(0, 0, 0, 0.6)", color: "#ffffff", fontWeight: 700 });
   });
+  it("applies the exact background width and height without changing the font size", () => {
+    const config = withOverlayDefaults({ styles: { shown_product: { bg_width: 420, bg_height: 160 } } });
+    expect(overlayPanelStyle(config.styles, "shown_product", false, "right")).toMatchObject({
+      width: 420,
+      height: 160,
+      boxSizing: "border-box",
+      marginLeft: "auto",
+    });
+    expect(config.layout.shown_product.font_size).toBe(DEFAULT_OVERLAY_LAYOUT.shown_product.font_size);
+  });
+  it("keeps the background automatic when width and height are empty", () => {
+    const style = normalizeOverlayStyle({ bg_width: "", bg_height: null }, "ticker");
+    expect(style.bg_width).toBeUndefined();
+    expect(style.bg_height).toBeUndefined();
+    expect(overlayPanelStyle({ ...DEFAULT_OVERLAY_STYLES, ticker: style }, "ticker")).not.toHaveProperty("width");
+    expect(overlayPanelStyle({ ...DEFAULT_OVERLAY_STYLES, ticker: style }, "ticker")).not.toHaveProperty("height");
+  });
   it("normalizes invalid colors, opacity and font weight without breaking the overlay", () => {
     expect(normalizeOverlayStyle({ bg_color: "red", bg_opacity: 9, text_color: "#abcdef", font_weight: 100, border_color: "invalid" }, "ticker")).toEqual({ bg_color: "#000000", bg_opacity: 1, text_color: "#abcdef", font_weight: 700 });
     expect(normalizeOverlayStyle({ bg_opacity: -2, font_weight: 900, border_color: "#A1B2C3" }, "ticker")).toMatchObject({ bg_opacity: 0, font_weight: 900, border_color: "#a1b2c3" });

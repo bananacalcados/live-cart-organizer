@@ -329,7 +329,7 @@ export default function LiveOverlay() {
     >
       {config.ticker.enabled && tickerText && (
         <OverlayBlock position={config.layout.ticker} blockKey="ticker">
-          <OverlayPanel key={tickerIdx} blockKey="ticker" styles={config.styles} className="animate-in fade-in duration-700">
+          <OverlayPanel key={tickerIdx} blockKey="ticker" styles={config.styles} align={config.layout.ticker.align} className="animate-in fade-in duration-700">
             {tickerText}
           </OverlayPanel>
         </OverlayBlock>
@@ -337,7 +337,7 @@ export default function LiveOverlay() {
 
       {rb.enabled && (
         <OverlayBlock position={config.layout.raffle_bar} blockKey="raffle_bar">
-          <OverlayPanel blockKey="raffle_bar" styles={config.styles} className="w-full">
+          <OverlayPanel blockKey="raffle_bar" styles={config.styles} align={config.layout.raffle_bar.align} className="w-full">
             {raffleWinner
               ? <span className="overlay-wheel-winner">🏆 Ganhadora: {raffleWinner.label}</span>
               : fill(rb.text_template, { count: raffleCount })}
@@ -355,7 +355,7 @@ export default function LiveOverlay() {
 
       {alert && (
         <OverlayBlock position={config.layout.alert} blockKey="alert">
-          <OverlayPanel key={alert.key} blockKey="alert" styles={config.styles} expired={alert.tone === "expired"} className="animate-in slide-in-from-left fade-in duration-500" style={{ lineHeight: 1.2 }}>
+          <OverlayPanel key={alert.key} blockKey="alert" styles={config.styles} align={config.layout.alert.align} expired={alert.tone === "expired"} className="animate-in slide-in-from-left fade-in duration-500" style={{ lineHeight: 1.2 }}>
             {alert.text}
           </OverlayPanel>
         </OverlayBlock>
@@ -365,7 +365,7 @@ export default function LiveOverlay() {
         <OverlayBlock position={config.layout.timers} blockKey="timers">
           <div className="flex flex-col gap-[0.3em]">
             {[currentTimer].map((t) => (
-              <OverlayPanel key={t.orderId} blockKey="timers" styles={config.styles} data-overlay-timer={t.orderId} className="animate-in fade-in duration-500" style={{ lineHeight: 1.2 }}>
+              <OverlayPanel key={t.orderId} blockKey="timers" styles={config.styles} align={config.layout.timers.align} data-overlay-timer={t.orderId} className="animate-in fade-in duration-500" style={{ lineHeight: 1.2 }}>
                 {fill(config.payment_timers.template, { handle: t.handle, product: t.product, size: t.size, timer: formatTimer(t.expiresAt - now) })
                   .split(formatTimer(t.expiresAt - now)).flatMap((part, i, arr) => i < arr.length - 1 ? [part, <span key={i} className="overlay-timer">{formatTimer(t.expiresAt - now)}</span>] : [part])}
               </OverlayPanel>
@@ -376,7 +376,7 @@ export default function LiveOverlay() {
 
       {spin && (
         <OverlayBlock position={config.layout.wheel} blockKey="wheel">
-          <OverlayPanel key={spin.key} blockKey="wheel" styles={config.styles} className="relative animate-in fade-in zoom-in-95 duration-500" style={{ lineHeight: 1.2 }}>
+          <OverlayPanel key={spin.key} blockKey="wheel" styles={config.styles} align={config.layout.wheel.align} className="relative animate-in fade-in zoom-in-95 duration-500" style={{ lineHeight: 1.2 }}>
             {spin.done && spin.raffle && (
               <div className="overlay-confetti" aria-hidden>
                 {Array.from({ length: 28 }).map((_, i) => (
@@ -400,7 +400,7 @@ export default function LiveOverlay() {
         <OverlayBlock position={config.layout.shown_product} blockKey="shown_product">
           <div className="flex flex-col gap-[0.25em]">
             {shouldShowCurrentShownProduct(shown.show_codes, shown.current) && shown.current && (
-              <OverlayPanel key={shown.current.code + (shown.current.shown_at || "")} blockKey="shown_product" styles={config.styles} className="animate-in fade-in zoom-in-95 duration-500" style={{ lineHeight: 1.1 }}>
+              <OverlayPanel key={shown.current.code + (shown.current.shown_at || "")} blockKey="shown_product" styles={config.styles} align={config.layout.shown_product.align} className="animate-in fade-in zoom-in-95 duration-500" style={{ lineHeight: 1.1 }}>
                 <div className="font-black tracking-wide" style={{ fontSize: "2.2em", whiteSpace: "nowrap" }}>{shown.current.code}</div>
                 <div className="font-bold" style={{ fontSize: "0.6em" }}>{shown.current.product_name}</div>
                 {shown.current.color && <div style={{ fontSize: "0.5em" }}>{shown.current.color}</div>}
@@ -415,7 +415,7 @@ export default function LiveOverlay() {
               </OverlayPanel>
             )}
             {shown.show_codes && shown.previous.filter((p) => p.code !== shown.current?.code).slice(0, 8).map((p) => (
-              <OverlayPanel key={p.code} blockKey="shown_product" styles={config.styles} className="animate-in fade-in duration-500" style={{ fontWeight: 700, fontSize: "0.42em", lineHeight: 1.2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+              <OverlayPanel key={p.code} blockKey="shown_product" styles={config.styles} align={config.layout.shown_product.align} className="animate-in fade-in duration-500" style={{ fontWeight: 700, fontSize: "0.42em", lineHeight: 1.2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                 {p.code} · {(p.product_name || "").split(" ").slice(0, 3).join(" ")}{p.color ? ` · ${p.color}` : ""}
               </OverlayPanel>
             ))}
@@ -425,7 +425,7 @@ export default function LiveOverlay() {
 
       {cta && (
         <OverlayBlock position={config.layout.cta} blockKey="cta">
-          <OverlayPanel blockKey="cta" styles={config.styles} className="animate-in fade-in zoom-in-95 duration-500">
+          <OverlayPanel blockKey="cta" styles={config.styles} align={config.layout.cta.align} className="animate-in fade-in zoom-in-95 duration-500">
             {cta}
           </OverlayPanel>
         </OverlayBlock>
