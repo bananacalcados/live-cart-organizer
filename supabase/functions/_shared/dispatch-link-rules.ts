@@ -37,6 +37,7 @@ export const COMM_TYPES = ['convite_live', 'oferta', 'reativacao', 'lancamento',
 export const ALLOWED_VAR_MODES = ['__static__', '__first_name__', '__full_name__'] as const;
 export const TEST_TTL_MS = 2 * 60 * 60 * 1000;
 export const TESTS_PER_HOUR = 5;
+export const FAILED_TESTS_PER_HOUR = 10;
 
 export function linkUsable(link: DispatchLink | null, now = new Date()) {
   if (!link || !link.is_active || link.revoked_at) throw new RuleError('link_inativo', 'Este link está desativado.', 403);
@@ -178,8 +179,30 @@ export function findValidTest(tests: LinkTest[], sessionId: string, hash: string
   return t;
 }
 
-export function checkTestRate(recentTestsLastHour: number) {
-  if (recentTestsLastHour >= TESTS_PER_HOUR) throw new RuleError('limite_testes', 'Muitos testes nesta hora. Espere um pouco.', 429);
+/** Só testes que saíram contam no limite; falhas têm um freio próprio, maior. */
+export function checkTestRate(okLastHour: number, failedLastHour = 0) {
+  if (okLastHour >= TESTS_PER_HOUR) throw new RuleError('limite_testes', 'Muitos testes nesta hora. Espere um pouco.', 429);
+  if (failedLastHour >= FAILED_TESTS_PER_HOUR) throw new RuleError('limite_testes', 'Muitos testes com erro nesta hora. Espere um pouco ou fale com o Matthews.', 429);
+}
+
+/** Lê o erro real da Meta (details.error) e devolve texto técnico p/ guardar + frase simples p/ equipe. */
+export function metaSendError(d: any): { stored: string; friendly: string } {
+  const e = d?.details?.error || (typeof d?.details === 'object' ? null : null);
+  const code = Number(e?.code ?? e?.error_data?.code ?? NaN);
+  const sub = e?.error_subcode ? `/${e.error_subcode}` : '';
+  const msg = [e?.message, e?.error_data?.details].filter(Boolean).join(' — ');
+  const stored = (e ? `Meta ${Number.isFinite(code) ? code : '?'}${sub}: ${msg || 'sem mensagem'}` : String(d?.error || d?.details || 'falha no envio')).slice(0, 500);
+  const text = `${msg} ${d?.error || ''}`.toLowerCase();
+  let friendly = 'A Meta não aceitou o teste. Tente de novo ou fale com o Matthews.';
+  if ([131053, 131052].includes(code) || /media|image|imagem|photo/.test(text)) friendly = 'A foto não foi aceita pela Meta. Troque a foto e tente de novo.';
+  else if ([131026, 131030, 131021].includes(code) || /phone|recipient|número/.test(text)) friendly = 'Número inválido ou sem WhatsApp. Confira o número.';
+  else if ([132001, 132015, 132016, 132007].includes(code) || /template.*(not exist|does not exist|paused|disabled)/.test(text)) friendly = 'Modelo não aprovado ou pausado pela Meta. Escolha outro.';
+  else if ([132000, 132012, 132018, 131008, 131009, 100].includes(code)) friendly = 'Algum texto não foi aceito pela Meta. Confira os espaços (sem quebra de linha) e tente de novo.';
+  else if ([131042].includes(code)) friendly = 'A conta da Meta está com problema de pagamento. Fale com o Matthews.';
+  else if ([190, 10, 200].includes(code)) friendly = 'A conexão desse número com a Meta caiu. Fale com o Matthews.';
+  else if ([4, 80007, 130429, 131048, 131056].includes(code)) friendly = 'A Meta pediu uma pausa nos envios. Espere uns minutos.';
+  else if ([131049].includes(code)) friendly = 'A Meta segurou essa mensagem para esse número agora. Tente com outro número.';
+  return { stored, friendly };
 }
 
 export function normalizeTestPhone(input: unknown) {

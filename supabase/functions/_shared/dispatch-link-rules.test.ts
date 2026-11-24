@@ -78,6 +78,8 @@ Deno.test('variáveis: modo proibido, campo inexistente e vazio recusados', () =
 Deno.test('limite de testes por hora e telefone de teste', () => {
   assertEquals(code(() => R.checkTestRate(4)), 'ok');
   assertEquals(code(() => R.checkTestRate(5)), 'limite_testes');
+  assertEquals(code(() => R.checkTestRate(0, 9)), 'ok'); // falhas não contam nos 5
+  assertEquals(code(() => R.checkTestRate(0, 10)), 'limite_testes'); // freio de 10 falhas
   assertEquals(R.normalizeTestPhone('(33) 99999-1234'), '5533999991234');
   assertEquals(code(() => R.normalizeTestPhone('123')), 'telefone_invalido');
 });
@@ -95,4 +97,12 @@ Deno.test('preset do admin: exige público, modo e limite válidos', () => {
   assertEquals(code(() => R.validatePreset({ ...base, allow_send_now: false, allow_schedule: false })), 'modo_invalido');
   assertEquals(code(() => R.validatePreset({ ...base, max_recipients: 0 })), 'limite_invalido');
   assertEquals(code(() => R.validatePassword('curta')), 'senha_invalida');
+});
+
+Deno.test('erro real da Meta é guardado e traduzido', () => {
+  const r = R.metaSendError({ error: 'Failed to send template', details: { error: { code: 131053, message: 'Media upload error' } } });
+  assertEquals(r.stored, 'Meta 131053: Media upload error');
+  assertEquals(r.friendly.startsWith('A foto não foi aceita'), true);
+  assertEquals(R.metaSendError({ details: { error: { code: 132001, message: 'Template name does not exist' } } }).friendly.startsWith('Modelo não aprovado'), true);
+  assertEquals(R.metaSendError({ details: { error: { code: 131026, message: 'Message undeliverable' } } }).friendly.startsWith('Número inválido'), true);
 });

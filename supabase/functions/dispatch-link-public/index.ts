@@ -223,10 +223,11 @@ async function handle(action: string, body: any, req: Request) {
     const cfg = await prepareConfig(link, body);
     const phone = R.normalizeTestPhone(body.test_phone);
     const since = new Date(Date.now() - 3600_000).toISOString();
-    const { count } = await db.from('dispatch_link_tests').select('id', { count: 'exact', head: true }).eq('session_id', session.id).gte('created_at', since);
-    R.checkTestRate(count || 0);
+    const { data: recent } = await db.from('dispatch_link_tests').select('status').eq('session_id', session.id).gte('created_at', since).limit(100);
+    const failedN = (recent || []).filter((r: any) => r.status === 'failed').length;
+    R.checkTestRate((recent || []).length - failedN, failedN);
     let status: 'sent' | 'failed' | 'simulated' = 'simulated';
-    let messageId: string | null = null, err: string | null = null;
+    let messageId: string | null = null, err: string | null = null, friendlyErr = '';
     if (!link.simulate_only) {
       const res = await fetch(`${URL_}/functions/v1/meta-whatsapp-send-template`, {
         method: 'POST',
@@ -239,13 +240,13 @@ async function handle(action: string, body: any, req: Request) {
       const d = await res.json().catch(() => ({}));
       status = d?.success ? 'sent' : 'failed';
       messageId = d?.messageId || d?.message_id || d?.data?.messages?.[0]?.id || null;
-      if (!d?.success) err = String(d?.error || d?.details?.error?.message || 'falha no envio').slice(0, 300);
+      if (!d?.success) { const me = R.metaSendError(d); err = me.stored; friendlyErr = me.friendly; console.error('[dispatch-link-public] test send failed', err); }
     }
     const { data: t, error } = await db.from('dispatch_link_tests').insert({
       link_id: link.id, session_id: session.id, config_hash: cfg.hash, phone_masked: R.maskPhone(phone), status, message_id: messageId, error: err,
     }).select('id').single();
     if (error) throw error;
-    if (status === 'failed') return json({ ok: false, code: 'teste_falhou', error: `O teste não foi enviado: ${err}` }, 502);
+    if (status === 'failed') return json({ ok: false, code: 'teste_recusado', error: friendlyErr }, 502);
     return json({ ok: true, test_id: t.id, simulated: status === 'simulated' });
   }
 
