@@ -23,6 +23,7 @@ import { applyReservedFiscalNumber, fiscalEmissionReuseBody, getFiscalEmissionCl
 //   • IdentificadorInterno: NFE-<order_id>
 // ============================================================================
 import { isOnlineSale, missingOnlineCustomerData, MISSING_CUSTOMER_MESSAGE } from "../_shared/fiscal/sale-fiscal-rules.ts";
+import { buildNfeCustomerPayload } from "./fiscal-customer.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 
 const corsHeaders = {
@@ -148,54 +149,6 @@ async function lookupIbge(city: string, uf: string, cepIbge?: string | null): Pr
 }
 
 
-// Fallback Tiny: pedidos Beta sincronizados (ou vindos do checkout-transparente) podem ter
-// shipping_address/CPF vazios. Busca os dados direto no Tiny ERP usando o tiny_order_id e
-// normaliza no mesmo formato do shipping_address da Expedição Beta.
-const TINY_V2_BASE = "https://api.tiny.com.br/api2";
-async function tinyGetOrderData(
-  tinyOrderId: string,
-): Promise<{ shipping_address: any | null; cpf: string | null } | null> {
-  const token = Deno.env.get("TINY_ERP_TOKEN");
-  if (!token || !tinyOrderId) return null;
-  try {
-    const reqBody = new URLSearchParams({ token, formato: "json", id: String(tinyOrderId) });
-    const resp = await fetch(`${TINY_V2_BASE}/pedido.obter.php`, {
-      method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: reqBody.toString(),
-      signal: AbortSignal.timeout(15000),
-    });
-    if (!resp.ok) return null;
-    const json = await resp.json();
-    const pedido = json?.retorno?.pedido;
-    if (!pedido) return null;
-    const ent = pedido.endereco_entrega || {};
-    const cli = pedido.cliente || {};
-    const pick = (a: any, b: any) => (a && String(a).trim() ? a : (b ?? ""));
-    const cep = pick(ent.cep, cli.cep);
-    const endereco = pick(ent.endereco, cli.endereco);
-    const cpf = (cli.cpf_cnpj && String(cli.cpf_cnpj).trim()) ? cli.cpf_cnpj : null;
-    let shipping_address: any = null;
-    if (cep || endereco) {
-      shipping_address = {
-        address1: endereco || "",
-        address2: pick(ent.complemento, cli.complemento),
-        city: pick(ent.cidade, cli.cidade),
-        province: pick(ent.uf, cli.uf),
-        zip: cep || "",
-        country: "Brazil",
-        name: pick(cli.nome, cli.fantasia),
-        number: pick(ent.numero, cli.numero),
-        neighborhood: pick(ent.bairro, cli.bairro),
-        phone: pick(cli.fone, cli.celular),
-      };
-    }
-    return { shipping_address, cpf };
-  } catch (_e) {
-    return null;
-  }
-}
-
 Deno.serve(withAccessLog("nfe-emitir", async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 // Fase 4 auth: funcionário com módulo ou chamada interna (service_role + x-internal-call).
@@ -224,9 +177,6 @@ Deno.serve(withAccessLog("nfe-emitir", async (req) => {
     };
 
     let order: NormOrder;
-    // Para pedidos Beta sem endereço/CPF, habilita fallback on-demand no Tiny ERP.
-    let betaTinyOrderId: string | null = null;
-    let betaOrderRowId: string | null = null;
     // Pedidos da Expedição/Beta são sempre online; vendas PDV dependem do tipo/canal.
     let isOnlineOrder = true;
 
@@ -347,8 +297,6 @@ Deno.serve(withAccessLog("nfe-emitir", async (req) => {
         .select("*, expedition_beta_order_items(*)")
         .eq("id", beta_order_id).single();
       if (oErr || !o) throw new Error(`Pedido (Beta) não encontrado: ${oErr?.message}`);
-      betaOrderRowId = (o as any).id;
-      betaTinyOrderId = (o as any).tiny_order_id || null;
       order = {
         customer_cpf: (o as any).customer_cpf || null,
         customer_name: (o as any).customer_name || null,
@@ -426,35 +374,6 @@ Deno.serve(withAccessLog("nfe-emitir", async (req) => {
     if (!items.length) throw new Error("Pedido sem itens");
 
 
-    // Fallback Tiny: completa endereço/CPF ausentes em pedidos Beta (sync sem endereco_entrega
-    // ou pedidos do checkout-transparente). Busca on-demand no Tiny e persiste de volta para
-    // reaproveitar em reemissão e geração de etiqueta.
-    if (betaTinyOrderId) {
-      const sa0 = (order.shipping_address || {}) as any;
-      const needAddr = digits(sa0.zip ?? sa0.cep).length !== 8;
-      const needCpf = digits(order.customer_cpf).length !== 11;
-      if (needAddr || needCpf) {
-        const td = await tinyGetOrderData(betaTinyOrderId);
-        if (td) {
-          if (needCpf && td.cpf) order.customer_cpf = td.cpf;
-          if (needAddr && td.shipping_address) {
-            const merged: any = { ...td.shipping_address };
-            for (const k of Object.keys(sa0)) {
-              const v = sa0[k];
-              if (v !== null && v !== undefined && String(v).trim() !== "") merged[k] = v;
-            }
-            order.shipping_address = merged;
-          }
-          if (betaOrderRowId) {
-            await supabase.from("expedition_beta_orders").update({
-              shipping_address: order.shipping_address,
-              customer_cpf: order.customer_cpf,
-            }).eq("id", betaOrderRowId);
-          }
-        }
-      }
-    }
-
     // Venda online: exige CPF válido e endereço completo da cliente (sem inventar bairro/UF).
     if (isOnlineOrder) {
       const ship0 = (order.shipping_address || {}) as any;
@@ -503,7 +422,7 @@ Deno.serve(withAccessLog("nfe-emitir", async (req) => {
     ], 3);
     const split = splitStreetNumber(streetSource);
     const logradouro = firstUsable([split.logradouro, cepInfo?.logradouro, "Rua nao informada"], 3);
-    // Prioriza o campo dedicado `number` (PDV/checkout/Tiny guardam separado do logradouro)
+    // Prioriza o campo dedicado `number` (PDV/checkout guardam separado do logradouro)
     const numero = firstUsable([ship.number, split.numero, "S/N"], 1).slice(0, 10) || "S/N";
     const bairro = firstUsable([ship.neighborhood, ship.address2, ship.bairro, cepInfo?.bairro, "Centro"], 2).slice(0, 60) || "Centro";
 
@@ -747,26 +666,19 @@ Deno.serve(withAccessLog("nfe-emitir", async (req) => {
         ...(company.ie_isento ? { IeIsento: true } : {}),
         ...(company.im ? { Im: digits(company.im) } : {}),
       },
-      Cliente: {
-        CpfCnpj: cpfDest,
-        NmCliente: sanitize(order.customer_name || "CONSUMIDOR").slice(0, 60),
-        IndicadorIe: 9,
-        Endereco: {
-          Cep: cepDest,
-          Logradouro: sanitize(logradouro).slice(0, 60) || "Rua nao informada",
-          Numero: sanitize(numero).slice(0, 10) || "S/N",
-          Bairro: bairro,
-          CodMunicipio: ibgeDest,
-          Municipio: cidadeDest.slice(0, 60),
-          Uf: ufDestino,
-          CodPais: 1058,
-          Pais: "BRASIL",
-        },
-        Contato: {
-          ...(order.customer_phone ? { Telefone: digits(order.customer_phone) } : {}),
-          ...(order.customer_email ? { Email: order.customer_email } : {}),
-        },
-      },
+      Cliente: buildNfeCustomerPayload({
+        cpf: cpfDest,
+        name: order.customer_name,
+        phone: order.customer_phone,
+        email: order.customer_email,
+        cep: cepDest,
+        logradouro,
+        numero,
+        bairro,
+        codMunicipio: ibgeDest,
+        municipio: cidadeDest,
+        uf: ufDestino,
+      }),
       Produtos: produtos,
       // Frete vai RATEADO dentro de cada Produto (ValorFrete por item) — ver bloco de rateio acima.
       // Não existe ValorFrete em nível de nota na API BrasilNFe.

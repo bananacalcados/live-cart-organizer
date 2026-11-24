@@ -54,3 +54,8 @@
 - [x] Devolução sem escolha começa com estorno; troca mantém o comportamento atual
 - [x] Respeitar voucher/estorno já salvo, inclusive após converter troca em devolução
 - [x] Testar a regra e conferir a prévia sem finalizar registros reais
+
+# Remoção do Tiny — NF-e e auditoria dos assistentes
+- [x] Remover somente o fallback Tiny da NF-e, preservando payload e validações
+- [x] Testar dados completos e CPF ausente sem chamar emissor; implantar e commitar
+- [x] Explicar canais, gatilhos e fontes de pedido/rastreio dos assistentes sem alterá-los
