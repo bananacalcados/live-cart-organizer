@@ -43,6 +43,7 @@ const SectorManager = lazyNamed(() => import("@/components/marketing/SectorManag
 const AttendanceRulesSettings = lazyNamed(() => import("@/components/settings/AttendanceRulesSettings"), "AttendanceRulesSettings");
 const GroupsVipManager = lazyNamed(() => import("@/components/marketing/GroupsVipManager"), "GroupsVipManager");
 const LiveSessionManager = lazyNamed(() => import("@/components/LiveSessionManager"), "LiveSessionManager");
+const DispatchLinksManager = lazyNamed(() => import("@/components/marketing/DispatchLinksManager"), "DispatchLinksManager");
 const MassTemplateDispatcher = lazyNamed(() => import("@/components/marketing/MassTemplateDispatcher"), "MassTemplateDispatcher");
 
 const PrizeManager = lazyNamed(() => import("@/components/marketing/PrizeManager"), "PrizeManager");
@@ -2021,7 +2022,14 @@ export default function Marketing() {
 
           {/* ── DISPAROS ── */}
           <TabsContent value="disparos" className="space-y-4">
-            <MassTemplateDispatcher />
+            <Tabs defaultValue="massa">
+              <TabsList>
+                <TabsTrigger value="massa">Disparo em massa</TabsTrigger>
+                <TabsTrigger value="links">Links de Disparo</TabsTrigger>
+              </TabsList>
+              <TabsContent value="massa"><MassTemplateDispatcher /></TabsContent>
+              <TabsContent value="links"><DispatchLinksManager /></TabsContent>
+            </Tabs>
           </TabsContent>
 
 

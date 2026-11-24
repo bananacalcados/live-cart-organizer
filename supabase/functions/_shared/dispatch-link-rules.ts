@@ -302,6 +302,6 @@ export function validatePreset(input: any) {
 
 export function validatePassword(p: unknown) {
   const s = String(p || '');
-  if (s.length < 8 || s.length > 128) throw new RuleError('senha_invalida', 'A senha precisa ter de 8 a 128 caracteres.');
+  if (s.length < 6 || s.length > 128) throw new RuleError('senha_invalida', 'A senha precisa ter de 6 a 128 caracteres.');
   return s;
 }

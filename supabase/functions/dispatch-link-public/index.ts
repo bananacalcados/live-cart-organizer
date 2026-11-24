@@ -286,7 +286,7 @@ async function handle(action: string, body: any, req: Request) {
       total_recipients: 0, rendered_message: R.renderMessage(cfg.tpl, varsCfg), variables_config: varsCfg,
       force_resend: false, track_clicks: false, status: 'scheduled_paused', template_components: cfg.tpl.components,
       has_dynamic_vars: Object.values(varsCfg).some((v) => v.mode !== '__static__'), header_media_url: cfg.headerMediaUrl,
-      template_category: cfg.tpl.category || 'MARKETING', dispatch_link_id: link.id,
+      template_category: cfg.tpl.category || 'MARKETING', dispatch_link_id: link.id, tipo_comunicacao: String(body.comm_type),
     }).select('id').single();
     if (insErr || !d) {
       await db.from('dispatch_link_tests').update({ used_at: null }).eq('id', test.id);

@@ -47,7 +47,49 @@ Deno.serve(withAccessLog('dispatch-link-admin', async (req) => {
     if (action === 'list') {
       const { data, error } = await db.from('dispatch_links').select(COLS).order('created_at', { ascending: false }).limit(200);
       if (error) throw error;
-      return json({ ok: true, links: data });
+      const ids = (data || []).map((l: any) => l.id);
+      const stats: Record<string, { dispatches: number; sent: number; last_used_at: string | null }> = {};
+      if (ids.length) {
+        const [{ data: dh }, { data: ss }] = await Promise.all([
+          db.from('dispatch_history').select('dispatch_link_id,sent_count,created_at').in('dispatch_link_id', ids).limit(5000),
+          db.from('dispatch_link_sessions').select('link_id,created_at').in('link_id', ids).order('created_at', { ascending: false }).limit(1000),
+        ]);
+        for (const id of ids) stats[id] = { dispatches: 0, sent: 0, last_used_at: null };
+        for (const r of (dh || []) as any[]) {
+          const s = stats[r.dispatch_link_id]; s.dispatches++; s.sent += Number(r.sent_count || 0);
+          if (!s.last_used_at || r.created_at > s.last_used_at) s.last_used_at = r.created_at;
+        }
+        for (const r of (ss || []) as any[]) {
+          const s = stats[r.link_id]; if (!s.last_used_at || r.created_at > s.last_used_at) s.last_used_at = r.created_at;
+        }
+      }
+      const { data: inst } = await db.from('whatsapp_numbers').select('id,label').in('id', [...new Set((data || []).flatMap((l: any) => l.allowed_instance_ids))]);
+      const names = Object.fromEntries((inst || []).map((i: any) => [i.id, i.label]));
+      return json({ ok: true, links: (data || []).map((l: any) => ({ ...l, stats: stats[l.id], instance_labels: l.allowed_instance_ids.map((x: string) => names[x] || '?') })) });
+    }
+    if (action === 'catalog') {
+      const [{ data: inst }, { data: pubs }] = await Promise.all([
+        db.from('whatsapp_numbers').select('id,label,provider,is_active').eq('provider', 'meta').eq('is_active', true).order('label'),
+        db.from('campanha_publicos').select('id,nome').order('nome').limit(200),
+      ]);
+      return json({ ok: true, instances: (inst || []).map((i: any) => ({ id: i.id, label: i.label })), saved_audiences: pubs || [], comm_types: R.COMM_TYPES });
+    }
+    if (action === 'templates') {
+      const iid = String(body.instance_id || '');
+      if (!/^[0-9a-f-]{36}$/i.test(iid)) return json({ ok: false, error: 'Instância inválida.' }, 400);
+      const URL_ = Deno.env.get('SUPABASE_URL')!, SERVICE = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+      const res = await fetch(`${URL_}/functions/v1/meta-whatsapp-get-templates?whatsappNumberId=${encodeURIComponent(iid)}`, { headers: { apikey: SERVICE, Authorization: `Bearer ${SERVICE}` } });
+      const d = await res.json().catch(() => ({}));
+      if (!d?.success) return json({ ok: false, error: 'Não consegui carregar os modelos dessa instância.' }, 502);
+      const { data: rates } = await db.from('dispatch_unit_cost_rates').select('category,unit_cost_brl');
+      const rate = (c: string) => { const r = (rates || []).find((x: any) => x.category === c); return r ? Number(r.unit_cost_brl) : null; };
+      const templates = (d.templates || []).filter((t: any) => t.status === 'APPROVED').map((t: any) => {
+        let supported = true; try { R.checkTemplateSupported(t); } catch { supported = false; }
+        const cat = String(t.category || 'MARKETING').toUpperCase();
+        const carousel = (t.components || []).some((c: any) => String(c.type).toUpperCase() === 'CAROUSEL');
+        return { name: t.name, language: t.language, category: cat, unit_cost_brl: rate(cat), supported, carousel };
+      });
+      return json({ ok: true, templates });
     }
     if (action === 'create') {
       const p = R.validatePreset(body);
@@ -94,10 +136,12 @@ Deno.serve(withAccessLog('dispatch-link-admin', async (req) => {
       const limit = Math.min(Math.max(Number(body.limit) || 50, 1), 200);
       const offset = Math.max(Number(body.offset) || 0, 0);
       const { data, error } = await db.from('dispatch_history')
-        .select('id,campaign_name,template_name,status,total_recipients,sent_count,failed_count,scheduled_at,started_at,completed_at,created_at,whatsapp_number_id')
+        .select('id,campaign_name,template_name,status,total_recipients,sent_count,failed_count,scheduled_at,started_at,completed_at,created_at,whatsapp_number_id,audience_filters,tipo_comunicacao,template_category,unit_cost_at_send')
         .eq('dispatch_link_id', id).order('created_at', { ascending: false }).range(offset, offset + limit - 1);
       if (error) throw error;
-      return json({ ok: true, dispatches: data });
+      const { data: tests } = await db.from('dispatch_link_tests').select('id,phone_masked,status,created_at,used_at')
+        .eq('link_id', id).order('created_at', { ascending: false }).limit(50);
+      return json({ ok: true, dispatches: data, tests: tests || [] });
     }
     return json({ ok: false, error: 'Ação inválida.' }, 400);
   } catch (e) {
