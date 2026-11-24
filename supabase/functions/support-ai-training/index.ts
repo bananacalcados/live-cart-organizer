@@ -68,7 +68,7 @@ Deno.serve(withAccessLog("support-ai-training", async (req) => {
         await save({
           ...base, ...tok(), status: "ok", review_group: "suporte", agent_text: outcome.text, agent_actions: outcome.actions,
           decision: dec.decision, reason: dec.reason, handoff_summary: outcome.handoff?.resumo ?? null,
-          would_route_support: !outcome.resolved && shouldRouteSupport(triage.categoria, !!outcome.handoff),
+          would_route_support: !outcome.resolved && !outcome.policyAnswer && shouldRouteSupport(triage.categoria, !!outcome.handoff),
           prazo_por_envio: !!outcome.prazoPorEnvio, silent_handoff: !!outcome.handoff && !outcome.text,
           tracking_info: outcome.tracking ? { pedido: outcome.tracking.ref, ...outcome.tracking.info } : null,
           link_type: outcome.link?.tipo ?? null, other_instances: ctx.otherInstances, consolidation_target: outcome.consolidation ?? null, cpf_different_phone: outcome.cpfDifferentPhone ?? false,

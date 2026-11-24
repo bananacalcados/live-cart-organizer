@@ -151,7 +151,7 @@ Deno.serve(withAccessLog("support-ai-agent", async (req) => {
       handoff_summary: outcome.handoff?.resumo ?? null, script_version: script?.version ?? null,
       sale_id: linkSale ?? (orders.length === 1 ? saleIds.get("P1") : null), sale_channel: linkOrder ? "online" : null,
       link_type: outcome.link?.tipo ?? null, customer_name: nome,
-      would_route_support: shouldRouteSupport(triage.categoria, !!outcome.handoff),
+      would_route_support: !outcome.policyAnswer && shouldRouteSupport(triage.categoria, !!outcome.handoff),
       prazo_por_envio: !!outcome.prazoPorEnvio,
       tracking_info: outcome.tracking ? { pedido: outcome.tracking.ref, ...outcome.tracking.info } : null,
       other_instances: ctx.otherInstances, consolidation_target: outcome.consolidation ?? null,

@@ -131,3 +131,26 @@ export function linkText(tipo: "troca" | "devolucao", nome: string | null, origi
 /** 8) Loja (humano) respondeu nas últimas 2h: no uso real o agente não age. */
 export const humanRepliedRecently = (conv: UnifiedMessage[], now: number, hours = 2) =>
   conv.some(m => m.from === "loja" && m.human && now - Date.parse(m.at) <= hours * 3600000 && Date.parse(m.at) <= now);
+
+/** Pergunta hipotética sobre a política ("se precisar trocar vocês trocam?"), sem pedido de troca de fato. */
+export function isPolicyQuestion(text: string): boolean {
+  const t = text.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  if (!/troc|devolv|devoluc/.test(t)) return false;
+  // Troca de modelo/numeração antes do envio é alteração do pedido: equipe decide.
+  if (/antes d[oe] (envio|enviar|mandar|despach)|\bpel[oa]\s|por (outro|outra|um|uma)\b|alterar o pedido|mudar o pedido/.test(t)) return false;
+  // Pedido concreto: quer trocar agora / não serviu → fluxo normal.
+  if (/\b(quero|queria|gostaria de|vou|preciso)\s+(trocar|devolver|fazer a troca)|nao (me )?serviu|ficou (pequen|grand|apertad|larg)|veio (errad|trocad|com defeito)|defeito/.test(t)
+    && !/\b(se|caso)\s+(eu\s+)?(precis|quiser|nao servir|nao der)/.test(t)) return false;
+  return /\b(se|caso)\s+(eu\s+)?(precis|quiser|nao servir|nao der|nao ficar)|(voces|vcs|vc|voce)\s+(troca|trocam|aceita|aceitam|faz|fazem)|\btem\s+troca|\baceita(m)?\s+troca|\bposso\s+(trocar|devolver)|\bda\s+(pra|para)\s+trocar|como funciona (a )?(troca|devoluc)|(qual|quanto)\s+(e\s+)?(o\s+)?prazo\s+(de|da|pra|para)\s+(troca|devoluc)|\be se nao servir/.test(t);
+}
+
+/** Resposta da política (palavras do Matthews). Loja física: só troca, na loja. */
+export function policyAnswerText(nome: string | null, channels: ("online" | "loja")[]): string {
+  const n = nome ? `, ${nome}` : "";
+  const online = "troca e devolução em até 7 dias, contando o dia da entrega do pedido";
+  const loja = "compras feitas na loja têm troca, feita direto na loja";
+  const onlyStore = channels.length > 0 && channels.every((c) => c === "loja");
+  const mixed = channels.includes("loja") && channels.includes("online");
+  const body = onlyStore ? `Pode sim${n} 😊 As ${loja}.` : mixed ? `Pode sim${n} 😊 Pedidos online: ${online}. E as ${loja}.` : `Pode sim${n} 😊 Fazemos ${online}.`;
+  return `${body} Posso te ajudar em mais alguma coisa?`;
+}

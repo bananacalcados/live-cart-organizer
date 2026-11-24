@@ -4,7 +4,7 @@ import { createOpenAI } from "npm:@ai-sdk/openai@4";
 import { jsonSchema, Output, stepCountIs, streamText, tool } from "npm:ai@7";
 import { z } from "npm:zod@3";
 import { createLovableAiGatewayRunIdFetch } from "./run-id.ts";
-import { alreadyResolved, CONSOLIDATION_TEXT, cpfRequestAllowed, isRefundStatusQuestion, linkText, preferredLink, publicCommentReply, silentHandoffText, type SupportFacts, waitingMinutes, withinWindowByShipping } from "./support-policy.ts";
+import { alreadyResolved, CONSOLIDATION_TEXT, cpfRequestAllowed, isPolicyQuestion, isRefundStatusQuestion, policyAnswerText, linkText, preferredLink, publicCommentReply, silentHandoffText, type SupportFacts, waitingMinutes, withinWindowByShipping } from "./support-policy.ts";
 import { completedRefundText, type SupportRefundConsult } from "./support-refund.ts";
 import { currentCustomerText, resolveReturnFlow, returnFlowContinuation, type ReturnFlowContext, type ReturnFlowState } from "./support-return-flow.ts";
 import { instagramDmHandoff } from "./instagram-support.ts";
@@ -259,7 +259,7 @@ export function agentOutcomeIsEmpty(out: Pick<AgentOutcome, "text" | "actions" |
 }
 
 export type AgentOutcome = {
-  text: string; actions: AgentAction[];
+  text: string; actions: AgentAction[]; policyAnswer?: boolean;
   link: { ref: string; tipo: "troca" | "devolucao" } | null;
   handoff: { motivo: string; resumo: string } | null;
   exchangeOffered: boolean;
@@ -293,6 +293,22 @@ export async function runAgent(cfg: GatewayConfig, model: string, script: string
   if (deps.consolidation) return { ...out, text: CONSOLIDATION_TEXT, consolidation: deps.consolidation };
   const refundQuestion = isRefundStatusQuestion(conv);
   if (triage.facts?.danger && !refundQuestion && !returnFlowContinuation(deps.returnFlow)) return handoff("situacao_sensivel", triage.justificativa);
+  // Só perguntou SE pode trocar/devolver e nenhum pedido foi entregue: responde a política, sem escalar.
+  if (["troca", "devolucao", "troca_ou_devolucao_ambiguo", "outro_suporte", "nada"].includes(triage.categoria) && !returnFlowContinuation(deps.returnFlow)
+      && isPolicyQuestion(currentCustomerText(conv))) {
+    let delivered = false;
+    for (const o of deps.orders.slice(0, 8)) {
+      if (o.canal !== "online") continue;
+      if (o.entregue_em) { delivered = true; break; }
+      const e = await deps.checkEligibility(o.ref, "troca");
+      rec("checar_elegibilidade", { pedido: o.ref, tipo: "troca" }, e);
+      if (e.motivo !== "sem_data_de_entrega") { delivered = true; break; }
+    }
+    if (!delivered) {
+      rec("responder_politica", {}, { pedidos: deps.orders.length });
+      return { ...out, policyAnswer: true, text: policyAnswerText(nome, deps.orders.map((o) => o.canal === "loja" ? "loja" : "online")) };
+    }
+  }
   if (deps.instagram) {
     if (!deps.orders.length && deps.cpfLookup && conv.some(m => m.from === "cliente" && /\b\d{3}\.?\d{3}\.?\d{3}-?\d{2}\b/.test(m.text))) {
       const candidate = await deps.cpfLookup();
@@ -562,8 +578,9 @@ CONTEXTO DO SISTEMA (não invente nada além disso):
 }
 
 /** Decisão final é do sistema, a partir das ações validadas. */
-export function finalDecision(o: Pick<AgentOutcome, "link" | "handoff"> & { tracking?: AgentOutcome["tracking"]; consolidation?: AgentOutcome["consolidation"]; resolved?: boolean; prazoPorEnvio?: boolean; prazoPorRecebimentoInformado?: boolean; multiOrders?: AgentOutcome["multiOrders"] }, orders: OrderCtx[]): { decision: string; reason: string } {
+export function finalDecision(o: Pick<AgentOutcome, "link" | "handoff"> & { tracking?: AgentOutcome["tracking"]; consolidation?: AgentOutcome["consolidation"]; resolved?: boolean; policyAnswer?: boolean; prazoPorEnvio?: boolean; prazoPorRecebimentoInformado?: boolean; multiOrders?: AgentOutcome["multiOrders"] }, orders: OrderCtx[]): { decision: string; reason: string } {
   if (o.resolved) return { decision: "nada", reason: "caso_ja_resolvido" };
+  if (o.policyAnswer) return { decision: "conversa", reason: "politica_troca_respondida" };
   if (o.consolidation) return { decision: "consolidar_em_outra_instancia", reason: "atendimento_humano_mesmo_assunto:" + o.consolidation.id };
   if (o.handoff) return { decision: "fila", reason: "ia_escalou:" + o.handoff.motivo };
   if (o.link) return { decision: "enviar_link", reason: o.prazoPorRecebimentoInformado ? "prazo_pela_data_informada_pela_cliente" : o.prazoPorEnvio ? "prazo_garantido_pela_data_de_envio" : "um_pedido_elegivel" };
