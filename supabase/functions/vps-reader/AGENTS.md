@@ -1,0 +1,2 @@
+- vps-reader is read-only: tables/columns only from _shared/vps-reader-allowlist.ts (explicit columns, never '*'); the only writes are the vps_reader_guard_hit/vps_reader_audit_log RPCs, enforced by rules_test.ts, so backups can never alter business data.
+- Access order: GET, IP in vps_reader_allowed_ips (first x-forwarded-for item, must equal cf-connecting-ip — the gateway rewrites both), SHA-256 key hash in vps_reader_keys (many active for rotation), then app_settings.vps_reader_enabled=true; no key secrets live in project secrets.

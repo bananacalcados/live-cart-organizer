@@ -29161,6 +29161,120 @@ export type Database = {
           },
         ]
       }
+      vps_reader_allowed_ips: {
+        Row: {
+          active: boolean
+          created_at: string
+          ip: string
+          label: string | null
+        }
+        Insert: {
+          active?: boolean
+          created_at?: string
+          ip: string
+          label?: string | null
+        }
+        Update: {
+          active?: boolean
+          created_at?: string
+          ip?: string
+          label?: string | null
+        }
+        Relationships: []
+      }
+      vps_reader_audit: {
+        Row: {
+          created_at: string
+          duration_ms: number | null
+          id: number
+          ip: string | null
+          ip_headers: Json | null
+          key_id: string | null
+          op: string | null
+          rows_returned: number | null
+          status: string
+          table_name: string | null
+        }
+        Insert: {
+          created_at?: string
+          duration_ms?: number | null
+          id?: never
+          ip?: string | null
+          ip_headers?: Json | null
+          key_id?: string | null
+          op?: string | null
+          rows_returned?: number | null
+          status: string
+          table_name?: string | null
+        }
+        Update: {
+          created_at?: string
+          duration_ms?: number | null
+          id?: never
+          ip?: string | null
+          ip_headers?: Json | null
+          key_id?: string | null
+          op?: string | null
+          rows_returned?: number | null
+          status?: string
+          table_name?: string | null
+        }
+        Relationships: []
+      }
+      vps_reader_guard: {
+        Row: {
+          bad_count: number
+          bad_window_start: string
+          blocked_until: string | null
+          calls: number
+          ip: string
+          window_start: string
+        }
+        Insert: {
+          bad_count?: number
+          bad_window_start?: string
+          blocked_until?: string | null
+          calls?: number
+          ip: string
+          window_start?: string
+        }
+        Update: {
+          bad_count?: number
+          bad_window_start?: string
+          blocked_until?: string | null
+          calls?: number
+          ip?: string
+          window_start?: string
+        }
+        Relationships: []
+      }
+      vps_reader_keys: {
+        Row: {
+          active: boolean
+          created_at: string
+          id: string
+          key_hash: string
+          label: string
+          revoked_at: string | null
+        }
+        Insert: {
+          active?: boolean
+          created_at?: string
+          id?: string
+          key_hash: string
+          label: string
+          revoked_at?: string | null
+        }
+        Update: {
+          active?: boolean
+          created_at?: string
+          id?: string
+          key_hash?: string
+          label?: string
+          revoked_at?: string | null
+        }
+        Relationships: []
+      }
       webhook_events_raw: {
         Row: {
           created_at: string
@@ -36021,6 +36135,23 @@ export type Database = {
       }
       vip_set_daily_destination: {
         Args: { p_day: string; p_force?: boolean; p_number_id: string }
+        Returns: Json
+      }
+      vps_reader_audit_log: {
+        Args: {
+          p_ip: string
+          p_ip_headers: Json
+          p_key_id: string
+          p_ms: number
+          p_op: string
+          p_rows: number
+          p_status: string
+          p_table: string
+        }
+        Returns: undefined
+      }
+      vps_reader_guard_hit: {
+        Args: { p_bad: boolean; p_ip: string }
         Returns: Json
       }
       wa_archive_summary_refresh: {

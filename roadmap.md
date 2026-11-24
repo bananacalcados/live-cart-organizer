@@ -65,3 +65,6 @@
 - [x] Comparar antes/depois com concierge desligado, humano recente e pausas; implantar e commitar
 - [x] Etapa 2: remover função implantada/código, telas e referências mortas sem apagar histórico
 - [x] Listar configurações/tabelas sem uso, validar e commitar separadamente
+
+# Porta de leitura da VPS
+- [x] Banco, função vps-reader (IP fixo, chave por hash, interruptor desligado), testes e conferência do cabeçalho de IP
