@@ -289,98 +289,8 @@ export async function routeMessage(
     console.error('[router] Error checking mass-dispatch gate:', err);
   }
 
-  // 5. Check concierge mode — production (all phones) or test (single phone)
-  let conciergeTestMode = false;
-  let conciergeProductionMode = false;
-  let conciergeTestPhone: string | null = null;
-  try {
-    const { data: settings } = await supabase
-      .from('app_settings')
-      .select('key, value')
-      .in('key', ['concierge_test_mode', 'concierge_test_phone', 'concierge_production_mode']);
-    if (settings) {
-      for (const s of settings) {
-        if (s.key === 'concierge_test_mode') conciergeTestMode = s.value === true || s.value === 'true';
-        if (s.key === 'concierge_test_phone') conciergeTestPhone = String(s.value || '').replace(/"/g, '');
-        if (s.key === 'concierge_production_mode') conciergeProductionMode = s.value === true || s.value === 'true';
-      }
-    }
-  } catch (err) {
-    console.error('[router] Error checking concierge settings:', err);
-  }
-
-  const conciergeAvailableForPhone = (() => {
-    // Production mode: Bia responds to everyone
-    if (conciergeProductionMode) return true;
-    // Test mode: Bia responds only to the test phone
-    if (!conciergeTestMode || !conciergeTestPhone) return false;
-    const phoneSuffix = normalizedPhone.slice(-8);
-    const testSuffix = conciergeTestPhone.replace(/\D/g, '').slice(-8);
-    return phoneSuffix === testSuffix;
-  })();
-
-  // 6. Concierge cooldown — once Bia interacted, never auto-reactivate her
-  // for the next 48h unless there is an explicit active AI session handled above.
-  if (conciergeAvailableForPhone) {
-    try {
-      const recentCutoff = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString();
-      const { data: recentConciergeLogs } = await supabase
-        .from('ai_conversation_logs')
-        .select('created_at, tool_called')
-        .in('phone', phoneVariants)
-        .eq('stage', 'concierge')
-        .gt('created_at', recentCutoff)
-        .order('created_at', { ascending: false })
-        .limit(5);
-
-      if (recentConciergeLogs && recentConciergeLogs.length > 0) {
-        const wasTransferred = recentConciergeLogs.some(
-          (log: any) => log.tool_called && log.tool_called.includes('transfer_to_human')
-        );
-
-        const lastConciergeAt = recentConciergeLogs[0].created_at;
-        const { data: outgoingAfterAi } = await supabase
-          .from('whatsapp_messages')
-          .select('id, message, created_at')
-          .in('phone', phoneVariants)
-          .eq('direction', 'outgoing')
-          .gt('created_at', lastConciergeAt)
-          .order('created_at', { ascending: false })
-          .limit(10);
-
-        const hasHumanMessageAfterConcierge = (outgoingAfterAi || []).some((msg) => {
-          if (isAiTaggedMessage(msg.message)) return false;
-          const normalizedMsg = normalizeAutomatedMessage(msg.message);
-          const msgAt = new Date(msg.created_at).getTime();
-          const isDuplicate = (outgoingAfterAi || [])
-            .filter((m) => isAiTaggedMessage(m.message))
-            .some((ai) => {
-              const aiNorm = normalizeAutomatedMessage(ai.message);
-              const aiAt = new Date(ai.created_at).getTime();
-              return aiNorm === normalizedMsg && Math.abs(aiAt - msgAt) <= AUTOMATED_DUPLICATE_WINDOW_MS;
-            });
-          return !isDuplicate;
-        });
-
-        if (wasTransferred) {
-          console.log(`[router] Concierge transferred to human for ${phone}, 48h reactivation lock active`);
-          return { agent: 'none', reason: 'concierge_transferred_cooldown' };
-        }
-
-        if (hasHumanMessageAfterConcierge) {
-          console.log(`[router] Human sent message after concierge for ${phone}, 48h reactivation lock active`);
-          return { agent: 'none', reason: 'human_after_concierge' };
-        }
-
-        console.log(`[router] Recent concierge interaction found for ${phone}, 48h reactivation lock active`);
-        return { agent: 'none', reason: 'recent_concierge_cooldown' };
-      }
-    } catch (err) {
-      console.error('[router] Error checking recent concierge cooldown:', err);
-    }
-  }
-
-  // 7. Intent pre-classification for Concierge
+  // 5. Intent pre-classification. The concierge was retired while disabled;
+  // support messages keep following the exact same legacy path as before.
   const msgLower = (input.messageText || '').toLowerCase().trim();
 
   // Sales-related keywords → legacy (human seller handles it)
@@ -396,7 +306,7 @@ export async function routeMessage(
     'novidade', 'novidades', 'lançamento', 'lancamento',
   ];
 
-  // Support/tracking keywords → concierge
+  // Support/tracking keywords → legacy support flow
   const supportKeywords = [
     'rastreio', 'rastrear', 'rastreamento', 'código de rastreio',
     'cadê meu pedido', 'cade meu pedido', 'meu pedido', 'onde está',
@@ -412,15 +322,10 @@ export async function routeMessage(
   const isSalesIntent = salesKeywords.some(kw => msgLower.includes(kw));
   const isSupportIntent = supportKeywords.some(kw => msgLower.includes(kw));
 
-  // Support intent takes priority; if both detected, route to concierge
+  // Support intent takes priority over sales intent. Keep the previous reason
+  // so existing webhook logs and fallback handling remain unchanged.
   if (isSupportIntent) {
-    // Only route to concierge if test mode is on AND phone matches test phone
-    if (conciergeAvailableForPhone) {
-      console.log(`[router] Support intent + concierge available for ${phone}`);
-      return { agent: 'concierge', reason: 'support_intent' };
-    }
-    // Concierge not available for this phone → legacy
-    console.log(`[router] Support intent for ${phone} but concierge not available, routing to legacy`);
+    console.log(`[router] Support intent for ${phone}, routing to legacy`);
     return { agent: 'legacy', reason: 'concierge_not_available' };
   }
 
