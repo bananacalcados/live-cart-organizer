@@ -48,6 +48,7 @@ const VipGoRedirect = lazy(() => import("./pages/VipGoRedirect"));
 const RhCandidatePage = lazy(() => import("./pages/RhCandidatePage"));
 const VagaPublicPage = lazy(() => import("./pages/VagaPublicPage"));
 const LiveOverlay = lazy(() => import("./pages/LiveOverlay"));
+const DispatchLinkWizard = lazy(() => import("./pages/dispatch-link/DispatchLinkWizard"));
 const PublicTracking = lazy(() => import("./pages/PublicTracking"));
 const CentralPublicPage = lazy(() => import("./pages/CentralPublicPage"));
 
@@ -149,6 +150,7 @@ const App = () => (
               <Route path="/vaga/:codigo" element={<VagaPublicPage />} />
               <Route path="/rh/candidato/:id" element={<RhCandidatePage />} />
               <Route path="/overlay/:token" element={<LiveOverlay />} />
+              <Route path="/d/:codigo" element={<DispatchLinkWizard />} />
               <Route path="/zap/:slug" element={<LiveWhatsAppRedirectPage />} />
 
               <Route path="/live-consumidor" element={<LiveConsumidorLP />} />

@@ -133,7 +133,37 @@ async function prepareConfig(link: R.DispatchLink, body: any) {
   return { instanceId, tpl, vars, headerMediaUrl, hash };
 }
 
+const UPLOAD_BUCKET = 'chat-media';
+const UPLOAD_MAX_BYTES = 5 * 1024 * 1024;
+const UPLOAD_TYPES: Record<string, string> = { 'image/jpeg': 'jpg', 'image/png': 'png' };
+const UPLOADS_PER_SESSION = 15;
+
+async function lockMinutesLeft(code: string, ip: string | null) {
+  const { data: l } = await db.from('dispatch_links').select('id').eq('code', code).maybeSingle();
+  if (!l) return 15;
+  const since = new Date(Date.now() - 15 * 60_000).toISOString();
+  const { data } = await db.from('dispatch_link_attempts').select('created_at,ip').eq('link_id', l.id).eq('success', false).gte('created_at', since)
+    .order('created_at', { ascending: false }).limit(40);
+  const rows = (data || []) as { created_at: string; ip: string | null }[];
+  const mine = rows.filter((r) => r.ip === ip);
+  // libera quando a tentativa que mantém o bloqueio sair da janela de 15 min
+  const ref = mine.length >= 5 ? mine[4] : rows.length >= 20 ? rows[19] : rows[rows.length - 1];
+  if (!ref) return 1;
+  const ms = new Date(ref.created_at).getTime() + 15 * 60_000 - Date.now();
+  return Math.max(1, Math.ceil(ms / 60_000));
+}
+
 async function handle(action: string, body: any, req: Request) {
+  if (action === 'info') {
+    const code = String(body.code || '');
+    if (!/^[A-Za-z0-9_-]{10,64}$/.test(code)) return json({ ok: false, code: 'link_invalido', error: 'Link inválido.' }, 404);
+    const { data: l } = await db.from('dispatch_links').select('name,is_active,revoked_at,expires_at').eq('code', code).maybeSingle();
+    if (!l) return json({ ok: false, code: 'link_invalido', error: 'Link inválido.' }, 404);
+    const usable = l.is_active && !l.revoked_at && (!l.expires_at || new Date(l.expires_at).getTime() > Date.now());
+    if (!usable) return json({ ok: false, code: 'link_inativo', error: 'Este link está desativado ou venceu.' }, 403);
+    return json({ ok: true, link_name: l.name });
+  }
+
   if (action === 'login') {
     const code = String(body.code || '');
     if (!/^[A-Za-z0-9_-]{10,64}$/.test(code)) return json({ ok: false, error: 'Código ou senha inválidos.' }, 401);
@@ -144,7 +174,10 @@ async function handle(action: string, body: any, req: Request) {
     if (error) throw error;
     const r = data as any;
     if (!r?.ok) {
-      if (r?.reason === 'locked') return json({ ok: false, code: 'bloqueado', error: 'Muitas tentativas. Espere 15 minutos.' }, 429);
+      if (r?.reason === 'locked') {
+        const minutes = await lockMinutesLeft(code, clientIp(req));
+        return json({ ok: false, code: 'bloqueado', minutes, error: `Muitas tentativas. Espere ${minutes} minuto(s).` }, 429);
+      }
       if (r?.reason === 'inactive') return json({ ok: false, code: 'link_inativo', error: 'Este link está desativado ou venceu.' }, 403);
       return json({ ok: false, code: 'senha_invalida', error: 'Código ou senha inválidos.' }, 401);
     }
@@ -285,6 +318,37 @@ async function handle(action: string, body: any, req: Request) {
       }
     }
     return json({ ok: true, dispatch_id: d.id, enqueued: inserted, excluded, skipped_sent_today: all.length - cands.length, scheduled_at: scheduledAt });
+  }
+
+  if (action === 'upload_url') {
+    const ct = String(body.content_type || '');
+    const ext = UPLOAD_TYPES[ct];
+    if (!ext) throw new R.RuleError('imagem_tipo', 'Use uma foto JPG ou PNG.');
+    const size = Number(body.size || 0);
+    if (!Number.isFinite(size) || size <= 0 || size > UPLOAD_MAX_BYTES) throw new R.RuleError('imagem_grande', 'A foto precisa ter até 5 MB.');
+    const dir = `dispatch-links/${link.id}/${session.id}`;
+    const { data: existing } = await db.storage.from(UPLOAD_BUCKET).list(dir, { limit: 100 });
+    if ((existing || []).length >= UPLOADS_PER_SESSION) throw new R.RuleError('imagem_limite', 'Muitas fotos neste acesso. Entre de novo pelo link.', 429);
+    const path = `${dir}/${crypto.randomUUID()}.${ext}`;
+    const { data, error } = await db.storage.from(UPLOAD_BUCKET).createSignedUploadUrl(path);
+    if (error || !data) throw error || new Error('signed upload failed');
+    return json({ ok: true, path, upload_url: data.signedUrl });
+  }
+
+  if (action === 'confirm_upload') {
+    const path = String(body.path || '');
+    const dir = `dispatch-links/${link.id}/${session.id}`;
+    const m = path.match(/^dispatch-links\/[0-9a-f-]{36}\/[0-9a-f-]{36}\/([0-9a-f-]{36}\.(jpg|png))$/);
+    if (!m || !path.startsWith(dir + '/')) throw new R.RuleError('imagem_invalida', 'Foto inválida. Envie de novo.', 403);
+    const { data: files } = await db.storage.from(UPLOAD_BUCKET).list(dir, { search: m[1], limit: 5 });
+    const f = (files || []).find((x: any) => x.name === m[1]) as any;
+    const size = Number(f?.metadata?.size || 0), mime = String(f?.metadata?.mimetype || '');
+    if (!f || size <= 0 || size > UPLOAD_MAX_BYTES || !UPLOAD_TYPES[mime]) {
+      if (f) await db.storage.from(UPLOAD_BUCKET).remove([path]);
+      throw new R.RuleError('imagem_invalida', 'A foto precisa ser JPG ou PNG de até 5 MB.');
+    }
+    const { data } = db.storage.from(UPLOAD_BUCKET).getPublicUrl(path);
+    return json({ ok: true, url: data.publicUrl });
   }
 
   if (action === 'status') {
