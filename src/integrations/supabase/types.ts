@@ -5739,6 +5739,7 @@ export type Database = {
           cost_per_message: number | null
           created_at: string
           created_by: string | null
+          dispatch_link_id: string | null
           failed_count: number | null
           force_resend: boolean | null
           has_dynamic_vars: boolean | null
@@ -5776,6 +5777,7 @@ export type Database = {
           cost_per_message?: number | null
           created_at?: string
           created_by?: string | null
+          dispatch_link_id?: string | null
           failed_count?: number | null
           force_resend?: boolean | null
           has_dynamic_vars?: boolean | null
@@ -5813,6 +5815,7 @@ export type Database = {
           cost_per_message?: number | null
           created_at?: string
           created_by?: string | null
+          dispatch_link_id?: string | null
           failed_count?: number | null
           force_resend?: boolean | null
           has_dynamic_vars?: boolean | null
@@ -5841,7 +5844,47 @@ export type Database = {
           variables_config?: Json | null
           whatsapp_number_id?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "dispatch_history_dispatch_link_id_fkey"
+            columns: ["dispatch_link_id"]
+            isOneToOne: false
+            referencedRelation: "dispatch_links"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      dispatch_link_attempts: {
+        Row: {
+          created_at: string
+          id: number
+          ip: string | null
+          link_id: string | null
+          success: boolean
+        }
+        Insert: {
+          created_at?: string
+          id?: number
+          ip?: string | null
+          link_id?: string | null
+          success: boolean
+        }
+        Update: {
+          created_at?: string
+          id?: number
+          ip?: string | null
+          link_id?: string | null
+          success?: boolean
+        }
+        Relationships: [
+          {
+            foreignKeyName: "dispatch_link_attempts_link_id_fkey"
+            columns: ["link_id"]
+            isOneToOne: false
+            referencedRelation: "dispatch_links"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       dispatch_link_clicks: {
         Row: {
@@ -5882,6 +5925,176 @@ export type Database = {
           phone_key?: string | null
           recipient_id?: string
           user_agent?: string | null
+        }
+        Relationships: []
+      }
+      dispatch_link_sessions: {
+        Row: {
+          created_at: string
+          expires_at: string
+          id: string
+          ip: string | null
+          link_id: string
+          password_version: number
+          revoked_at: string | null
+          token_hash: string
+        }
+        Insert: {
+          created_at?: string
+          expires_at: string
+          id?: string
+          ip?: string | null
+          link_id: string
+          password_version: number
+          revoked_at?: string | null
+          token_hash: string
+        }
+        Update: {
+          created_at?: string
+          expires_at?: string
+          id?: string
+          ip?: string | null
+          link_id?: string
+          password_version?: number
+          revoked_at?: string | null
+          token_hash?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "dispatch_link_sessions_link_id_fkey"
+            columns: ["link_id"]
+            isOneToOne: false
+            referencedRelation: "dispatch_links"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      dispatch_link_tests: {
+        Row: {
+          config_hash: string
+          created_at: string
+          error: string | null
+          id: string
+          link_id: string
+          message_id: string | null
+          phone_masked: string | null
+          session_id: string
+          status: string
+          used_at: string | null
+          used_dispatch_id: string | null
+        }
+        Insert: {
+          config_hash: string
+          created_at?: string
+          error?: string | null
+          id?: string
+          link_id: string
+          message_id?: string | null
+          phone_masked?: string | null
+          session_id: string
+          status: string
+          used_at?: string | null
+          used_dispatch_id?: string | null
+        }
+        Update: {
+          config_hash?: string
+          created_at?: string
+          error?: string | null
+          id?: string
+          link_id?: string
+          message_id?: string | null
+          phone_masked?: string | null
+          session_id?: string
+          status?: string
+          used_at?: string | null
+          used_dispatch_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "dispatch_link_tests_link_id_fkey"
+            columns: ["link_id"]
+            isOneToOne: false
+            referencedRelation: "dispatch_links"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "dispatch_link_tests_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "dispatch_link_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      dispatch_links: {
+        Row: {
+          allow_schedule: boolean
+          allow_send_now: boolean
+          allowed_audiences: Json
+          allowed_comm_types: string[] | null
+          allowed_instance_ids: string[]
+          allowed_templates: Json
+          code: string
+          created_at: string
+          created_by: string | null
+          description: string | null
+          expires_at: string | null
+          id: string
+          is_active: boolean
+          max_recipients: number
+          name: string
+          password_hash: string
+          password_version: number
+          revoked_at: string | null
+          simulate_only: boolean
+          template_mode: string
+          updated_at: string
+        }
+        Insert: {
+          allow_schedule?: boolean
+          allow_send_now?: boolean
+          allowed_audiences?: Json
+          allowed_comm_types?: string[] | null
+          allowed_instance_ids: string[]
+          allowed_templates?: Json
+          code: string
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          expires_at?: string | null
+          id?: string
+          is_active?: boolean
+          max_recipients: number
+          name: string
+          password_hash: string
+          password_version?: number
+          revoked_at?: string | null
+          simulate_only?: boolean
+          template_mode?: string
+          updated_at?: string
+        }
+        Update: {
+          allow_schedule?: boolean
+          allow_send_now?: boolean
+          allowed_audiences?: Json
+          allowed_comm_types?: string[] | null
+          allowed_instance_ids?: string[]
+          allowed_templates?: Json
+          code?: string
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          expires_at?: string | null
+          id?: string
+          is_active?: boolean
+          max_recipients?: number
+          name?: string
+          password_hash?: string
+          password_version?: number
+          revoked_at?: string | null
+          simulate_only?: boolean
+          template_mode?: string
+          updated_at?: string
         }
         Relationships: []
       }
@@ -32044,6 +32257,23 @@ export type Database = {
       dispatch_link_click: {
         Args: { p_code: string; p_ip?: string; p_page?: string; p_ua?: string }
         Returns: Json
+      }
+      dispatch_link_hash_password: {
+        Args: { p_password: string }
+        Returns: string
+      }
+      dispatch_link_login: {
+        Args: {
+          p_code: string
+          p_ip: string
+          p_password: string
+          p_token_hash: string
+        }
+        Returns: Json
+      }
+      dispatch_link_sent_today: {
+        Args: { p_instance: string; p_template: string }
+        Returns: string[]
       }
       dispatch_quota_summary: {
         Args: {
