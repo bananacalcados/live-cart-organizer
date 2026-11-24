@@ -52,7 +52,7 @@ export async function callLink<T = any>(action: string, body: Record<string, unk
 }
 
 export type VarCfg = { mode: "__static__" | "__first_name__" | "__full_name__"; staticValue?: string };
-export type Tpl = { name: string; language: string; category?: string; components: any[]; variable_keys: string[] };
+export type Tpl = { name: string; language: string; category?: string; unit_cost_brl?: number | null; components: any[]; variable_keys: string[] };
 
 export function headerFormat(t: Tpl | null) {
   const h = t?.components?.find((c: any) => String(c.type).toUpperCase() === "HEADER");
@@ -99,3 +99,50 @@ export function formatBrasilia(iso: string) {
 export const COMM_LABELS: Record<string, string> = {
   convite_live: "Convite para live", oferta: "Oferta", reativacao: "Chamar cliente sumida", lancamento: "Lançamento", pesquisa: "Pesquisa",
 };
+
+export const CATEGORY_INFO: Record<string, { label: string; cls: string }> = {
+  MARKETING: { label: "Marketing", cls: "bg-accent text-accent-foreground" },
+  UTILITY: { label: "Utilidade", cls: "bg-stage-shipped text-primary-foreground" },
+  AUTHENTICATION: { label: "Autenticação", cls: "bg-stage-pre-sale text-primary-foreground" },
+};
+
+export const brl = (n: number) => n.toLocaleString("pt-BR", { style: "currency", currency: "BRL", minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+/** "2.456 mensagens × R$ 0,39 ≈ R$ 957,84" */
+export function costLine(total: number, unit: number | null | undefined) {
+  if (unit == null) return null;
+  return `${total.toLocaleString("pt-BR")} mensagens × ${brl(unit)} ≈ ${brl(Math.round(total * unit * 100) / 100)}`;
+}
+
+export type Seg = { text: string } | { slot: number; value: string | null; example: boolean };
+
+/** Quebra o texto do modelo em pedaços, marcando cada {{n}} com o que foi digitado (ou vazio). */
+export function fillSegments(prefix: string, text: string, vars: Record<string, VarCfg>): Seg[] {
+  const out: Seg[] = [];
+  let last = 0;
+  for (const m of text.matchAll(/\{\{(\d+)\}\}/g)) {
+    if (m.index! > last) out.push({ text: text.slice(last, m.index) });
+    const n = Number(m[1]);
+    const v = vars[`${prefix}_${n}`];
+    if (!v) out.push({ slot: n, value: null, example: false });
+    else if (v.mode === "__static__") out.push({ slot: n, value: v.staticValue?.trim() || null, example: false });
+    else out.push({ slot: n, value: v.mode === "__full_name__" ? "Maria Silva" : "Maria", example: true });
+    last = m.index! + m[0].length;
+  }
+  if (last < text.length) out.push({ text: text.slice(last) });
+  return out;
+}
+
+/** Trecho do texto em volta do espaço: "Olá ___, temos novidades". */
+export function slotContext(t: Tpl, key: string) {
+  const [prefix, n] = [key.slice(0, key.lastIndexOf("_")), key.slice(key.lastIndexOf("_") + 1)];
+  const comp = (t.components || []).find((c: any) => String(c.type).toUpperCase() === prefix.toUpperCase());
+  const text: string = comp?.text || "";
+  const i = text.indexOf(`{{${n}}}`);
+  if (i < 0) return "";
+  const clean = (s: string) => s.replace(/\{\{(\d+)\}\}/g, "[$1]").replace(/\s+/g, " ");
+  const end = i + n.length + 4;
+  const before = clean(text.slice(Math.max(0, i - 28), i)).trimStart();
+  const after = clean(text.slice(end, end + 28)).trimEnd();
+  return `${i > 28 ? "…" : ""}${before}___${after}${end + 28 < text.length ? "…" : ""}`.replace(/\s+/g, " ").trim();
+}

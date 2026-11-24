@@ -4,7 +4,8 @@ import { ArrowLeft, CheckCircle2, ImagePlus, Info, Loader2, Lock, RefreshCw, Sen
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
-  callLink, friendly, LinkError, previewParts, headerFormat, configKey, brasiliaToIso, formatBrasilia, COMM_LABELS,
+  callLink, friendly, LinkError, headerFormat, configKey, brasiliaToIso, formatBrasilia, COMM_LABELS,
+  CATEGORY_INFO, brl, costLine, fillSegments, slotContext, type Seg,
   type Tpl, type VarCfg,
 } from "@/lib/dispatchLinkPublic";
 
@@ -34,13 +35,53 @@ function ErrorBox({ text }: { text: string | null }) {
   return <div role="alert" className="rounded-xl border border-destructive/40 bg-destructive/10 p-3 text-[15px] text-destructive">{text}</div>;
 }
 
-function Choice({ active, onClick, title, sub }: { active: boolean; onClick: () => void; title: string; sub?: string }) {
+function Choice({ active, onClick, title, sub, extra }: { active: boolean; onClick: () => void; title: string; sub?: string; extra?: React.ReactNode }) {
   return (
     <button type="button" onClick={onClick} aria-pressed={active}
       className={`w-full rounded-xl border-2 p-4 text-left transition ${active ? "border-primary bg-primary/10" : "border-border bg-card"}`}>
       <div className="text-base font-semibold">{title}</div>
       {sub && <div className="mt-0.5 text-sm text-muted-foreground">{sub}</div>}
+      {extra}
     </button>
+  );
+}
+
+function Segs({ segs }: { segs: Seg[] }) {
+  return <>{segs.map((g, i) => "text" in g ? <span key={i}>{g.text}</span>
+    : g.value ? <span key={i} className={g.example ? "rounded bg-primary/15 px-0.5" : ""}>{g.value}</span>
+    : <mark key={i} className="rounded bg-primary px-1 font-semibold text-primary-foreground">[Espaço {g.slot}]</mark>)}</>;
+}
+
+function CategoryBadge({ tpl }: { tpl: Tpl }) {
+  const c = CATEGORY_INFO[String(tpl.category || "MARKETING").toUpperCase()] || { label: tpl.category || "Outra", cls: "bg-muted text-foreground" };
+  return (
+    <span className="mt-2 flex flex-wrap items-center gap-2">
+      <span className={`rounded-full px-3 py-1 text-sm font-bold ${c.cls}`}>{c.label}</span>
+      {tpl.unit_cost_brl != null && <span className="text-sm font-semibold">{brl(tpl.unit_cost_brl)} por mensagem</span>}
+    </span>
+  );
+}
+
+function FullPreview({ tpl, vars, image }: { tpl: Tpl; vars: Record<string, VarCfg>; image: string | null }) {
+  const comp = (ty: string) => (tpl.components || []).find((c: any) => String(c.type).toUpperCase() === ty);
+  const h = comp("HEADER"), b = comp("BODY"), f = comp("FOOTER"), btns = comp("BUTTONS")?.buttons || [];
+  const fmt = h ? String(h.format || "TEXT").toUpperCase() : null;
+  return (
+    <div>
+      <div className="mb-1 text-sm font-medium text-muted-foreground">Assim a cliente vai receber (nome de exemplo):</div>
+      <div className="rounded-2xl bg-secondary p-3" data-testid="previa">
+        <div className="max-w-[92%] overflow-hidden rounded-xl bg-card shadow-sm">
+          {fmt === "IMAGE" && (image ? <img src={image} alt="Foto da mensagem" className="max-h-64 w-full object-cover" />
+            : <div className="flex h-32 items-center justify-center bg-muted text-sm text-muted-foreground">[Foto ainda não escolhida]</div>)}
+          <div className="whitespace-pre-wrap p-3 text-[15px] leading-relaxed">
+            {fmt === "TEXT" && h?.text && <div className="mb-1 font-bold"><Segs segs={fillSegments("header", h.text, vars)} /></div>}
+            {b?.text && <Segs segs={fillSegments("body", b.text, vars)} />}
+            {f?.text && <div className="mt-2 text-xs text-muted-foreground">{f.text}</div>}
+          </div>
+          {btns.map((x: any, i: number) => <div key={i} className="border-t p-2 text-center text-sm font-medium text-whatsapp">{String(x.text || "")}</div>)}
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -187,7 +228,7 @@ export default function DispatchLinkWizard() {
     catch (e) { handleErr(e); } finally { setBusy(false); }
   }
 
-  const p = tpl ? previewParts(tpl, vars) : null;
+  const cost = costLine(count?.total ?? 0, tpl?.unit_cost_brl);
   const total = count?.total ?? 0;
 
   return (
@@ -245,8 +286,18 @@ export default function DispatchLinkWizard() {
               <HowTo>Toque na mensagem que quer mandar. Preencha os espaços em branco: pode escrever um texto ou usar o nome da cliente. Se pedir foto, escolha uma foto do celular. Embaixo aparece como a mensagem vai chegar.</HowTo>
               {instance.templates.length === 0 && <ErrorBox text="Nenhuma mensagem liberada para este link. Fale com o Matthews." />}
               <div className="flex flex-col gap-2">
-                {instance.templates.map((t) => <Choice key={`${t.name}|${t.language}`} active={tplKey === `${t.name}|${t.language}`} title={t.name.replace(/_/g, " ")} sub={headerFormat(t) === "IMAGE" ? "Com foto" : "Só texto"} onClick={() => pickTemplate(t)} />)}
+                {instance.templates.map((t) => <Choice key={`${t.name}|${t.language}`} active={tplKey === `${t.name}|${t.language}`} title={t.name.replace(/_/g, " ")} sub={headerFormat(t) === "IMAGE" ? "Com foto" : "Só texto"} extra={<CategoryBadge tpl={t} />} onClick={() => pickTemplate(t)} />)}
               </div>
+
+              {tpl && <FullPreview tpl={tpl} vars={vars} image={hdr === "IMAGE" ? image : null} />}
+              {tpl && hdr === "IMAGE" && (
+                <label className="flex h-14 cursor-pointer items-center justify-center gap-2 rounded-xl border-2 border-dashed text-base font-medium">
+                  {uploading ? <Loader2 className="h-5 w-5 animate-spin" /> : <ImagePlus className="h-5 w-5" />}
+                  {uploading ? "Enviando a foto…" : image ? "Trocar a foto" : "Escolher a foto (vai no topo da mensagem)"}
+                  <input type="file" accept="image/jpeg,image/png" className="hidden" disabled={uploading}
+                    onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) uploadImage(f); }} />
+                </label>
+              )}
 
               {tpl && tpl.variable_keys.length > 0 && (
                 <div className="flex flex-col gap-3 rounded-xl border p-3">
@@ -256,7 +307,7 @@ export default function DispatchLinkWizard() {
                     const isBtn = k.startsWith("button_url_");
                     return (
                       <div key={k} className="flex flex-col gap-2">
-                        <div className="text-sm font-medium">{isBtn ? "Final do link do botão" : `Espaço ${n + 1}`}</div>
+                        <div className="text-sm font-medium">{isBtn ? "Final do link do botão" : <>Espaço {k.slice(k.lastIndexOf("_") + 1)}{k.startsWith("header_") ? " (título)" : ""} <span className="font-normal text-muted-foreground">— {slotContext(tpl, k)}</span></>}</div>
                         {!isBtn && (
                           <div className="grid grid-cols-3 gap-2">
                             {([["__static__", "Texto"], ["__first_name__", "1º nome"], ["__full_name__", "Nome todo"]] as const).map(([m, l]) => (
@@ -275,31 +326,6 @@ export default function DispatchLinkWizard() {
                 </div>
               )}
 
-              {tpl && hdr === "IMAGE" && (
-                <label className="flex h-14 cursor-pointer items-center justify-center gap-2 rounded-xl border-2 border-dashed text-base font-medium">
-                  {uploading ? <Loader2 className="h-5 w-5 animate-spin" /> : <ImagePlus className="h-5 w-5" />}
-                  {image ? "Trocar a foto" : "Escolher a foto"}
-                  <input type="file" accept="image/jpeg,image/png" className="hidden" disabled={uploading}
-                    onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) uploadImage(f); }} />
-                </label>
-              )}
-
-              {p && (
-                <div>
-                  <div className="mb-1 text-sm font-medium text-muted-foreground">Assim vai chegar (com nome de exemplo):</div>
-                  <div className="rounded-2xl bg-secondary p-3">
-                    <div className="max-w-[92%] overflow-hidden rounded-xl bg-card shadow-sm">
-                      {hdr === "IMAGE" && (image ? <img src={image} alt="Foto da mensagem" className="max-h-64 w-full object-cover" /> : <div className="flex h-32 items-center justify-center bg-muted text-sm text-muted-foreground">foto aqui</div>)}
-                      <div className="whitespace-pre-wrap p-3 text-[15px]">
-                        {p.header && <div className="mb-1 font-bold">{p.header}</div>}
-                        {p.body}
-                        {p.footer && <div className="mt-2 text-xs text-muted-foreground">{p.footer}</div>}
-                      </div>
-                      {p.buttons.map((b, i) => <div key={i} className="border-t p-2 text-center text-sm font-medium text-primary">{b}</div>)}
-                    </div>
-                  </div>
-                </div>
-              )}
               {testStale && <div className="flex gap-2 rounded-xl border border-accent bg-accent/20 p-3 text-sm"><AlertTriangle className="h-5 w-5 shrink-0" /> Você mudou a mensagem. Vai precisar fazer o teste de novo.</div>}
               <ErrorBox text={err} />
               <Button className="mt-auto h-14 text-lg" disabled={!modelReady || uploading} onClick={() => go("publico")}>Continuar</Button>
@@ -320,6 +346,7 @@ export default function DispatchLinkWizard() {
                 <div className={`rounded-xl p-4 text-center ${count.exceeds ? "bg-destructive/10 text-destructive" : "bg-primary/10"}`}>
                   <div className="text-3xl font-bold">{count.total.toLocaleString("pt-BR")}</div>
                   <div className="text-sm">{count.exceeds ? `pessoas — passa do máximo deste link (${opts.max_recipients.toLocaleString("pt-BR")}). Fale com o Matthews.` : "pessoas nesse público"}</div>
+                  {cost && !count.exceeds && <div className="mt-2 text-sm font-semibold">Custo estimado: {cost}</div>}
                 </div>
               )}
               <ErrorBox text={err} />
@@ -353,7 +380,9 @@ export default function DispatchLinkWizard() {
               <HowTo>Confira tudo. Escolha <b>Enviar agora</b> ou <b>Agendar</b> (horário de Brasília). Depois toque em <b>Confirmar</b> e confirme mais uma vez.</HowTo>
               <dl className="divide-y rounded-xl border">
                 {[["Mensagem", tpl.name.replace(/_/g, " ")], ["WhatsApp", instance?.label || ""], ["Público", audience?.label || ""],
-                  ["Quantidade", `${total.toLocaleString("pt-BR")} pessoas`], ["Tipo", COMM_LABELS[commType] || commType]].map(([k, v]) => (
+                  ["Quantidade", `${total.toLocaleString("pt-BR")} pessoas`], ["Tipo", COMM_LABELS[commType] || commType],
+                  ["Categoria", CATEGORY_INFO[String(tpl.category || "").toUpperCase()]?.label || tpl.category || ""],
+                  ...(cost ? [["Custo estimado", cost]] : [])].map(([k, v]) => (
                   <div key={k} className="flex justify-between gap-3 p-3"><dt className="text-muted-foreground">{k}</dt><dd className="text-right font-semibold">{v}</dd></div>
                 ))}
               </dl>

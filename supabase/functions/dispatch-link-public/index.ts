@@ -187,6 +187,12 @@ async function handle(action: string, body: any, req: Request) {
   const { session, link } = await loadContext(body.token);
 
   if (action === 'options') {
+    // Custo por categoria: mesma tabela que o ERP usa para carimbar o custo dos disparos (dispatch_unit_cost_for).
+    const { data: rates } = await db.from('dispatch_unit_cost_rates').select('category,unit_cost_brl');
+    const rateOf = (c: unknown) => {
+      const r = (rates || []).find((x: any) => x.category === String(c || 'MARKETING').toUpperCase());
+      return r ? Number(r.unit_cost_brl) : null;
+    };
     const { data: inst } = await db.from('whatsapp_numbers').select('id,label,provider,is_active').in('id', link.allowed_instance_ids);
     const instances = [];
     for (const i of (inst || []).filter((x: any) => x.is_active && x.provider === 'meta')) {
@@ -194,7 +200,7 @@ async function handle(action: string, body: any, req: Request) {
       try {
         templates = (await fetchTemplates(i.id)).filter((t) => {
           try { R.checkTemplateAllowed(link, t.name, t.language); R.checkTemplateSupported(t); return true; } catch { return false; }
-        }).map((t) => ({ name: t.name, language: t.language, category: t.category, components: t.components, variable_keys: R.templateVarKeys(t) }));
+        }).map((t) => ({ name: t.name, language: t.language, category: String(t.category || 'MARKETING').toUpperCase(), unit_cost_brl: rateOf(t.category), components: t.components, variable_keys: R.templateVarKeys(t) }));
       } catch { templates = []; }
       instances.push({ id: i.id, label: i.label, templates });
     }
