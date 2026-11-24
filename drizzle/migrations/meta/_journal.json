@@ -1933,6 +1933,13 @@
       "when": 1795467829736,
       "tag": "0275_central_reverse_prepare_exit_note_only",
       "breakpoints": true
+    },
+    {
+      "idx": 276,
+      "version": "7",
+      "when": 1795533095981,
+      "tag": "0276_refresh_cris_cafe_shopify_status",
+      "breakpoints": true
     }
   ]
 }
