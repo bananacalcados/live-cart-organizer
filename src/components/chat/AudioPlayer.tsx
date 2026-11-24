@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from "react";
-import { Play, Pause } from "lucide-react";
+import { Play, Pause, CircleAlert } from "lucide-react";
 
 interface AudioPlayerProps {
   src: string;
@@ -22,14 +22,30 @@ export function AudioPlayer({ src, direction, className = "" }: AudioPlayerProps
   const [duration, setDuration] = useState(0);
   const [currentTime, setCurrentTime] = useState(0);
   const [speed, setSpeed] = useState(1);
+  const [loadError, setLoadError] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const progressRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    setLoadError(false);
+    setDuration(0);
+    setCurrentTime(0);
+    setIsPlaying(false);
+  }, [src]);
 
   useEffect(() => {
     const audio = audioRef.current;
     if (!audio) return;
 
-    const onLoaded = () => setDuration(audio.duration);
+    const onLoaded = () => {
+      setDuration(audio.duration);
+      setLoadError(false);
+    };
+    const onLoadError = () => {
+      setIsPlaying(false);
+      setDuration(0);
+      setLoadError(true);
+    };
     const onTimeUpdate = () => {
       if (!isDragging) setCurrentTime(audio.currentTime);
     };
@@ -42,26 +58,32 @@ export function AudioPlayer({ src, direction, className = "" }: AudioPlayerProps
     audio.addEventListener("durationchange", onLoaded);
     audio.addEventListener("timeupdate", onTimeUpdate);
     audio.addEventListener("ended", onEnded);
+    audio.addEventListener("error", onLoadError);
 
     return () => {
       audio.removeEventListener("loadedmetadata", onLoaded);
       audio.removeEventListener("durationchange", onLoaded);
       audio.removeEventListener("timeupdate", onTimeUpdate);
       audio.removeEventListener("ended", onEnded);
+      audio.removeEventListener("error", onLoadError);
     };
-  }, [isDragging]);
+  }, [isDragging, src]);
 
   const togglePlay = useCallback(() => {
     const audio = audioRef.current;
-    if (!audio) return;
+    if (!audio || loadError) return;
     if (isPlaying) {
       audio.pause();
       setIsPlaying(false);
     } else {
-      audio.play().catch(() => {});
-      setIsPlaying(true);
+      audio.play()
+        .then(() => setIsPlaying(true))
+        .catch(() => {
+          setIsPlaying(false);
+          setLoadError(true);
+        });
     }
-  }, [isPlaying]);
+  }, [isPlaying, loadError]);
 
   const cycleSpeed = useCallback(() => {
     const audio = audioRef.current;
@@ -112,6 +134,15 @@ export function AudioPlayer({ src, direction, className = "" }: AudioPlayerProps
   const progress = duration > 0 ? (currentTime / duration) * 100 : 0;
   const isOut = direction === "outgoing";
   const accentColor = isOut ? "#7c57d1" : "#00a884";
+
+  if (loadError) {
+    return (
+      <div className={`flex items-center gap-2 rounded-md bg-muted/60 px-3 py-2 text-xs text-muted-foreground ${className}`} role="status">
+        <CircleAlert className="h-4 w-4 shrink-0" />
+        Áudio indisponível
+      </div>
+    );
+  }
 
   return (
     <div className={`flex items-center gap-2 min-w-[200px] max-w-[280px] ${className}`}>

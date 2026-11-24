@@ -10,6 +10,7 @@ import { Instagram, Send, Loader2, AlertCircle, Info, Camera, Video, Mic, Paperc
 import { toast } from "sonner";
 import { convertAudioBlobToWav } from "@/lib/audioRecorder";
 import { ChatPixButton } from "@/components/ChatPixButton";
+import { AudioPlayer } from "@/components/chat/AudioPlayer";
 import { instagramWindowLabel, type InstagramWindow } from '../../../supabase/functions/_shared/instagram-window';
 
 interface DMMessage {
@@ -444,7 +445,7 @@ export function InstagramDMChat({
                       <video src={m.media_url} controls className="rounded mb-1 max-w-full" />
                     )}
                     {m.media_url && m.media_type?.startsWith("audio") && (
-                      <audio src={m.media_url} controls className="mb-1 w-full" />
+                      <AudioPlayer src={m.media_url} direction={m.direction} className="mb-1 w-full" />
                     )}
                     {(m.message || (!m.media_url && m.media_type)) && (
                       <p className="whitespace-pre-wrap break-words">{m.message || `[${m.media_type}]`}</p>

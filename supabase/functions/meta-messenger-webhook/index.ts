@@ -10,6 +10,7 @@ import { rhVagaInboxSource } from "../_shared/rh-vaga-automation.ts";
 import {instagramInteractionPayload,followupButtonJob} from '../_shared/instagram-interaction.ts';
 import {handleLiveFollowupButton} from '../_shared/live-followup-button.ts';
 import { rememberInstagramIdentity } from '../_shared/instagram-identity.ts';
+import { rehostInstagramMedia } from '../_shared/instagram-media.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -20,42 +21,6 @@ const DEFAULT_OWN_IG_USERNAMES = ['bananacalcados'];
 
 function normalizeIgUsername(value: string | null | undefined): string {
   return (value || '').replace(/^@+/, '').trim().toLowerCase();
-}
-
-/**
- * A mídia do story (reply/menção) vem de `lookaside.fbsbx.com/ig_messaging_cdn`,
- * que expira em poucas horas e pode ser VÍDEO (mp4) — o card renderiza como <img>
- * e falha silenciosamente. Aqui baixamos e re-hospedamos no bucket público
- * `whatsapp-media`, devolvendo URL permanente + se é vídeo. Fallback: URL original.
- */
-async function rehostStoryMedia(
-  supabase: ReturnType<typeof createClient>,
-  tempUrl: string,
-): Promise<{ url: string; isVideo: boolean } | null> {
-  try {
-    const res = await fetch(tempUrl);
-    if (!res.ok) return { url: tempUrl, isVideo: false };
-    const contentType = res.headers.get('content-type') || 'application/octet-stream';
-    const buf = new Uint8Array(await res.arrayBuffer());
-    if (buf.byteLength === 0) return { url: tempUrl, isVideo: false };
-
-    const isVideo = contentType.startsWith('video/');
-    let ext = contentType.split('/')[1]?.split(';')[0]?.replace(/[^a-z0-9]/gi, '') || (isVideo ? 'mp4' : 'jpg');
-
-    const path = `instagram/story/${new Date().toISOString().slice(0, 10)}/${crypto.randomUUID()}.${ext}`;
-    const { error } = await supabase.storage
-      .from('whatsapp-media')
-      .upload(path, buf, { contentType, upsert: false });
-    if (error) {
-      console.error('[rehostStoryMedia] upload falhou:', error.message);
-      return { url: tempUrl, isVideo };
-    }
-    const { data } = supabase.storage.from('whatsapp-media').getPublicUrl(path);
-    return { url: data?.publicUrl || tempUrl, isVideo };
-  } catch (e) {
-    console.error('[rehostStoryMedia] erro:', (e as Error).message);
-    return { url: tempUrl, isVideo: false };
-  }
 }
 
 function isOwnInstagramUsername(username: string | null | undefined, extra: string[] = []): boolean {
@@ -190,7 +155,11 @@ serve(withAccessLog("meta-messenger-webhook", async (req) => {
           const mid = event.message?.mid;
           const att = event.message?.attachments?.[0];
           const attType = att?.type || 'text';
-          const attUrl = att?.payload?.url || null;
+          const rawAttUrl = att?.payload?.url || null;
+          const rehostedAtt = rawAttUrl
+            ? await rehostInstagramMedia(supabase, rawAttUrl, attType)
+            : null;
+          const attUrl = rehostedAtt?.url || rawAttUrl;
           const echoMessage = event.message?.text || (att ? `[${attType}]` : '[media]');
           if (mid) {
             const { data: existing, error: existingError } = await supabase
@@ -213,7 +182,9 @@ serve(withAccessLog("meta-messenger-webhook", async (req) => {
                   message: echoMessage,
                   status: 'sent',
                   media_type: attType,
-                  media_url: attUrl,
+                  // O envio manual já grava nossa URL permanente. O echo da Meta
+                  // nunca pode substituí-la pelo link temporário do lookaside.
+                  media_url: existingRow.media_url || attUrl,
                 })
                 .eq('id', existingRow.id);
 
@@ -367,6 +338,12 @@ serve(withAccessLog("meta-messenger-webhook", async (req) => {
             }
           }
 
+          // Áudios, fotos, vídeos e arquivos comuns do Direct também vencem no
+          // lookaside. Copiar antes do insert garante que o histórico continue tocando.
+          if (mediaUrl && ['image', 'video', 'audio', 'file'].includes(mediaType)) {
+            mediaUrl = (await rehostInstagramMedia(supabase, mediaUrl, mediaType)).url;
+          }
+
           // If still empty (Instagram sometimes sends empty text with story replies etc)
           if (!messageText && !mediaUrl) {
             messageText = '[mensagem sem conteúdo]';
@@ -433,7 +410,7 @@ serve(withAccessLog("meta-messenger-webhook", async (req) => {
           typeof referralData.media_url === 'string' &&
           (referralData.media_url as string).includes('lookaside.fbsbx.com')
         ) {
-          const rehosted = await rehostStoryMedia(supabase, referralData.media_url as string);
+          const rehosted = await rehostInstagramMedia(supabase, referralData.media_url as string, 'story');
           if (rehosted) {
             if (rehosted.isVideo) {
               referralData.video_url = rehosted.url;
