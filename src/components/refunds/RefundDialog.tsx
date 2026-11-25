@@ -278,7 +278,7 @@ export function RefundDialog({ source, sourceId, label, customerName, onDone }: 
                 </label>
               )}
 
-              {error && <p className="text-destructive text-xs">{error}</p>}
+              {error && error !== fiscal?.error && <p className="text-destructive text-xs">{error}</p>}
 
               <div className="flex justify-end gap-2">
                 <button onClick={() => setOpen(false)} className="rounded-md border border-pos-white/20 px-4 py-2 text-sm text-pos-white hover:bg-pos-white/10">Cancelar</button>

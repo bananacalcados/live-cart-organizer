@@ -68,7 +68,7 @@ export function RefundFiscalNotice({ check, isAdmin, force, justification, onFor
           </ol>
           <Button variant="outline" onClick={() => setCancelNote(true)}>1. Cancelar a nota de venda</Button>
         </div>}
-        {(!check.step || check.step === "devolucao") && check.facts.sale_id && <Button variant="outline" onClick={() => setRegister(true)}>Registrar devolução agora</Button>}
+        {(!check.step || check.step === "devolucao") && check.facts.sale_id && !check.facts.registered && <Button variant="outline" onClick={() => setRegister(true)}>Registrar devolução agora</Button>}
         {(!check.step || check.step === "devolucao") && check.facts.registered && <Button variant="outline" onClick={() => setConfer(true)}>Finalizar troca/devolução</Button>}
         {(!check.step || check.step === "devolucao") && check.facts.registered && check.facts.received && !check.facts.return_note_ready && <Button variant="outline" disabled={emitting} onClick={() => void emitReturnNfe()}>
           {emitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />}
