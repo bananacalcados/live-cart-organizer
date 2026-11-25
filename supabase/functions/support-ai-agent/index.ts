@@ -36,6 +36,10 @@ Deno.serve(withAccessLog("support-ai-agent", async (req) => {
   const body = await req.json().catch(() => ({}));
   const { suggestion_id } = body;
   const dryRun = body.dry_run === true;
+  // Só em simulação: finge falha 503 do Lovable AI para provar a cadeia até o Claude (nada é gravado nem enviado).
+  const simulateLovableDown = dryRun && body.simulate_lovable_down === true;
+  const sim = <T,>(model: string, go: () => Promise<T>) => simulateLovableDown && !/^(anthropic\/)?claude/i.test(model)
+    ? Promise.reject(Object.assign(new Error("simulado: Lovable AI indisponível"), { statusCode: 503 })) : go();
   if (typeof suggestion_id !== "string" || !/^[0-9a-f-]{36}$/i.test(suggestion_id)) return json({ error: "suggestion_id" }, 400);
 
   const { data: s } = await sb.from("support_auto_suggestions").select("id,phone,whatsapp_number_id,channel,status,mode_at_creation,created_at,cost_due_at,cost_claimed_at,cost_prefilter_passed,incoming_text,triage,decision,reason,suggested_text,link_type,exchange_offered").eq("id", suggestion_id).maybeSingle();
@@ -87,6 +91,7 @@ Deno.serve(withAccessLog("support-ai-agent", async (req) => {
     });
     if (error) console.error("support-ai-attempt-log", error.message);
   };
+  const dryAttempts: unknown[] = [];
   try {
     const meta = { id: s.id, phone: s.phone, number: s.whatsapp_number_id };
     const simulatedTriage = dryRun && !s.triage && /devol/i.test(s.incoming_text ?? "");
@@ -96,8 +101,8 @@ Deno.serve(withAccessLog("support-ai-agent", async (req) => {
       primaryModel: st.ai_triage_model,
       alternateModel: st.ai_agent_model,
       fallbackModel: anthropicApiKey ? SUPPORT_CLAUDE_TRIAGE_MODEL : null,
-      run: (model) => runTriage({ ...cfg, guardedFetch: budgetGateway(sb, meta, "triagem") }, model, conv, orders, log),
-      onAttempt: (attempt) => dryRun ? undefined : recordAttempt("triagem", attempt),
+      run: (model) => sim(model, () => runTriage({ ...cfg, guardedFetch: budgetGateway(sb, meta, "triagem") }, model, conv, orders, log)),
+      onAttempt: (attempt) => dryRun ? void dryAttempts.push({ kind: "triagem", ...attempt }) : recordAttempt("triagem", attempt),
     });
     ctx.configure(triage.facts ?? {}, triage.categoria);
     const base = { triage, triage_category: triage.categoria, triage_confidence: triage.confianca, intent: triageToIntent(triage.categoria) };
@@ -118,19 +123,19 @@ Deno.serve(withAccessLog("support-ai-agent", async (req) => {
       primaryModel: st.ai_agent_model,
       alternateModel: st.ai_triage_model,
       fallbackModel: anthropicApiKey ? SUPPORT_CLAUDE_AGENT_MODEL : null,
-      run: (model) => runAgent({ ...cfg, guardedFetch: budgetGateway(sb, meta, "agente") }, model, script?.body ?? "", nome, triage, conv, {
+      run: (model) => sim(model, () => runAgent({ ...cfg, guardedFetch: budgetGateway(sb, meta, "agente") }, model, script?.body ?? "", nome, triage, conv, {
         ...ctx.deps, offersAlreadyMade: offers ?? 0, maxOffers: st.max_offer_attempts ?? 1, supportPhone: st.support_whatsapp_phone ?? null,
         instagram: s.channel === 'instagram', instagramHandle: ctx.instagramHandle,
         returnFlow, now: dryRun ? Date.parse(s.created_at) : Date.now(),
-      }, log, () => { agentModelCalled = true; }),
-      onAttempt: (attempt) => !dryRun && agentModelCalled ? recordAttempt("agente", attempt) : undefined,
+      }, log, () => { agentModelCalled = true; })),
+      onAttempt: (attempt) => dryRun ? void dryAttempts.push({ kind: "agente", ...attempt }) : agentModelCalled ? recordAttempt("agente", attempt) : undefined,
     });
 
     const dec = finalDecision(outcome, orders);
     if (dryRun) {
       await flushLogs();
       return json({
-        dry_run: true, id: s.id, simulated_triage: simulatedTriage,
+        dry_run: true, id: s.id, simulated_triage: simulatedTriage, attempts: dryAttempts,
         before: { decision: s.decision, reason: s.reason, text: s.suggested_text, link_type: s.link_type, exchange_offered: s.exchange_offered },
         after: { decision: dec.decision, reason: dec.reason, text: outcome.text, link_type: outcome.link?.tipo ?? null,
           return_flow_state: outcome.returnFlowState ?? null, return_flow_reason: outcome.returnFlowReason ?? null,
@@ -175,7 +180,7 @@ Deno.serve(withAccessLog("support-ai-agent", async (req) => {
   } catch (e) {
     await flushLogs();
     const msg = String((e as Error)?.message || e);
-    if (dryRun) return json({ dry_run: true, id: s.id, error: msg.slice(0, 300) }, 200);
+    if (dryRun) return json({ dry_run: true, id: s.id, error: msg.slice(0, 300), attempts: dryAttempts }, 200);
     if (/teto_diario/i.test(msg)) {
       // Teto estourado: nunca ignora a cliente — vai para Em suporte com o motivo, e o alerta de 100% sai na hora.
       try { await notifyBudget(sb); } catch (err) { console.error("support-budget-alert", (err as Error).message); }
