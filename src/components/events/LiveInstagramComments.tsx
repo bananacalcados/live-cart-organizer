@@ -194,12 +194,12 @@ const CommentCard = memo(function CommentCard({
 
               {!!data?.unconfirmedCurrent && (
                 <span className="rounded-full bg-orange-600 px-2 py-0.5 text-[11px] font-bold uppercase text-white" title="Carrinho montado, mas a cliente ainda não confirmou o pedido">
-                  ⚠️ Pedido não confirmado · esta live{data.unconfirmedCurrent > 1 ? ` (${data.unconfirmedCurrent})` : ""}
+                  ⚠️ Cadastro não concluído · esta live{data.unconfirmedCurrent > 1 ? ` (${data.unconfirmedCurrent})` : ""}
                 </span>
               )}
               {!!data?.unconfirmedOther && (
                 <span className="rounded-full bg-orange-800 px-2 py-0.5 text-[11px] font-bold uppercase text-white">
-                  ⚠️ Pedido não confirmado · outros eventos ({data.unconfirmedOther})
+                  ⚠️ Cadastro não concluído · outras lives ({data.unconfirmedOther})
                 </span>
               )}
               {!!data?.openCurrent && (

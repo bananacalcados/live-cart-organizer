@@ -49,6 +49,9 @@ interface HandleOrderStats {
   cancelledThisEvent: number;
   cancelledPast: number;
   cancelledDates: string[];
+  // Pedidos não pagos (qualquer live) sem ficha de cadastro
+  noRegistration: number;
+  noRegistrationDates: string[];
 }
 
 
@@ -294,6 +297,16 @@ const CommentRow = memo(function CommentRow({
               <AlertTriangle className="h-2.5 w-2.5" />
               {stats.openPast} {stats.openPast === 1 ? "não finalizado" : "não finalizados"}
               {stats.openDates.length > 0 && ` (${stats.openDates.slice(0, 3).join(", ")}${stats.openDates.length > 3 ? "…" : ""})`}
+            </span>
+          )}
+          {stats && stats.noRegistration > 0 && (
+            <span
+              className="inline-flex items-center gap-1 rounded-full bg-orange-600 px-1.5 py-0.5 text-[10px] font-bold uppercase text-white"
+              title={stats.noRegistrationDates.length ? `Pedidos sem cadastro em: ${stats.noRegistrationDates.join(" • ")}` : "Fez pedido e nunca completou o cadastro"}
+            >
+              <AlertTriangle className="h-2.5 w-2.5" />
+              {stats.noRegistration} {stats.noRegistration === 1 ? "pedido sem cadastro" : "pedidos sem cadastro"}
+              {stats.noRegistrationDates.length > 0 && ` (${stats.noRegistrationDates.slice(0, 3).join(", ")}${stats.noRegistrationDates.length > 3 ? "…" : ""})`}
             </span>
           )}
           {stats && (stats.cancelledThisEvent > 0 || stats.cancelledPast > 0) && (
@@ -687,7 +700,7 @@ export function EventLiveCommentsPanel({ eventId }: Props) {
       const ensure = (h: string): HandleOrderStats => {
         let s = stats.get(h);
         if (!s) {
-          s = { paidThisEvent: 0, paidPast: 0, paidDates: [], openPast: 0, openDates: [], cancelledThisEvent: 0, cancelledPast: 0, cancelledDates: [] };
+          s = { paidThisEvent: 0, paidPast: 0, paidDates: [], openPast: 0, openDates: [], cancelledThisEvent: 0, cancelledPast: 0, cancelledDates: [], noRegistration: 0, noRegistrationDates: [] };
           stats.set(h, s);
         }
         return s;
@@ -778,6 +791,35 @@ export function EventLiveCommentsPanel({ eventId }: Props) {
         cancelledDatesByHandle.forEach((set, h) => {
           const s = stats.get(h);
           if (s) s.cancelledDates = sortDates(set);
+        });
+        // Pedidos não pagos sem ficha de cadastro (1 consulta por lote de 100).
+        const unpaid = allRows.filter((o: any) => o.id && o.stage !== "cancelled" && !(o.is_paid || o.paid_externally || isPaidOrderStage(o.stage)));
+        const registered = new Set<string>();
+        const unpaidIds = Array.from(new Set(unpaid.map((o: any) => o.id as string)));
+        for (let i = 0; i < unpaidIds.length; i += 100) {
+          const { data: regs } = await supabase.from("customer_registrations").select("order_id").in("order_id", unpaidIds.slice(i, i + 100));
+          (regs || []).forEach((r: any) => r.order_id && registered.add(r.order_id));
+        }
+        if (cancelled) return;
+        const noRegDates = new Map<string, Set<string>>();
+        const seen = new Set<string>();
+        unpaid.forEach((o: any) => {
+          if (registered.has(o.id) || seen.has(o.id)) return;
+          seen.add(o.id);
+          const h = idToHandle.get(o.customer_id);
+          if (!h) return;
+          const s = ensure(h);
+          s.noRegistration += 1;
+          const evDate = o.events?.start_date || o.events?.created_at || o.created_at;
+          if (evDate) {
+            const set = noRegDates.get(h) || new Set<string>();
+            set.add(format(new Date(evDate), "dd/MM/yyyy"));
+            noRegDates.set(h, set);
+          }
+        });
+        noRegDates.forEach((set, h) => {
+          const s = stats.get(h);
+          if (s) s.noRegistrationDates = sortDates(set);
         });
       }
 
