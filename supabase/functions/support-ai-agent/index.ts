@@ -9,9 +9,9 @@ import {
 import { buildSupportContext } from "../_shared/support-context.ts";
 import { primaryInstance } from "../_shared/support-policy.ts";
 import { budgetGateway } from "../_shared/support-budget-gateway.ts";
-import { notifyBudget } from "../_shared/support-guard.ts";
+import { notifyAiOutagePause, notifyBudget } from "../_shared/support-guard.ts";
 import { hasPendingCustomerRequest, humanRepliedRecently } from "../_shared/support-policy.ts";
-import { runSupportAiWithRetry, type SupportAiAttempt } from "../_shared/support-ai-retry.ts";
+import { runSupportAiWithRetry, SUPPORT_CLAUDE_AGENT_MODEL, SUPPORT_CLAUDE_TRIAGE_MODEL, type SupportAiAttempt } from "../_shared/support-ai-retry.ts";
 import { returnFlowContinuation, type ReturnFlowContext } from "../_shared/support-return-flow.ts";
 
 const cors = { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-cron-secret" };
@@ -78,7 +78,8 @@ Deno.serve(withAccessLog("support-ai-agent", async (req) => {
     if (!dryRun) await sb.from("support_auto_suggestions").update({ status: "ignorada", reason: "outra_instancia_mais_ativa" }).eq("id", s.id).eq("status", "processando");
     return json({ ignored: "outra_instancia_mais_ativa", dry_run: dryRun });
   }
-  const cfg = { apiKey, baseURL: "https://ai.gateway.lovable.dev/v1", timeoutMs: st.ai_timeout_ms ?? 30000 };
+  const anthropicApiKey = Deno.env.get("ANTHROPIC_API_KEY") ?? null;
+  const cfg = { apiKey, baseURL: "https://ai.gateway.lovable.dev/v1", timeoutMs: st.ai_timeout_ms ?? 30000, anthropicApiKey };
   const recordAttempt = async (kind: "triagem" | "agente", attempt: SupportAiAttempt) => {
     const { error } = await sb.rpc("support_ai_attempt_log", {
       p_suggestion: s.id, p_kind: kind, p_attempt: attempt.attempt, p_model: attempt.model,
@@ -94,6 +95,7 @@ Deno.serve(withAccessLog("support-ai-agent", async (req) => {
     } : await runSupportAiWithRetry({
       primaryModel: st.ai_triage_model,
       alternateModel: st.ai_agent_model,
+      fallbackModel: anthropicApiKey ? SUPPORT_CLAUDE_TRIAGE_MODEL : null,
       run: (model) => runTriage({ ...cfg, guardedFetch: budgetGateway(sb, meta, "triagem") }, model, conv, orders, log),
       onAttempt: (attempt) => dryRun ? undefined : recordAttempt("triagem", attempt),
     });
@@ -115,6 +117,7 @@ Deno.serve(withAccessLog("support-ai-agent", async (req) => {
     const outcome = await runSupportAiWithRetry({
       primaryModel: st.ai_agent_model,
       alternateModel: st.ai_triage_model,
+      fallbackModel: anthropicApiKey ? SUPPORT_CLAUDE_AGENT_MODEL : null,
       run: (model) => runAgent({ ...cfg, guardedFetch: budgetGateway(sb, meta, "agente") }, model, script?.body ?? "", nome, triage, conv, {
         ...ctx.deps, offersAlreadyMade: offers ?? 0, maxOffers: st.max_offer_attempts ?? 1, supportPhone: st.support_whatsapp_phone ?? null,
         instagram: s.channel === 'instagram', instagramHandle: ctx.instagramHandle,
@@ -178,6 +181,7 @@ Deno.serve(withAccessLog("support-ai-agent", async (req) => {
       try { await notifyBudget(sb); } catch (err) { console.error("support-budget-alert", (err as Error).message); }
       return fallback(`teto diário da IA | ${msg}`.slice(0, 300));
     }
+    if (/ia_pausada_10min/i.test(msg)) return fallback(`IA indisponível (pausa de 10 min) | ${msg}`.slice(0, 300));
     if (/No output generated|triagem_vazia_ou_invalida/i.test(msg) && !hasPendingCustomerRequest(conv)) {
       await sb.from("support_auto_suggestions").update({
         ai_status: "ok", ai_error: null, status: "ignorada", decision: "nada",
@@ -187,6 +191,14 @@ Deno.serve(withAccessLog("support-ai-agent", async (req) => {
       return json({ ignored: "conversa_encerrada_sem_pedido" });
     }
     console.error("support-ai-agent", msg);
+    if ((e as any)?.supportAiExhausted) {
+      // Todos os provedores falharam nesta conversa: conta para a pausa geral (3x/15 min → 10 min) e a cliente vai para Em suporte.
+      try {
+        const { data: out } = await sb.rpc("support_ai_outage_record", { p_suggestion: s.id, p_reason: msg.slice(0, 300) });
+        if (out?.new) await notifyAiOutagePause(sb, msg, out.until);
+      } catch (err) { console.error("support-ai-outage", (err as Error).message); }
+      return fallback(`IA indisponível | ${msg}`.slice(0, 300));
+    }
     return fallback(msg.slice(0, 300));
   }
 }));

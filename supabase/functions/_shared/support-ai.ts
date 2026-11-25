@@ -1,6 +1,8 @@
 // Fase 4b — triagem e agente de suporte por IA (modo sombra).
 // A IA só sugere texto e pede ações por ferramenta; quem decide e valida é o servidor.
 import { createOpenAI } from "npm:@ai-sdk/openai@4";
+import { createAnthropic } from "npm:@ai-sdk/anthropic@4";
+import { isClaudeModel } from "./support-ai-retry.ts";
 import { jsonSchema, Output, stepCountIs, streamText, tool } from "npm:ai@7";
 import { z } from "npm:zod@3";
 import { createLovableAiGatewayRunIdFetch } from "./run-id.ts";
@@ -113,7 +115,7 @@ Considere o histórico unificado e marque fatos do assunto ATUAL, não reclamaç
 Seja conservador: na dúvida entre troca e devolução use troca_ou_devolucao_ambiguo.
 Responda SOMENTE com um objeto JSON válido, sem markdown, contendo categoria, confianca, justificativa, motivo_tamanho e facts com exatamente: originality, danger, selected_ref, insisted_return, exchange_offer_made, same_subject_instance, confirmed_product.`;
 
-export type GatewayConfig = { apiKey: string; baseURL: string; timeoutMs: number; guardedFetch?: typeof fetch };
+export type GatewayConfig = { apiKey: string; baseURL: string; timeoutMs: number; guardedFetch?: typeof fetch; anthropicApiKey?: string | null };
 export type CallLog = { kind: "triagem" | "agente"; model: string; ok: boolean; error?: string; ms: number; inTok?: number; outTok?: number };
 
 function provider(cfg: GatewayConfig) {
@@ -124,6 +126,12 @@ function provider(cfg: GatewayConfig) {
     headers: { "Lovable-API-Key": cfg.apiKey, "X-Lovable-AIG-SDK": "vercel-ai-sdk" },
     fetch: cfg.guardedFetch ?? run.fetch,
   });
+}
+/** Modelo Claude (motor reserva, chave própria) ou Lovable AI (Responses). O mesmo fetch protegido reserva/registra as duas. */
+function languageModel(cfg: GatewayConfig, model: string) {
+  if (!isClaudeModel(model)) return provider(cfg).responses(model);
+  if (!cfg.anthropicApiKey) throw new Error("sem_chave_claude");
+  return createAnthropic({ apiKey: cfg.anthropicApiKey, ...(cfg.guardedFetch ? { fetch: cfg.guardedFetch } : {}) })(model.replace(/^anthropic\//i, ""));
 }
 const reasoningOpts = { store: false, forceReasoning: true, reasoningEffort: "low", reasoningSummary: "auto", include: ["reasoning.encrypted_content"] };
 
@@ -200,11 +208,11 @@ export async function runTriage(cfg: GatewayConfig, model: string, conv: ConvMes
   const t0 = Date.now();
   try {
     const result = streamText({
-      model: provider(cfg).responses(model),
+      model: languageModel(cfg, model),
       instructions: TRIAGE_INSTRUCTIONS,
       // Envia o JSON schema estrito ao gateway (sem ele o modelo inventava chaves em facts);
-      // a leitura continua sendo result.text + validação Zod local.
-      output: Output.object({ schema: TRIAGE_SCHEMA }),
+      // a leitura continua sendo result.text + validação Zod local. Claude recebe só a instrução de JSON.
+      ...(isClaudeModel(model) ? { maxOutputTokens: 2000 } : { output: Output.object({ schema: TRIAGE_SCHEMA }) }),
       messages: [{ role: "user", content: `PEDIDOS (60 dias):\n${JSON.stringify(orders)}\n\nCONVERSA:\n${conversationTranscript(conv)}` }],
       ...(cfg.guardedFetch ? { maxRetries: 0 } : {}),
       abortSignal: AbortSignal.timeout(cfg.timeoutMs),
@@ -548,8 +556,9 @@ CONTEXTO DO SISTEMA (não invente nada além disso):
   try {
     onModelCall?.();
     const result = streamText({
-      model: provider(cfg).responses(model),
+      model: languageModel(cfg, model),
       instructions,
+      ...(isClaudeModel(model) ? { maxOutputTokens: 4000 } : {}),
       messages: [{ role: "user", content: `CONVERSA (a última linha é a mais recente):\n${conversationTranscript(conv)}` }],
       tools,
       ...(cfg.guardedFetch ? { maxRetries: 0 } : {}),

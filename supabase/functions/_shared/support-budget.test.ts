@@ -45,3 +45,27 @@ Deno.test("alerta de 80% dispara uma vez por dia", async () => {
   assertEquals(a, { level: 80, sent: true }); assertEquals(b, { level: 80, sent: false });
   assertEquals(sent.length, 1); assert(sent[0].includes("83%"));
 });
+
+Deno.test("stream vazio/falho do provedor nunca chama pausa geral", async () => {
+  const calls: string[] = [];
+  const sb = { rpc: async (name: string) => { calls.push(name); return { data: name === "support_cost_reserve" ? { allowed: true, id: "r" } : null, error: null }; } };
+  const guarded = budgetGateway(sb, { id: "x", phone: "1", number: null }, "triagem");
+  const realFetch = globalThis.fetch;
+  for (const body of ['data: {"type":"response.failed","response":{"error":{"message":"server_error"}}}\n\n', ""]) {
+    globalThis.fetch = async () => new Response(body, { status: 200 });
+    try { const r = await guarded("https://x", { body: JSON.stringify({ model: "openai/gpt-6-luna" }) }); await r.text(); } catch { /* ok */ }
+  }
+  globalThis.fetch = async () => new Response("{}", { status: 503 });
+  await guarded("https://x", { body: JSON.stringify({ model: "openai/gpt-6-luna" }) });
+  globalThis.fetch = realFetch;
+  assertEquals(calls.includes("support_cost_pause"), false);
+  assertEquals(guarded.lastError(), "HTTP 503: IA: 503");
+});
+
+Deno.test("uso de tokens do Claude é lido do stream", async () => {
+  const { inspectSseEvent } = await import("./support-budget-gateway.ts");
+  const acc = { input: null, output: null, refused: false, failed: null } as any;
+  inspectSseEvent({ type: "message_start", message: { usage: { input_tokens: 1200, output_tokens: 1 } } }, acc);
+  inspectSseEvent({ type: "message_delta", delta: { stop_reason: "end_turn" }, usage: { output_tokens: 80 } }, acc);
+  assertEquals([acc.input, acc.output, acc.refused], [1200, 80, false]);
+});

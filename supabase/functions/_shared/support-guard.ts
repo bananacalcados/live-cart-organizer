@@ -88,6 +88,16 @@ export async function notifyBudget(supabase: any, s?: any): Promise<{ level: 80 
   return { level, sent: await sendAlert(supabase, s, text) };
 }
 
+/** Alerta único quando entra a pausa geral de 10 min (todos os provedores falharam 3x em 15 min), com a causa real. */
+export async function notifyAiOutagePause(supabase: any, reason: string, until: string | null): Promise<boolean> {
+  const { data: s } = await supabase.rpc('support_guard_status');
+  if (!s) return false;
+  const hora = until ? new Date(until).toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit' }) : '10 min';
+  const causa = String(reason || 'sem detalhe').replace(/\s+/g, ' ').slice(0, 300);
+  const text = `🛑 Suporte automático: IA pausada por 10 min (volta sozinha às ${hora}).\nCausa: todos os provedores de IA (Lovable e Claude) falharam 3 vezes em 15 min.\nÚltimo erro: ${causa}\nMensagens nesse intervalo vão para Em suporte.`;
+  return sendAlert(supabase, s, text);
+}
+
 export async function runSupportGuardTick(supabase: any, now = Date.now()) {
   const { data: s, error } = await supabase.rpc('support_guard_status');
   if (error || !s) return { ok: false, error: error?.message };

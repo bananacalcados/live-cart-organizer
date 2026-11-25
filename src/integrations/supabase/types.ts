@@ -26310,6 +26310,7 @@ export type Database = {
           ok: boolean
           output_tokens: number | null
           phone: string
+          provider: string | null
           reservation_tokens: number
           settled: boolean
           suggestion_id: string | null
@@ -26328,6 +26329,7 @@ export type Database = {
           ok: boolean
           output_tokens?: number | null
           phone: string
+          provider?: string | null
           reservation_tokens?: number
           settled?: boolean
           suggestion_id?: string | null
@@ -26346,6 +26348,7 @@ export type Database = {
           ok?: boolean
           output_tokens?: number | null
           phone?: string
+          provider?: string | null
           reservation_tokens?: number
           settled?: boolean
           suggestion_id?: string | null
@@ -26389,6 +26392,30 @@ export type Database = {
           reserved?: number
           suggestions?: number
           tokens?: number
+        }
+        Relationships: []
+      }
+      support_ai_outages: {
+        Row: {
+          created_at: string
+          id: string
+          paused_until: string | null
+          reason: string | null
+          suggestion_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          paused_until?: string | null
+          reason?: string | null
+          suggestion_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          paused_until?: string | null
+          reason?: string | null
+          suggestion_id?: string | null
         }
         Relationships: []
       }
@@ -35341,6 +35368,10 @@ export type Database = {
         Returns: string
       }
       support_ai_health_1h: { Args: never; Returns: Json }
+      support_ai_outage_record: {
+        Args: { p_reason: string; p_suggestion: string }
+        Returns: Json
+      }
       support_ai_reprocess: { Args: { p_id: string }; Returns: Json }
       support_ai_settings_get: { Args: never; Returns: Json }
       support_ai_settings_update: {

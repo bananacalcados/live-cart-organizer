@@ -2010,6 +2010,13 @@
       "when": 1795566929057,
       "tag": "0286_pickup_single_incoming_validation",
       "breakpoints": true
+    },
+    {
+      "idx": 287,
+      "version": "7",
+      "when": 1795607480949,
+      "tag": "0287_support_ai_pause_always_expires",
+      "breakpoints": true
     }
   ]
 }
