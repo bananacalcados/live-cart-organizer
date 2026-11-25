@@ -74,11 +74,13 @@ interface Props {
   open: boolean;
   sellerId?: string;
   sellerName?: string;
+  /** Vinda do estorno: restringe à venda e abre direto quando há uma única devolução. */
+  initialSaleId?: string;
   onCancel: () => void;
   onDone: () => void;
 }
 
-export function FinalizeExchangePicker({ open, sellerId, sellerName, onCancel, onDone }: Props) {
+export function FinalizeExchangePicker({ open, sellerId, sellerName, initialSaleId, onCancel, onDone }: Props) {
   const [phase, setPhase] = useState<WizardPhase>("list");
   const [events, setEvents] = useState<EventRow[]>([]);
   const [loading, setLoading] = useState(false);
@@ -105,27 +107,30 @@ export function FinalizeExchangePicker({ open, sellerId, sellerName, onCancel, o
   const [waNumberId, setWaNumberId] = useState<string | null>(null);
   const [waMessage, setWaMessage] = useState<string>("");
   const [sendingWa, setSendingWa] = useState(false);
+  const [autoOpenDone, setAutoOpenDone] = useState(false);
   const { numbers: waNumbers } = useWhatsAppNumberStore();
 
   useEffect(() => {
     if (open) {
-      setPhase("list"); setSearch(""); setSelected(null);
+      setPhase("list"); setSearch(""); setSelected(null); setAutoOpenDone(false);
       setDevolvidos([]); setReposicoes([]);
       setResolucao(initialExchangeResolution("devolucao")); setEstornoForma("pix");
       setPosSaleId(null); setCustomerId(null); setShipCustomer(EMPTY_CUSTOMER);
       setNfeDoc(null); setNfeObs(""); setTrackingCode(""); setTrackingCarrier("");
       setWaNumberId(null); setWaMessage("");
     }
-  }, [open]);
+  }, [open, initialSaleId]);
 
 
   const loadEvents = useCallback(async () => {
     setLoading(true);
     try {
-      const { data, error } = await supabase
+      let query = supabase
         .from("trocas_devolucoes")
         .select("*")
-        .in("status", OPEN_STATUSES)
+        .in("status", OPEN_STATUSES);
+      if (initialSaleId) query = query.eq("pedido_original_id", initialSaleId);
+      const { data, error } = await query
         .order("created_at", { ascending: false })
         .limit(100);
       if (error) throw error;
@@ -157,7 +162,7 @@ export function FinalizeExchangePicker({ open, sellerId, sellerName, onCancel, o
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [initialSaleId]);
 
   useEffect(() => {
     if (open && phase === "list") loadEvents();
@@ -222,7 +227,7 @@ export function FinalizeExchangePicker({ open, sellerId, sellerName, onCancel, o
     return { psid, nfeAuthorized: !!envio };
   }, [loadCustomerIntoForm]);
 
-  const selectEvent = async (ev: EventRow) => {
+  const selectEvent = useCallback(async (ev: EventRow) => {
     setLoadingItems(true);
     setSelected(ev);
     setResolucao(initialExchangeResolution(ev.tipo, ev.resolucao_diferenca));
@@ -264,7 +269,13 @@ export function FinalizeExchangePicker({ open, sellerId, sellerName, onCancel, o
     } finally {
       setLoadingItems(false);
     }
-  };
+  }, [loadShippingState]);
+
+  useEffect(() => {
+    if (!open || !initialSaleId || autoOpenDone || phase !== "list" || loading || loadingItems || selected || events.length !== 1) return;
+    setAutoOpenDone(true);
+    void selectEvent(events[0]);
+  }, [open, initialSaleId, autoOpenDone, phase, loading, loadingItems, selected, events, selectEvent]);
 
 
   // Fase 6 — duas camadas de valor

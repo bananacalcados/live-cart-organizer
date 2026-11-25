@@ -107,7 +107,7 @@ export interface FinalizeExchangeResult {
 }
 
 /** Chama a edge function de emissão da devolução e normaliza o resultado. */
-async function emitirNfeDevolucao(
+export async function emitirNfeDevolucao(
   eventId: string,
   ambiente?: "homologacao" | "producao",
 ): Promise<FinalizeExchangeResult["devolucao"]> {

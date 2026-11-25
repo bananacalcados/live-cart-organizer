@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { runInNewContext } from 'node:vm';
 import ts from 'typescript';
 import { returnDiscountRatio, returnLineValues, isUndiscountedReverse } from '../../supabase/functions/_shared/devolucao-values';
-import { decideDevolucao } from '../../supabase/functions/_shared/devolucao-guard';
+import { decideDevolucao, podeReutilizarNotaDeOutraTroca } from '../../supabase/functions/_shared/devolucao-guard';
 import { parseXmlDest, parseXmlItems, matchXmlItem, mergeDest, cfopEntrada, precheckDevolucao, missingAddressMessage, cstEntradaPisCofins } from '../../supabase/functions/_shared/devolucao-dest';
 
 const cases = [
@@ -32,7 +32,7 @@ async function dryRun(price: number, discount: number, expected: number, existin
         : existing ? [{ id: 'rv', devolucao_doc_id: 'doc' }] : [];
       if (table === 'pos_sales') return { id: 'sale', discount, total: expected, customer_name: 'Cliente Teste', customer_cpf: '52998224725', pos_sale_items: [item] };
       if (table === 'companies') return { brasilnfe_token: 'fake-test-only', address_state: 'MG' };
-      if (table === 'trocas_devolucoes') return cols.includes('trocas_devolucoes_itens') ? evt : [];
+      if (table === 'trocas_devolucoes') return cols.startsWith('*,') ? evt : [];
       if (table === 'fiscal_documents') {
         if (cols === 'chave_acesso, modelo, company_id') return { chave_acesso: '1'.repeat(44), company_id: 'company' };
         if (cols === 'valor_total') return { valor_total: price };
@@ -43,7 +43,7 @@ async function dryRun(price: number, discount: number, expected: number, existin
     };
     const q: any = { select(c: string) { cols = c; return q; },
       eq(k: string, v: unknown) { filters.push([k, v]); return q; },
-      not: () => q, in: () => q, order: () => q, limit: () => q,
+      not: () => q, in: () => q, neq: () => q, order: () => q, limit: () => q,
       maybeSingle: async () => ({ data: result() }), single: async () => ({ data: result() }),
       then: (resolve: (value: unknown) => unknown) => Promise.resolve({ data: result() }).then(resolve),
       update: writes, insert: writes };
@@ -54,7 +54,7 @@ async function dryRun(price: number, discount: number, expected: number, existin
   const js = ts.transpileModule(source, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.None } }).outputText;
   runInNewContext(js, { Deno: { env: { get: () => 'fake-test-only' }, serve: (fn: typeof handler) => { handler = fn; } },
     createClient: () => db, withAccessLog: (_: string, fn: unknown) => fn, requireStaffOrInternal: async () => null,
-    returnDiscountRatio, returnLineValues, isUndiscountedReverse, decideDevolucao,
+    returnDiscountRatio, returnLineValues, isUndiscountedReverse, decideDevolucao, podeReutilizarNotaDeOutraTroca,
     parseXmlDest, parseXmlItems, matchXmlItem, mergeDest, cfopEntrada, precheckDevolucao, missingAddressMessage, cstEntradaPisCofins, cstEntradaRule: cstEntradaPisCofins,
     Request, Response, URL, fetch, console });
   if (!handler) throw new Error('Handler not registered');
@@ -87,6 +87,10 @@ describe('devolução com desconto único — SQL reproduzido em dry_run', () =>
     const reverse = await dryRun(399.99, 139.99, 260);
     const exchange = await dryRun(399.99, 139.99, 260, true, true);
     expect(exchange.produtos).toEqual(reverse.produtos);
+  });
+  it('dry_run da troca mantém a trava de duplicidade sem escrever nem chamar o provedor', async () => {
+    const exchange = await dryRun(259.99, 0, 259.99, true, true);
+    expect(exchange.decision.action).toBe('reuse');
   });
   it('sem item original correspondente não desconta de novo o valor líquido salvo', async () => {
     const result = await dryRun(359.99, 36, 323.99, true, true, true);

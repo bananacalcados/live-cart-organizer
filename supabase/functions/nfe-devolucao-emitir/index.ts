@@ -1,5 +1,5 @@
 import { withAccessLog } from "../_shared/withAccessLog.ts";
-import { decideDevolucao, type ExistingDevolucao } from "../_shared/devolucao-guard.ts";
+import { decideDevolucao, podeReutilizarNotaDeOutraTroca, type ExistingDevolucao } from "../_shared/devolucao-guard.ts";
 import { returnDiscountRatio, returnLineValues, isUndiscountedReverse } from "../_shared/devolucao-values.ts";
 import { parseXmlDest, parseXmlItems, matchXmlItem, mergeDest, cfopEntrada, precheckDevolucao, missingAddressMessage, cstEntradaPisCofins as cstEntradaRule } from "../_shared/devolucao-dest.ts";
 import { requireStaffOrInternal } from "../_shared/staff-or-internal.ts";
@@ -458,7 +458,7 @@ Deno.serve(withAccessLog("nfe-devolucao-emitir", async (req) => {
       const devIds = (devs || []).map((d: any) => d.id);
       const [{ data: tdLinks }, { data: rvLinks }] = devIds.length
         ? await Promise.all([
-          supabase.from("trocas_devolucoes").select("id, devolucao_doc_id, status, pedido_original_id").in("devolucao_doc_id", devIds),
+          supabase.from("trocas_devolucoes").select("id, devolucao_doc_id, status, pedido_original_id, trocas_devolucoes_itens(direcao, estado_estoque, sku, barcode, quantidade)").in("devolucao_doc_id", devIds),
           // Reversa cancelada libera a nota para a reversa nova (ex.: prazo de postagem vencido).
           supabase.from("correios_reverse_shipments").select("id, devolucao_doc_id").in("devolucao_doc_id", devIds).neq("status", "cancelada"),
         ])
@@ -477,7 +477,13 @@ Deno.serve(withAccessLog("nfe-devolucao-emitir", async (req) => {
         id: d.id, status: d.status, valor_total: Number(d.valor_total || 0), numero: d.numero, chave_acesso: d.chave_acesso,
         reusable: isReverse
           ? !otherReverse(d) && (!d.troca_devolucao_id || openTrocaIds.includes(d.troca_devolucao_id))
-          : !otherTroca(d),
+          : !otherTroca(d) || (tdLinks || []).some((t: any) => podeReutilizarNotaDeOutraTroca({
+              trocaAtualId: troca_devolucao_id,
+              pedidoOriginalId,
+              documentoId: d.id,
+              itensAtuais: devolvidos,
+              outra: t,
+            })),
       }));
       const decision = decideDevolucao({ valorNovo: totalLiquido, valorOriginal, existentes });
       const undiscounted = decision.action === "block" && existentes.find((d) => isUndiscountedReverse({

@@ -73,3 +73,8 @@
 - [x] Confirmar localização, vínculo de troca e mensagens posteriores dos candidatos retroativos
 - [x] Aplicar entrega por retirada segura e elegibilidade de 7 dias corridos; testar sem mensagens
 - [x] Conferir total aplicado, exclusões e ausência de mudança na tela
+
+# Estorno com devolução e NF-e no próprio modal
+- [ ] Reutilizar NF-e autorizada somente quando outra troca/devolução encerrada tem exatamente os mesmos itens e quantidades
+- [ ] Abrir a finalização já na devolução da venda e permitir emitir a NF-e de devolução pelo modal do estorno
+- [ ] Testar travas e fluxo no navegador sem emitir nota, estornar pagamento ou enviar mensagens reais

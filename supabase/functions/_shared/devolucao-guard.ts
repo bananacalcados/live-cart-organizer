@@ -21,6 +21,57 @@ export type DevolucaoDecision =
 const brl = (v: number) => `R$ ${Number(v || 0).toFixed(2).replace(".", ",")}`;
 const TOL = 0.01;
 
+export interface DevolucaoItemMatch {
+  direcao?: string | null;
+  estado_estoque?: string | null;
+  sku?: string | null;
+  barcode?: string | null;
+  quantidade?: number | string | null;
+}
+
+const norm = (v: unknown) => String(v ?? "").trim().toUpperCase();
+const conferidos = (items: DevolucaoItemMatch[]) => (items || []).filter((i) =>
+  i.direcao === "devolvido" && (i.estado_estoque === "retornado_vendavel" || i.estado_estoque === "retornado_avaria"),
+);
+
+/** Mesma mercadoria e quantidade, sem depender da ordem das linhas. Sem SKU/código, não há prova suficiente. */
+export function mesmaDevolucaoConferida(atuais: DevolucaoItemMatch[], anteriores: DevolucaoItemMatch[]): boolean {
+  const signature = (items: DevolucaoItemMatch[]) => {
+    const quantities = new Map<string, number>();
+    for (const item of conferidos(items)) {
+      const key = norm(item.sku) || norm(item.barcode);
+      if (!key) return [] as string[];
+      quantities.set(key, (quantities.get(key) || 0) + Number(item.quantidade || 0));
+    }
+    return [...quantities.entries()].filter(([, q]) => q > 0).sort(([a], [b]) => a.localeCompare(b)).map(([key, q]) => `${key}:${q}`);
+  };
+  const a = signature(atuais);
+  const b = signature(anteriores);
+  return a.length > 0 && a.length === b.length && a.every((line, index) => line === b[index]);
+}
+
+/** Só uma TD encerrada da mesma venda e com o mesmo retorno pode ceder sua NF a outra TD. */
+export function podeReutilizarNotaDeOutraTroca(input: {
+  trocaAtualId: string | null;
+  pedidoOriginalId: string;
+  documentoId: string;
+  itensAtuais: DevolucaoItemMatch[];
+  outra: {
+    id: string;
+    devolucao_doc_id: string | null;
+    status: string;
+    pedido_original_id: string | null;
+    trocas_devolucoes_itens?: DevolucaoItemMatch[];
+  };
+}): boolean {
+  const { outra } = input;
+  return outra.id !== input.trocaAtualId
+    && outra.devolucao_doc_id === input.documentoId
+    && outra.pedido_original_id === input.pedidoOriginalId
+    && (outra.status === "concluida" || outra.status === "cancelada")
+    && mesmaDevolucaoConferida(input.itensAtuais, outra.trocas_devolucoes_itens || []);
+}
+
 export function decideDevolucao(input: {
   valorNovo: number;
   valorOriginal: number | null;

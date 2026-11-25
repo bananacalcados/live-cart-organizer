@@ -92,14 +92,19 @@ export function RefundDialog({ source, sourceId, label, customerName, onDone }: 
     return `Cartão ${brand}${last4}${inst}`;
   }, [preview]);
 
+  const checkFiscal = async () => {
+    const check = await refundApi.fiscalCheck(source, sourceId, reason);
+    setFiscal(check);
+    return check;
+  };
+
   const goConfirm = async () => {
     const err = validateRefundAmount(parsedAmount, remaining);
     if (err) { setError(err); return; }
     if (!reason) { setError("Escolha o motivo do estorno."); return; }
     if (reason === "outro" && !reasonText.trim()) { setError("Descreva o motivo em \"outro\"."); return; }
     try {
-      const check = await refundApi.fiscalCheck(source, sourceId, reason);
-      setFiscal(check);
+      const check = await checkFiscal();
       if (!check.allowed && !(isAdmin && force && justification.trim().length >= 3)) { setError(check.error); return; }
     } catch (e) { setError(e instanceof Error ? e.message : "Conferência indisponível."); return; }
     setError(null);
@@ -260,7 +265,12 @@ export function RefundDialog({ source, sourceId, label, customerName, onDone }: 
                 </div>
               )}
 
-              <RefundFiscalNotice check={fiscal} isAdmin={isAdmin} force={force} justification={justification} onForce={setForce} onJustification={setJustification} onRegistered={() => { setFiscal(null); setError(null); }} />
+              <RefundFiscalNotice check={fiscal} isAdmin={isAdmin} force={force} justification={justification} onForce={setForce} onJustification={setJustification} onRegistered={() => {
+                setError(null);
+                void checkFiscal()
+                  .then((check) => setError(check.allowed ? null : check.error))
+                  .catch((e) => setError(e instanceof Error ? e.message : "Conferência indisponível."));
+              }} />
               {canSuggestCancel && (
                 <label className="flex items-start gap-2 rounded-md border border-pos-white/15 bg-pos-white/5 p-3 text-xs cursor-pointer">
                   <input type="checkbox" checked={cancelOrder} onChange={(e) => setCancelOrder(e.target.checked)} className="mt-0.5" />
