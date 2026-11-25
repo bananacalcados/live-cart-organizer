@@ -357,20 +357,14 @@ export function NewExchangePicker({ open, sellerId, initialSaleId, onCancel, onD
         repoe_estoque: reposEstoquePadrao,
       }));
 
-      const estadoRepos = modoExpedicao === "despacho_antecipado" ? "despachado" : "reservado";
-      const reposicoesInput: ReposicaoItemInput[] =
+      // O produto novo NUNCA é gravado direto aqui: entra pela mesma função do modal
+      // ("Adicionar produto da troca"), que cria o pedido na Expedição e reserva estoque.
+      // Gravar direto deixava o par marcado como "despachado" sem envio e duplicava a conta.
+      const reposParaExpedicao =
         tipo === "troca"
-          ? repos.filter((r) => r.sku && r.produto_nome).map((r) => ({
-              produto_id: r.produto_id,
-              sku: r.sku,
-              barcode: r.barcode,
-              produto_nome: r.produto_nome,
-              tamanho: r.tamanho,
-              quantidade: r.quantidade,
-              valor_unitario: r.valor_unitario,
-              estado_estoque: estadoRepos as any,
-            }))
+          ? repos.filter((r) => r.sku && r.produto_nome).map((r) => ({ sku: r.sku, barcode: r.barcode || null, quantity: r.quantidade }))
           : [];
+      const reposicoesInput: ReposicaoItemInput[] = [];
 
       // Status inicial: físico com produto em mãos -> vai direto p/ conferência.
       const status =
@@ -398,6 +392,11 @@ export function NewExchangePicker({ open, sellerId, initialSaleId, onCancel, onD
       };
 
       const result = await createNewExchange(params);
+
+      if (reposParaExpedicao.length) {
+        const { error: addErr } = await supabase.rpc("exchange_add_replacement" as any, { p_troca_id: result.id, p_items: reposParaExpedicao });
+        if (addErr) toast.warning(`Troca criada, mas o produto novo não entrou na Expedição: ${addErr.message}. Use "Adicionar produto da troca" no modal.`);
+      }
 
       // Reversa gerada nesta tela: liga a nota de devolução dela à troca recém-criada (nunca emite outra).
       if (postagemReversa.trim()) {
