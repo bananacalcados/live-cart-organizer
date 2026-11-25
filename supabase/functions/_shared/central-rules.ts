@@ -4,7 +4,7 @@ export function tokenAllowed(link: { request_type: string; expires_at: string; r
 }
 export function centralDecision(input: { deliveredAt: string | null; source: string | null; unused: boolean; itemEligible: boolean }, now: number) {
   const delivered = input.deliveredAt ? Date.parse(input.deliveredAt) : NaN;
-  if (input.source !== 'carrier' || !Number.isFinite(delivered) || delivered > now) return { status: 'escalado', reason: 'Ainda precisamos confirmar a data de entrega com a transportadora.' };
+  if (!['carrier', 'retirada'].includes(input.source ?? '') || !Number.isFinite(delivered) || delivered > now) return { status: 'escalado', reason: 'Ainda precisamos confirmar a data de entrega.' };
   if (now > delivered + 7 * 86400000) return { status: 'escalado', reason: 'O prazo precisa ser analisado por um atendente.' };
   if (!input.unused || !input.itemEligible) return { status: 'escalado', reason: 'Um atendente precisa conferir as condições do produto.' };
   return { status: 'aprovado', reason: null };

@@ -33554,6 +33554,10 @@ export type Database = {
         Args: { p_event_id?: string; p_number_id?: string; p_username: string }
         Returns: Json
       }
+      invalidate_pickup_on_shipping_question: {
+        Args: { p_at: string; p_phone: string }
+        Returns: undefined
+      }
       inventory_claim_correction_batch: {
         Args: { p_batch_size: number; p_count_id: string }
         Returns: {
@@ -34223,6 +34227,13 @@ export type Database = {
       }
       phone_ddd: { Args: { e164: string }; Returns: string }
       phone_suffix8: { Args: { e164: string }; Returns: string }
+      pickup_delivery_guard: {
+        Args: { p: Database["public"]["Tables"]["pos_sales"]["Row"] }
+        Returns: Json
+      }
+      pickup_local_city: { Args: { p_city: string }; Returns: boolean }
+      pickup_normalize: { Args: { p_text: string }; Returns: string }
+      pickup_shipping_question: { Args: { p_text: string }; Returns: boolean }
       pos_crediario_norm: { Args: { p: string }; Returns: string }
       pos_crediario_pay_installment: {
         Args: {
@@ -35891,6 +35902,7 @@ export type Database = {
         }
         Returns: undefined
       }
+      sync_pickup_delivery: { Args: { p_id: string }; Returns: undefined }
       title_case_color: { Args: { p_color: string }; Returns: string }
       tracked_link_click: {
         Args: { p_code: string; p_slug: string }

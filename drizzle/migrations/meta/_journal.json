@@ -1982,6 +1982,34 @@
       "when": 1795564584902,
       "tag": "0282_exchange_dispatch_tracking_from_expedition",
       "breakpoints": true
+    },
+    {
+      "idx": 283,
+      "version": "7",
+      "when": 1795566624227,
+      "tag": "0283_store_pickup_delivery_guards",
+      "breakpoints": true
+    },
+    {
+      "idx": 284,
+      "version": "7",
+      "when": 1795566664524,
+      "tag": "0284_store_pickup_delivery_integration",
+      "breakpoints": true
+    },
+    {
+      "idx": 285,
+      "version": "7",
+      "when": 1795566744381,
+      "tag": "0285_pickup_readonly_audit_access",
+      "breakpoints": true
+    },
+    {
+      "idx": 286,
+      "version": "7",
+      "when": 1795566929057,
+      "tag": "0286_pickup_single_incoming_validation",
+      "breakpoints": true
     }
   ]
 }

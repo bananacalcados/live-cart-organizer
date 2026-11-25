@@ -1,0 +1,60 @@
+CREATE OR REPLACE FUNCTION public.pickup_normalize(p_text text) RETURNS text LANGUAGE sql IMMUTABLE SET search_path=public AS $$ SELECT lower(trim(translate(coalesce(p_text,''),'áàâãäéèêëíìîïóòôõöúùûüçÁÀÂÃÄÉÈÊËÍÌÎÏÓÒÔÕÖÚÙÛÜÇ','aaaaaeeeeiiiiooooouuuucAAAAAEEEEIIIIOOOOOUUUUC'))) $$;
+REVOKE ALL ON FUNCTION public.pickup_normalize(text) FROM PUBLIC,anon,authenticated;
+GRANT EXECUTE ON FUNCTION public.pickup_normalize(text) TO service_role;
+CREATE OR REPLACE FUNCTION public.pickup_shipping_question(p_text text) RETURNS boolean LANGUAGE sql IMMUTABLE SET search_path=public AS $$ SELECT public.pickup_normalize(p_text) !~ '(link (do|de|para)|link.*carrinho|cadastro #|logistica reversa)' AND public.pickup_normalize(p_text) ~ '(nao (recebi|chegou)|ainda (nao )?(recebi|chegou)|cade.*(pedido|tenis|par|envio|produto)|quando.*(cheg|envi|mand|post|despach)|rastre(io|amento)|\m(envi|manda|mandar|mandaram|post|despach)[a-z]*.*(meu|minha|pedido|tenis|par\M|produto)|\m(meu|minha|vcs|voce|vc|ja)\M.*(envi|mand|post|despach)|ja envia.*favor)' $$;
+REVOKE ALL ON FUNCTION public.pickup_shipping_question(text) FROM PUBLIC,anon,authenticated;
+GRANT EXECUTE ON FUNCTION public.pickup_shipping_question(text) TO service_role;
+-- Approximate 150 km municipal-centre radius, computed from public municipality coordinates.
+-- Source: https://github.com/kelvins/municipios-brasileiros/blob/main/csv/municipios.csv
+CREATE OR REPLACE FUNCTION public.pickup_local_city(p_city text) RETURNS boolean LANGUAGE sql IMMUTABLE SET search_path=public AS $$ SELECT public.pickup_normalize(p_city)=ANY(ARRAY['acucena','agua boa','aimores','alpercata','alvarenga','alvorada de minas','angelandia','antonio dias','aricanduva','ataleia','belo oriente','bom jesus do galho','braunas','bugre','campanario','cantagalo','capelinha','capitao andrade','caputira','caratinga','carmesia','central de minas','chale','coluna','conceicao de ipanema','conselheiro pena','coroaci','coronel fabriciano','corrego novo','cuparaque','dionisio','divino das laranjeiras','divinolandia de minas','dom cavati','dom joaquim','dores de guanhaes','engenheiro caldas','entre folhas','fernandes tourinho','ferros','franciscopolis','frei gaspar','frei inocencio','frei lagonegro','galileia','goiabeira','gonzaga','governador valadares','guanhaes','iapu','imbe de minas','inhapim','ipaba','ipanema','ipatinga','itabirinha','itamarandiba','itambacuri','itanhomi','itueta','jaguaracu','jampruca','joanesia','jose raydan','ladainha','lajinha','malacacheta','mantena','marilac','marlieria','materlandia','mathias lobato','mendes pimentel','mesquita','mutum','nacip raydan','naque','nova belem','nova modica','ouro verde de minas','passabem','paulistas','pecanha','periquito','pescador','piedade de caratinga','pingo-d''agua','pocrane','pote','raul soares','resplendor','rio vermelho','sabinopolis','santa barbara do leste','santa efigenia de minas','santa maria de itabira','santa maria do suacui','santa rita de minas','santa rita do itueto','santana do manhuacu','santana do paraiso','santo antonio do itambe','santo antonio do rio abaixo','sao domingos das dores','sao felix de minas','sao geraldo da piedade','sao geraldo do baixio','sao joao do manteninha','sao joao do oriente','sao joao evangelista','sao jose da safira','sao jose do divino','sao jose do goiabal','sao jose do jacuri','sao jose do mantimento','sao pedro do suacui','sao sebastiao do anta','sao sebastiao do maranhao','sao sebastiao do rio preto','sardoa','senhora do porto','serra azul de minas','setubinha','simonesia','sobralia','taparuba','tarumirim','teofilo otoni','timoteo','tumiritinga','ubaporanga','vargem alegre','vermelho novo','virginopolis','virgolandia']) $$;
+REVOKE ALL ON FUNCTION public.pickup_local_city(text) FROM PUBLIC,anon,authenticated;
+GRANT EXECUTE ON FUNCTION public.pickup_local_city(text) TO service_role;
+CREATE OR REPLACE FUNCTION public.pickup_delivery_guard(p public.pos_sales) RETURNS jsonb LANGUAGE plpgsql STABLE SET search_path=public AS $$
+DECLARE dt timestamptz; st text; city text; z text; phone text; national text; phones text[]; states text[]; cities text[]; zips text[];
+BEGIN
+ IF NOT (coalesce(p.is_store_pickup,false) OR coalesce(p.tracking_carrier,'') ~* '(retir|pickup)' OR coalesce(p.shipping_carrier,'') ~* '(retir|pickup)') THEN RETURN jsonb_build_object('pickup',false,'allowed',false,'reason','nao_retirada'); END IF;
+ IF coalesce(p.sales_channel,'presencial') NOT IN ('site','live','link_online','whatsapp') OR coalesce(p.status_cancelamento::text,'ativo')<>'ativo' OR p.status NOT IN ('paid','completed') THEN RETURN jsonb_build_object('pickup',true,'allowed',false,'reason','nao_online_ativo'); END IF;
+ dt:=coalesce(p.expedition_finished_at,CASE WHEN p.shipped_source='expedicao' THEN p.shipped_at END);
+ IF coalesce(p.expedition_stage,'')<>'concluido' OR dt IS NULL OR dt>now() THEN RETURN jsonb_build_object('pickup',true,'allowed',false,'reason','sem_conclusao_expedicao'); END IF;
+ IF p.sale_type='exchange' OR coalesce(p.voucher_amount,0)>0 OR EXISTS(SELECT 1 FROM public.trocas_devolucoes t WHERE t.pedido_novo_id=p.id OR t.diferenca_venda_id=p.id OR (t.pedido_original_id=p.id AND coalesce(p.discount,0)>0 AND abs(p.discount-t.valor_devolvido)<0.01)) THEN RETURN jsonb_build_object('pickup',true,'allowed',false,'reason','credito_ou_vinculo_troca'); END IF;
+ states:=ARRAY[p.customer_state,p.shipping_address->>'state',p.shipping_address->>'uf',p.payment_details->>'customer_state'];
+ cities:=ARRAY[p.customer_city,p.shipping_address->>'city',p.shipping_address->>'cidade',p.payment_details->>'customer_city'];
+ zips:=ARRAY[p.customer_cep,p.shipping_address->>'cep',p.shipping_address->>'zip',p.payment_details->>'customer_cep'];
+ FOREACH st IN ARRAY states LOOP IF nullif(trim(st),'') IS NOT NULL AND public.pickup_normalize(st) NOT IN ('mg','minas gerais') THEN RETURN jsonb_build_object('pickup',true,'allowed',false,'reason','fora_mg'); END IF; END LOOP;
+ FOREACH z IN ARRAY zips LOOP z:=regexp_replace(coalesce(z,''),'\D','','g'); IF z<>'' AND (length(z)<>8 OR z<'30000000' OR z>'39999999') THEN RETURN jsonb_build_object('pickup',true,'allowed',false,'reason','cep_fora_mg_ou_invalido'); END IF; END LOOP;
+ FOREACH city IN ARRAY cities LOOP IF nullif(trim(city),'') IS NOT NULL AND NOT public.pickup_local_city(city) THEN RETURN jsonb_build_object('pickup',true,'allowed',false,'reason','distante_ou_localizacao_nao_confirmada'); END IF; END LOOP;
+ IF NOT EXISTS(SELECT 1 FROM unnest(states) v WHERE public.pickup_normalize(v) IN ('mg','minas gerais')) AND NOT EXISTS(SELECT 1 FROM unnest(zips) v WHERE regexp_replace(coalesce(v,''),'\D','','g') ~ '^3[0-9]{7}$') THEN RETURN jsonb_build_object('pickup',true,'allowed',false,'reason','localizacao_nao_confirmada'); END IF;
+ IF NOT EXISTS(SELECT 1 FROM unnest(cities) v WHERE public.pickup_local_city(v)) AND NOT EXISTS(SELECT 1 FROM unnest(zips) v WHERE regexp_replace(coalesce(v,''),'\D','','g') ~ '^350[0-9]{5}$') THEN RETURN jsonb_build_object('pickup',true,'allowed',false,'reason','localizacao_nao_confirmada'); END IF;
+ phone:=regexp_replace(coalesce(nullif(p.customer_phone,''),p.payment_details->>'customer_phone',p.shipping_address->>'whatsapp',''),'\D','','g'); national:=CASE WHEN length(phone) IN (12,13) AND left(phone,2)='55' THEN substr(phone,3) ELSE phone END;
+ IF length(national) NOT IN (10,11) THEN RETURN jsonb_build_object('pickup',true,'allowed',false,'reason','telefone_nao_confirmado'); END IF;
+ phones:=ARRAY[phone,national,'55'||national,CASE WHEN length(national)=11 THEN left(national,2)||right(national,8) ELSE left(national,2)||'9'||right(national,8) END,CASE WHEN length(national)=11 THEN '55'||left(national,2)||right(national,8) ELSE '55'||left(national,2)||'9'||right(national,8) END];
+ IF EXISTS(SELECT 1 FROM public.whatsapp_messages m WHERE m.phone=ANY(phones) AND m.created_at>dt AND m.direction='incoming' AND NOT coalesce(m.is_group,false) AND public.pickup_shipping_question(m.message)) OR EXISTS(SELECT 1 FROM public.whatsapp_messages_archive m WHERE m.phone=ANY(phones) AND m.created_at>dt AND m.direction='incoming' AND NOT coalesce(m.is_group,false) AND public.pickup_shipping_question(m.message)) THEN RETURN jsonb_build_object('pickup',true,'allowed',false,'reason','cliente_cobrou_envio'); END IF;
+ RETURN jsonb_build_object('pickup',true,'allowed',true,'reason','retirada_confirmada','delivered_at',dt);
+END $$;
+REVOKE ALL ON FUNCTION public.pickup_delivery_guard(public.pos_sales) FROM PUBLIC,anon,authenticated;
+GRANT EXECUTE ON FUNCTION public.pickup_delivery_guard(public.pos_sales) TO service_role;
+ALTER TABLE public.shipment_simulations DROP CONSTRAINT shipment_simulations_delivered_source_chk;
+ALTER TABLE public.shipment_simulations ADD CONSTRAINT shipment_simulations_delivered_source_chk CHECK(delivered_source IS NULL OR delivered_source IN ('carrier','customer_informed','manual','retirada'));
+ALTER TABLE public.exchange_requests DROP CONSTRAINT exchange_requests_delivered_source_check;
+ALTER TABLE public.exchange_requests ADD CONSTRAINT exchange_requests_delivered_source_check CHECK(delivered_source IS NULL OR delivered_source IN ('carrier','customer_informed','manual','retirada'));
+CREATE OR REPLACE FUNCTION public.sync_pickup_delivery(p_id uuid) RETURNS void LANGUAGE plpgsql SET search_path=public AS $$
+DECLARE p public.pos_sales; g jsonb; dt timestamptz;
+BEGIN
+ SELECT * INTO p FROM public.pos_sales WHERE id=p_id; IF NOT FOUND THEN RETURN; END IF;
+ g:=public.pickup_delivery_guard(p);
+ IF coalesce((g->>'allowed')::boolean,false) THEN
+  dt:=(g->>'delivered_at')::timestamptz;
+  INSERT INTO public.shipment_simulations(tracking_code,sale_id,kind,fulfillment,stage,stage_started_at,customer_name,customer_phone,order_reference,destination_city,destination_state,posted_at,status)
+  SELECT public.gen_shipment_public_code(),p.id,'order','pickup','em_separacao',dt,p.customer_name,p.customer_phone,upper(substr(p.id::text,1,8)),p.customer_city,p.customer_state,dt,'active' WHERE NOT EXISTS(SELECT 1 FROM public.shipment_simulations WHERE sale_id=p.id) ON CONFLICT DO NOTHING;
+  UPDATE public.shipment_simulations s SET delivered_at=dt,delivered_source='retirada',stage='entregue',status='delivered',fulfillment='pickup',merged_into_id=NULL,stage_history=coalesce(s.stage_history,'{}'::jsonb)||jsonb_build_object('entregue',dt),delivery_estimate=NULL
+  WHERE s.sale_id=p.id AND (s.delivered_at IS NULL OR s.delivered_source='retirada') AND (s.delivered_at IS DISTINCT FROM dt OR s.delivered_source IS DISTINCT FROM 'retirada' OR s.stage IS DISTINCT FROM 'entregue' OR s.delivery_estimate IS NOT NULL OR s.merged_into_id IS NOT NULL);
+ ELSE
+  UPDATE public.shipment_simulations SET delivered_at=NULL,delivered_source=NULL,stage='embalado',status='active',stage_history=coalesce(stage_history,'{}'::jsonb)-'entregue' WHERE sale_id=p.id AND delivered_source='retirada';
+ END IF;
+END $$;
+REVOKE ALL ON FUNCTION public.sync_pickup_delivery(uuid) FROM PUBLIC,anon,authenticated;
+GRANT EXECUTE ON FUNCTION public.sync_pickup_delivery(uuid) TO service_role;
+CREATE OR REPLACE FUNCTION public.invalidate_pickup_on_shipping_question(p_phone text,p_at timestamptz) RETURNS void LANGUAGE sql SET search_path=public AS $$
+ UPDATE public.shipment_simulations s SET delivered_at=NULL,delivered_source=NULL,stage='embalado',status='active',stage_history=coalesce(s.stage_history,'{}'::jsonb)-'entregue' FROM public.pos_sales p WHERE p.phone_suffix8=right(regexp_replace(p_phone,'\D','','g'),8) AND length(regexp_replace(p_phone,'\D','','g')) IN (10,11,12,13) AND s.sale_id=p.id AND s.delivered_source='retirada' AND s.delivered_at<p_at $$;
+REVOKE ALL ON FUNCTION public.invalidate_pickup_on_shipping_question(text,timestamptz) FROM PUBLIC,anon,authenticated;
+GRANT EXECUTE ON FUNCTION public.invalidate_pickup_on_shipping_question(text,timestamptz) TO service_role;

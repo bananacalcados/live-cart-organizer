@@ -68,3 +68,8 @@
 
 # Porta de leitura da VPS
 - [x] Banco, função vps-reader (IP fixo, chave por hash, interruptor desligado), testes e conferência do cabeçalho de IP
+
+# Entrega por retirada na loja
+- [x] Confirmar localização, vínculo de troca e mensagens posteriores dos candidatos retroativos
+- [x] Aplicar entrega por retirada segura e elegibilidade de 7 dias corridos; testar sem mensagens
+- [x] Conferir total aplicado, exclusões e ausência de mudança na tela

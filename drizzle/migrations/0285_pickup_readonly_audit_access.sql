@@ -1,0 +1,1 @@
+GRANT EXECUTE ON FUNCTION public.pickup_normalize(text),public.pickup_shipping_question(text),public.pickup_local_city(text),public.pickup_delivery_guard(public.pos_sales) TO supabase_read_only_user;
