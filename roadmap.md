@@ -78,3 +78,8 @@
 - [x] Reutilizar NF-e autorizada somente quando outra troca/devolução encerrada tem exatamente os mesmos itens e quantidades
 - [x] Abrir a finalização já na devolução da venda e permitir emitir a NF-e de devolução pelo modal do estorno
 - [x] Testar travas e fluxo no navegador sem emitir nota, estornar pagamento ou enviar mensagens reais
+
+# Final do WhatsApp persistente por Instagram
+- [x] Guardar o final no cadastro e recuperar em próximos carrinhos, incluindo cancelados
+- [x] Preservar edição manual e aceitar novo final informado nos comentários
+- [x] Testar em ambiente isolado sem mensagens e conferir os dígitos recuperados

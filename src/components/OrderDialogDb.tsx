@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { Instagram, Phone, StickyNote, X, Link, Info, Loader2, RefreshCw, Ban, Gift, Truck, Percent, DollarSign, ShoppingBag, Tag, Wallet, CreditCard, QrCode, Lock, Store, MapPin, Package, Copy, ShieldCheck, AlertTriangle, ExternalLink, User } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { normalizeBRPhone } from "@/lib/phoneUtils";
@@ -50,6 +50,7 @@ import { conditionsSummary, type LiveConditions } from "@/lib/liveCodeOrder";
 import { useCartBuildingTracker } from "@/hooks/events/useCartBuildingPresence";
 import { findDuplicateLiveOrder } from "@/lib/liveDuplicateOrder";
 import { getOrderFinalValue } from "@/lib/orderTotal";
+import { savedLivePhoneLast4 } from "@/lib/livePhoneLast4";
 
 /** @ normalizado (sem arroba, minúsculo) para comparar dono do telefone. */
 const normHandle = (v?: string | null) =>
@@ -106,6 +107,7 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId, prefi
   const [fullName, setFullName] = useState("");
   /** 4 últimos dígitos informados na live (vinculação automática do WhatsApp). */
   const [phoneLast4, setPhoneLast4] = useState("");
+  const phoneLast4Edited = useRef(false);
   /** @ que originou o telefone atual — evita telefone "grudado" de outro @. */
   const [phoneOwnerHandle, setPhoneOwnerHandle] = useState("");
   const [last4Conflict, setLast4Conflict] = useState<string | null>(null);
@@ -237,6 +239,7 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId, prefi
 
   useEffect(() => {
     setEditingHandle(false);
+    phoneLast4Edited.current = false;
     if (!open) {
       // Fecha → zera tudo, para que o próximo pedido nunca herde telefone/@.
       if (!editingOrder) resetForm();
@@ -248,7 +251,7 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId, prefi
       setInstagramHandle(handle);
       setWhatsapp(phone);
       setPhoneOwnerHandle(normHandle(handle));
-      setPhoneLast4((editingOrder as any).phone_last4 || last4Of(phone));
+      setPhoneLast4(prefillPhoneLast4 || savedLivePhoneLast4(editingOrder.customer, editingOrder.phone_last4));
       setFullName((editingOrder.customer as any)?.full_name || "");
       setCartLink(editingOrder.cart_link || "");
       setNotes(editingOrder.notes || "");
@@ -308,6 +311,7 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId, prefi
     setWhatsapp("");
     setPhoneLast4("");
     setPhoneOwnerHandle("");
+    phoneLast4Edited.current = false;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [instagramHandle, editingOrder, open]);
 
@@ -316,7 +320,10 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId, prefi
     if (existingCustomer && !editingOrder) {
       if (existingCustomer.whatsapp) {
         setWhatsapp(existingCustomer.whatsapp);
-        setPhoneLast4(last4Of(existingCustomer.whatsapp));
+        setPhoneOwnerHandle(normHandle(existingCustomer.instagram_handle || instagramHandle));
+      }
+      if (!phoneLast4Edited.current) {
+        setPhoneLast4(prefillPhoneLast4 || savedLivePhoneLast4(existingCustomer));
         setPhoneOwnerHandle(normHandle(existingCustomer.instagram_handle || instagramHandle));
       }
       if ((existingCustomer as any).full_name && !fullName.trim()) {
@@ -735,7 +742,6 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId, prefi
 
         // Update existing order
         const orderUpdates: Partial<DbOrder> = {
-          phone_last4: phoneLast4.length === 4 ? phoneLast4 : null,
           cart_link: cartLink || null,
 
           notes: notes || null,
@@ -752,6 +758,16 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId, prefi
           pickup_store_id: isPickup && pickupStoreId ? pickupStoreId : null,
           is_delivery: isDelivery,
         } as any;
+        // An unrelated edit (including cancellation) must never clear the saved hint.
+        if (phoneLast4Edited.current || prefillPhoneLast4) {
+          orderUpdates.phone_last4 = phoneLast4.length === 4 ? phoneLast4 : null;
+          if (editingOrder.customer && phoneLast4Edited.current) {
+            await updateCustomer(editingOrder.customer.id, {
+              phone_last4: orderUpdates.phone_last4,
+              phone_last4_updated_at: new Date().toISOString(),
+            });
+          }
+        }
         Object.assign(orderUpdates, liveCashbackPatch(!!(editingOrder as any).cashback_id, (editingOrder as any).custom_shipping_cost != null, !!(editingOrder as any).checkout_installment_config));
         
         // If marking as paid externally, also mark as paid (manual source)
@@ -788,6 +804,12 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId, prefi
           toast.error("Erro ao criar cliente");
           return;
         }
+        if (phoneLast4Edited.current) {
+          await updateCustomer(newCustomer.id, {
+            phone_last4: phoneLast4.length === 4 ? phoneLast4 : null,
+            phone_last4_updated_at: new Date().toISOString(),
+          });
+        }
 
         // Check for existing active order in this event
         let activeOrder = duplicateAction === "new" ? null : findActiveOrderByCustomer(eventId, newCustomer.id);
@@ -816,6 +838,9 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId, prefi
           }
         }
         if (activeOrder) {
+          if (phoneLast4Edited.current || prefillPhoneLast4) {
+            await updateOrder(activeOrder.id, { phone_last4: phoneLast4.length === 4 ? phoneLast4 : null });
+          }
           for (const product of localProducts) {
             await useDbOrderStore.getState().addProductToOrder(activeOrder.id, product);
           }
@@ -841,7 +866,7 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId, prefi
           // Apply discount, shipping, and extras if set during creation
           if (newOrder) {
             const extraUpdates: Record<string, unknown> = {};
-            if (phoneLast4.length === 4) extraUpdates.phone_last4 = phoneLast4;
+            if ((phoneLast4Edited.current || prefillPhoneLast4) && phoneLast4.length === 4) extraUpdates.phone_last4 = phoneLast4;
 
             if (discountType) {
               extraUpdates.discount_type = discountType;
@@ -1086,7 +1111,7 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId, prefi
                   setWhatsapp(e.target.value);
                   setPhoneOwnerHandle(normHandle(instagramHandle));
                   const l4 = last4Of(e.target.value);
-                  if (l4) setPhoneLast4(l4);
+                  if (l4) { phoneLast4Edited.current = true; setPhoneLast4(l4); }
                 }}
 
                 onBlur={() => {
@@ -1142,7 +1167,7 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId, prefi
               placeholder="0000"
               className="w-32 text-lg font-mono tracking-widest"
               value={phoneLast4}
-              onChange={(e) => setPhoneLast4(e.target.value.replace(/\D/g, "").slice(0, 4))}
+              onChange={(e) => { phoneLast4Edited.current = true; setPhoneOwnerHandle(normHandle(instagramHandle)); setPhoneLast4(e.target.value.replace(/\D/g, "").slice(0, 4)); }}
             />
             <p className="text-xs text-muted-foreground">
               Quando a cliente entrar pelo link da live e digitar o WhatsApp

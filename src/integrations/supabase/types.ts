@@ -5286,6 +5286,8 @@ export type Database = {
           instagram_handle: string
           is_banned: boolean
           live_cancellation_count: number | null
+          phone_last4: string | null
+          phone_last4_updated_at: string | null
           tags: string[] | null
           updated_at: string
           whatsapp: string | null
@@ -5298,6 +5300,8 @@ export type Database = {
           instagram_handle: string
           is_banned?: boolean
           live_cancellation_count?: number | null
+          phone_last4?: string | null
+          phone_last4_updated_at?: string | null
           tags?: string[] | null
           updated_at?: string
           whatsapp?: string | null
@@ -5310,6 +5314,8 @@ export type Database = {
           instagram_handle?: string
           is_banned?: boolean
           live_cancellation_count?: number | null
+          phone_last4?: string | null
+          phone_last4_updated_at?: string | null
           tags?: string[] | null
           updated_at?: string
           whatsapp?: string | null

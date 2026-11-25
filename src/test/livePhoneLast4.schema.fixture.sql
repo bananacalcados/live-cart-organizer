@@ -1,0 +1,13 @@
+CREATE TABLE public.customers(id uuid PRIMARY KEY DEFAULT gen_random_uuid(),instagram_handle text UNIQUE,whatsapp text,updated_at timestamptz DEFAULT now());
+CREATE TABLE public.orders(id uuid PRIMARY KEY DEFAULT gen_random_uuid(),customer_id uuid,event_id uuid,phone_last4 text,stage text,link_status text DEFAULT 'pending',created_at timestamptz DEFAULT now(),updated_at timestamptz DEFAULT now());
+CREATE INDEX idx_customers_ig_handle_norm ON customers((lower(trim(leading '@' from instagram_handle))));
+CREATE FUNCTION public.ig_handle_norm(text) RETURNS text LANGUAGE sql IMMUTABLE AS $$ SELECT lower(trim(leading '@' from $1)) $$;
+CREATE TABLE public.live_code_settings(event_id uuid,mode text,store_usernames text[]);
+CREATE TABLE public.live_order_intents(id uuid,event_id uuid,username text,status text,phone text,phone_last4 text,updated_at timestamptz,items jsonb);
+CREATE TABLE public.product_color_codes(code text);
+CREATE TABLE public.product_variants(id uuid);
+CREATE TABLE public.model_number_tokens(token text);
+CREATE TABLE public.live_code_parse_log(comment_id text PRIMARY KEY,event_id uuid,username text,comment_text text,parsed jsonb,outcome text);
+CREATE ROLE anon; CREATE ROLE authenticated; CREATE ROLE service_role;
+INSERT INTO customers(id,instagram_handle) VALUES('00000000-0000-0000-0000-000000000001','@eni.nogueirarp');
+INSERT INTO orders(customer_id,event_id,phone_last4,stage) VALUES('00000000-0000-0000-0000-000000000001','00000000-0000-0000-0000-000000000011','3209','cancelled');

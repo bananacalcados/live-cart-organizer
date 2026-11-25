@@ -1,4 +1,5 @@
 - Live code-intent confirms only via src/lib/liveCodeOrder.ts; open carts receive items (no 2nd cart).
+- Live phone hints live in customers.phone_last4; orders inherit them on insert and the existing phone-change trigger mirrors explicit changes, so cancellation never controls retention. The comment parser persists parsed finals before no_intent; hints never prove identity.
 - Exchange desk (Centrais Fase 3): decisions only via RPC exchange_desk_action, mirrored by src/lib/exchangeDesk/rules.ts; only humans deny, reverse only once on approved, so every step keeps who/when history.
 - payment-receipts bucket is private; show receipts via storage/signedReceiptUrl.ts.
 - Exchange auto-replies (Phase 4): detection/decision starts in DB support_auto_suggestions; shadow stays human-click only, while auto mode sends only through support_suggestion_auto_enqueue/support_outbox with per-instance random pacing, one automatic reply per conversation/24h and emergency shadow fallback on send/NF/Correios failure.
