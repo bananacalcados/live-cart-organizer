@@ -24,6 +24,7 @@ import { sanitizeSizeInput, sanitizeColorInput, isValidSize, isValidColor } from
 import { ColorSizeCombobox } from "@/components/inventory/ColorSizeCombobox";
 import { ColorSizeMultiCombobox } from "@/components/inventory/ColorSizeMultiCombobox";
 import { GENDER_VALUES } from "@/lib/productGender";
+import { ProductColorPhotos } from "@/components/inventory/ProductColorPhotos";
 
 interface VariantRow {
   id?: string;                 // existente
@@ -795,6 +796,7 @@ export function ProductEditDialog({ masterId, open, onOpenChange, onSaved }: Pro
                 </div>
               </CardContent>
             </Card>
+            {masterId && <ProductColorPhotos masterId={masterId} variantColors={variants.filter((v) => v.id).map((v) => v.color)} />}
 
             {/* Variações */}
             <Card>

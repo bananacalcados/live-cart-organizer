@@ -22473,6 +22473,72 @@ export type Database = {
           },
         ]
       }
+      product_color_photos: {
+        Row: {
+          color: string | null
+          color_key: string
+          created_at: string
+          created_by: string | null
+          height: number | null
+          id: string
+          master_id: string
+          photo_id: string
+          position: number
+          source: string
+          url_full: string
+          url_medium: string
+          url_thumb: string
+          width: number | null
+        }
+        Insert: {
+          color?: string | null
+          color_key: string
+          created_at?: string
+          created_by?: string | null
+          height?: number | null
+          id?: string
+          master_id: string
+          photo_id: string
+          position?: number
+          source?: string
+          url_full: string
+          url_medium: string
+          url_thumb: string
+          width?: number | null
+        }
+        Update: {
+          color?: string | null
+          color_key?: string
+          created_at?: string
+          created_by?: string | null
+          height?: number | null
+          id?: string
+          master_id?: string
+          photo_id?: string
+          position?: number
+          source?: string
+          url_full?: string
+          url_medium?: string
+          url_thumb?: string
+          width?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "product_color_photos_master_id_fkey"
+            columns: ["master_id"]
+            isOneToOne: false
+            referencedRelation: "products_master"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "product_color_photos_master_id_fkey"
+            columns: ["master_id"]
+            isOneToOne: false
+            referencedRelation: "v_product_color_codes"
+            referencedColumns: ["master_id"]
+          },
+        ]
+      }
       product_color_shopify_alias: {
         Row: {
           created_at: string
@@ -31828,6 +31894,7 @@ export type Database = {
         Args: { _company_id: string; _user_id: string }
         Returns: boolean
       }
+      can_upload_product_photos: { Args: never; Returns: boolean }
       cashback_return_stats: {
         Args: { p_days?: number }
         Returns: {

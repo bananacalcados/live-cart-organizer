@@ -1,0 +1,1 @@
+- Product color photos: files live on the owner's external photo service (src/lib/productPhotos.ts); the DB keeps only links in product_color_photos, gated by app_settings.product_color_photos_mode, so Lovable storage/DB stay light.
