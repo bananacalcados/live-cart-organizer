@@ -90,7 +90,7 @@ function SearchHome() {
 function ProductSheet() {
   const { masterId = "" } = useParams();
   const { data: mode } = useProductColorPhotosMode(true);
-  const photosOn = !!mode && mode !== "off";
+  const photosOn = !!mode?.visible;
   const { data, isLoading } = useQuery({ queryKey: ["m-sheet", masterId, photosOn], queryFn: () => loadSheet(masterId, photosOn), enabled: !!masterId });
   if (isLoading) return <Shell title="Produto" back><Loader2 className="mx-auto h-6 w-6 animate-spin" /></Shell>;
   if (!data) return <Shell title="Produto" back><p className="text-sm text-muted-foreground">Produto não encontrado.</p></Shell>;
