@@ -25,6 +25,7 @@ import { ColorSizeCombobox } from "@/components/inventory/ColorSizeCombobox";
 import { ColorSizeMultiCombobox } from "@/components/inventory/ColorSizeMultiCombobox";
 import { GENDER_VALUES } from "@/lib/productGender";
 import { ProductColorPhotos } from "@/components/inventory/ProductColorPhotos";
+import { normalizeVariantOverride, splitOverridesOnParentChange } from "@/lib/variantPriceOverride";
 
 interface VariantRow {
   id?: string;                 // existente
@@ -68,6 +69,8 @@ export function ProductEditDialog({ masterId, open, onOpenChange, onSaved }: Pro
   const [cest, setCest] = useState("");
   const [costPrice, setCostPrice] = useState("");
   const [salePrice, setSalePrice] = useState("");
+  const [originalSalePrice, setOriginalSalePrice] = useState<number>(NaN);
+  const [pricePrompt, setPricePrompt] = useState<{ indices: number[] } | null>(null);
   const [weight, setWeight] = useState("");
   const [height, setHeight] = useState("");
   const [width, setWidth] = useState("");
@@ -157,6 +160,7 @@ export function ProductEditDialog({ masterId, open, onOpenChange, onSaved }: Pro
       setCest(master.cest || "");
       setCostPrice(master.cost_price?.toString() || "");
       setSalePrice(master.sale_price?.toString() || "");
+      setOriginalSalePrice(Number(master.sale_price ?? NaN));
       setWeight(master.weight_kg?.toString() || "");
       setHeight(master.height_cm?.toString() || "");
       setWidth(master.width_cm?.toString() || "");
@@ -313,12 +317,27 @@ export function ProductEditDialog({ masterId, open, onOpenChange, onSaved }: Pro
     }
   }
 
-  async function handleSave() {
+  function handleSaveClick() {
+    const split = splitOverridesOnParentChange(variants.map((v) => v.sale_price_override), originalSalePrice, parseFloat(salePrice));
+    if (split.followOld.length > 0) { setPricePrompt({ indices: split.followOld }); return; }
+    handleSave();
+  }
+
+  function answerPricePrompt(apply: boolean) {
+    const indices = pricePrompt?.indices || [];
+    setPricePrompt(null);
+    if (!apply) { handleSave(); return; }
+    const next = variants.map((v, i) => (indices.includes(i) ? { ...v, sale_price_override: "" } : v));
+    setVariants(next);
+    handleSave(next);
+  }
+
+  async function handleSave(rows: VariantRow[] = variants) {
     if (!masterId) return;
     if (!name.trim()) { toast.error("Informe o nome."); return; }
 
     // Valida formato de cor/tamanho em todas as variações preenchidas
-    for (const v of variants) {
+    for (const v of rows) {
       if (!v.color && !v.size) continue;
       if (v.size && !isValidSize(v.size)) {
         toast.error(`Tamanho inválido: "${v.size}". Use números (39, 34/35) ou PP/P/M/G/GG.`);
@@ -331,14 +350,14 @@ export function ProductEditDialog({ masterId, open, onOpenChange, onSaved }: Pro
     }
 
 
-    const hasNewVariants = variants.some((v) => !v.id && v.color && v.size);
+    const hasNewVariants = rows.some((v) => !v.id && v.color && v.size);
     if (hasNewVariants && !stockStoreId) {
       toast.error("Há variações novas: escolha a loja que recebe o estoque (no topo das Variações).");
       return;
     }
 
     // Validação de SKU/GTIN manuais nas variações novas
-    const newRows = variants.filter((v) => !v.id && v.color && v.size);
+    const newRows = rows.filter((v) => !v.id && v.color && v.size);
     const manualSkus = newRows.map((v) => (v.sku || "").trim()).filter(Boolean);
     const manualGtins = newRows.map((v) => (v.gtin || "").trim()).filter(Boolean);
 
@@ -411,7 +430,7 @@ export function ProductEditDialog({ masterId, open, onOpenChange, onSaved }: Pro
       if (e1) throw e1;
 
       // 1b. Propaga categoria ao PDV (pos_products) pelas SKUs das variações
-      const variantSkus = variants.map((v) => v.sku).filter(Boolean) as string[];
+      const variantSkus = rows.map((v) => v.sku).filter(Boolean) as string[];
       if (variantSkus.length > 0) {
         await supabase
           .from("pos_products")
@@ -433,7 +452,7 @@ export function ProductEditDialog({ masterId, open, onOpenChange, onSaved }: Pro
       }
 
       // 3. Atualiza/insere variações
-      for (const v of variants) {
+      for (const v of rows) {
         const stockDelta = v.current_stock - v.original_stock;
 
         if (v.id) {
@@ -443,8 +462,8 @@ export function ProductEditDialog({ masterId, open, onOpenChange, onSaved }: Pro
             .update({
               color: v.color,
               size: v.size,
-              cost_price_override: v.cost_price_override ? parseFloat(v.cost_price_override) : null,
-              sale_price_override: v.sale_price_override ? parseFloat(v.sale_price_override) : null,
+              cost_price_override: normalizeVariantOverride(v.cost_price_override, parseFloat(costPrice)),
+              sale_price_override: normalizeVariantOverride(v.sale_price_override, parseFloat(salePrice)),
               weight_kg_override: v.weight_kg_override ? parseFloat(v.weight_kg_override) : null,
               initial_stock: v.current_stock,
               is_active: v.is_active,
@@ -501,8 +520,8 @@ export function ProductEditDialog({ masterId, open, onOpenChange, onSaved }: Pro
               master_id: masterId,
               color: v.color,
               size: v.size,
-              cost_price_override: v.cost_price_override ? parseFloat(v.cost_price_override) : null,
-              sale_price_override: v.sale_price_override ? parseFloat(v.sale_price_override) : null,
+              cost_price_override: normalizeVariantOverride(v.cost_price_override, parseFloat(costPrice)),
+              sale_price_override: normalizeVariantOverride(v.sale_price_override, parseFloat(salePrice)),
               weight_kg_override: v.weight_kg_override ? parseFloat(v.weight_kg_override) : null,
               initial_stock: v.current_stock,
               gtin: newGtin,
@@ -545,19 +564,17 @@ export function ProductEditDialog({ masterId, open, onOpenChange, onSaved }: Pro
       // 5. Propaga campos do PAI ao PDV automaticamente (todas as SKUs existentes deste master).
       // Sincroniza: category, category_id, price, cost_price (respeitando overrides da variação).
       try {
-        const existingRows = variants.filter((v) => v.id && v.sku);
+        const existingRows = rows.filter((v) => v.id && v.sku);
         if (existingRows.length > 0) {
           const masterCost = parseFloat(costPrice) || 0;
-          const masterSale = parseFloat(salePrice) || 0;
           for (const v of existingRows) {
             const rowCost = v.cost_price_override ? parseFloat(v.cost_price_override) : masterCost;
-            const rowSale = v.sale_price_override ? parseFloat(v.sale_price_override) : masterSale;
+            // Preço de venda: o banco já atualiza o PDV quando o pai ou o preço próprio muda.
             const posPatch: Record<string, any> = {
               category: category || null,
               category_id: categoryId || null,
             };
             if (rowCost > 0) posPatch.cost_price = rowCost;
-            if (rowSale > 0) posPatch.price = rowSale;
             await supabase.from("pos_products").update(posPatch).eq("sku", v.sku!);
           }
         }
@@ -746,6 +763,19 @@ export function ProductEditDialog({ masterId, open, onOpenChange, onSaved }: Pro
                 <div>
                   <Label>Preço de Venda (R$)</Label>
                   <Input type="number" step="0.01" value={salePrice} onChange={(e) => setSalePrice(e.target.value)} />
+                  {(() => {
+                    const parent = parseFloat(salePrice);
+                    const own = variants
+                      .map((v) => normalizeVariantOverride(v.sale_price_override, parent))
+                      .filter((n): n is number => n != null && !(isFinite(originalSalePrice) && Math.abs(n - originalSalePrice) < 0.005));
+                    if (own.length === 0) return null;
+                    const values = Array.from(new Set(own.map((n) => n.toFixed(2).replace(".", ",")))).join(", ");
+                    return (
+                      <p className="text-[11px] text-muted-foreground mt-1">
+                        {own.length} {own.length === 1 ? "variação tem" : "variações têm"} preço próprio (R$ {values})
+                      </p>
+                    );
+                  })()}
                 </div>
                 <div>
                   <Label>Peso (kg)</Label>
@@ -1052,11 +1082,26 @@ export function ProductEditDialog({ masterId, open, onOpenChange, onSaved }: Pro
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>
             Cancelar
           </Button>
-          <Button onClick={handleSave} disabled={saving || loading}>
+          <Button onClick={handleSaveClick} disabled={saving || loading}>
             {saving ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Save className="h-4 w-4 mr-1" />}
             Salvar Alterações
           </Button>
         </DialogFooter>
+        <AlertDialog open={!!pricePrompt} onOpenChange={(o) => { if (!o) setPricePrompt(null); }}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Aplicar o novo preço a todas as {pricePrompt?.indices.length} variações?</AlertDialogTitle>
+              <AlertDialogDescription>
+                Essas variações estão com o preço antigo (R$ {isFinite(originalSalePrice) ? originalSalePrice.toFixed(2).replace(".", ",") : "—"}) gravado como preço próprio.
+                Sim = passam a seguir o preço do produto. Não = mantêm o preço antigo.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel onClick={() => answerPricePrompt(false)}>Não, manter</AlertDialogCancel>
+              <AlertDialogAction onClick={() => answerPricePrompt(true)}>Sim, aplicar</AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </DialogContent>
     </Dialog>
   );

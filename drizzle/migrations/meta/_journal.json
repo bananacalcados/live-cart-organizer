@@ -2059,6 +2059,13 @@
       "when": 1795724504630,
       "tag": "0293_product_photo_ai_presets",
       "breakpoints": true
+    },
+    {
+      "idx": 294,
+      "version": "7",
+      "when": 1795727057742,
+      "tag": "0294_variant_price_follows_master",
+      "breakpoints": true
     }
   ]
 }

@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect } from "react";
+import { normalizeVariantOverride } from "@/lib/variantPriceOverride";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -254,11 +255,9 @@ export function ProductMasterForm({ open, onOpenChange, onCreated, initial, init
           is_active: true,
         } as any,
         p_variants: variants.map((v) => {
-          // Herança automática: se a variação não tem preço próprio, herda do pai.
-          const parentCost = parseFloat(costPrice);
-          const parentSale = parseFloat(salePrice);
-          const cost = v.cost_price_override ?? (isFinite(parentCost) ? parentCost : undefined);
-          const sale = v.sale_price_override ?? (isFinite(parentSale) ? parentSale : undefined);
+          // Sem preço próprio (ou igual ao pai) = segue o pai. Nunca copiar o preço do pai na variação.
+          const cost = normalizeVariantOverride(v.cost_price_override, parseFloat(costPrice)) ?? undefined;
+          const sale = normalizeVariantOverride(v.sale_price_override, parseFloat(salePrice)) ?? undefined;
           return {
             color: v.color,
             size: v.size,
