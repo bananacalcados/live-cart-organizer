@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { useProductColorPhotosMode } from "@/hooks/useProductColorPhotosMode";
 import { loadSheet, searchMasters, stockByVariant, MobileMasterHit } from "./data";
 import { setDesktopPreference } from "./redirect";
+import { MobileColorPhotos } from "./MobileColorPhotos";
 
 const POSBarcodeScanner = lazy(() => import("@/components/pos/POSBarcodeScanner").then((m) => ({ default: m.POSBarcodeScanner })));
 const brl = (n: number | null | undefined) => (n == null ? "—" : n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }));
@@ -109,6 +110,7 @@ function ProductSheet() {
           {data.photos.map((p, i) => <img key={i} src={p.url_thumb} alt="" loading="lazy" className="h-16 w-16 shrink-0 rounded bg-muted object-cover" />)}
         </div>
       )}
+      {photosOn && <MobileColorPhotos masterId={masterId} variantColors={[...new Set(data.variants.map((v) => v.color || "").filter(Boolean))]} />}
       <ul className="space-y-2">
         {rows.map(({ variant: v, total: t, perStore }) => (
           <li key={v.id} className="rounded-lg border bg-card p-3">

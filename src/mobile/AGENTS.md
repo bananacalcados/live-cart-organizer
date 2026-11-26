@@ -1,2 +1,2 @@
 - Mobile screens live only in src/mobile/ and never import desktop pages/screens (nor are imported by them); share only libs, hooks and small widgets, so desktop changes cannot break mobile. Business rules go to shared libs, never into a screen.
-- /inventory redirects to /m/estoque only on coarse-pointer screens <768px unless the user chose "Ver versão completa" (localStorage), keeping desktop rendering unchanged.
+- /inventory mobile behavior follows app_settings.inventory_mobile_redirect (invite default = banner only, auto = redirect, off = nothing); desktop never queries it, so desktop rendering stays unchanged.

@@ -89,3 +89,8 @@
 - [x] Liberar lista antes do resumo/PDV, tratar falha e buscar miniaturas em lote com interruptor
 - [x] Compactar fotos por cor e manter ações acessíveis por toque
 - [x] Testar regras e prévia desktop/celular com gravações simuladas; conferir validação automática sem publicar
+
+# Estoque no celular + editor de foto
+- [x] A) Convite no lugar do desvio (chave invite/auto/off)
+- [x] B) Fotos por cor na ficha do celular
+- [ ] Editor de foto no "Fotos por cor" do computador
