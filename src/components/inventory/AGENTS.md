@@ -1,3 +1,4 @@
 - Product color photos: files live on the owner's external photo service (src/lib/productPhotos.ts); the DB keeps only links in product_color_photos, gated by app_settings.product_color_photos_mode, so Lovable storage/DB stay light.
 - Legacy rows render before parallel summary/PDV reads; thumbnails use one visible-master batch behind the existing photo switch, ordered by position then creation date, to avoid per-row work.
 - AI product photos: generation/job polling only via the owner photo service (src/lib/productPhotosAi.ts, 4s poll paused when hidden, 15-min cap — external service, not the DB); finished photos are saved with source=ia via insert-on-conflict-ignore, never deleting duplicates; pending job ids live per user in localStorage (24h) so paid images are reconciled on reopen; kits in product_photo_ai_presets.
+- PDV price follows catalog via DB triggers; variant overrides equal/0/blank become NULL. Screens never push prices to pos_products.

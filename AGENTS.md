@@ -82,4 +82,3 @@
 - Frontend edge calls always use the session token.
 - Finish with zero no-RLS tables; anon EXECUTE only for the documented public list.
 - Code search: RPC search_product_code_keys (fuzzy, cap 200).
-- PDV sale price follows the catalog via DB triggers (master sale_price → variants without override; override change → that variant), and variant overrides equal/zero/blank are normalized to NULL on write; screens must not push prices to pos_products themselves, avoiding stale per-variant copies.
