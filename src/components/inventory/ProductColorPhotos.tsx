@@ -8,8 +8,28 @@ import { toast } from "sonner";
 import { useProductColorPhotosMode } from "@/hooks/useProductColorPhotosMode";
 import { colorSlug, deletePhoto, reorderPositions, uploadPhoto, validatePhotoFile } from "@/lib/productPhotos";
 
-interface PhotoRow { id: string; color_key: string; photo_id: string; url_thumb: string; url_medium: string; url_full: string; position: number; }
+export interface PhotoRow { id: string; color_key: string; photo_id: string; url_thumb: string; url_medium: string; url_full: string; position: number; }
 interface Props { masterId: string; variantColors: string[]; }
+interface PhotoBlock { key: string; label: string; }
+
+export function buildPhotoBlocks(variantColors: string[], codes: { color: string | null; color_key: string | null }[]): PhotoBlock[] {
+  const m = new Map<string, string>();
+  const labels = [...variantColors.filter(Boolean), ...codes.map((c) => c.color || "")].filter(Boolean);
+  for (const label of labels) {
+    const code = codes.find((c) => (c.color || "").trim().toLowerCase() === label.trim().toLowerCase());
+    const key = colorSlug(code?.color_key, label);
+    if (key !== "geral" && !m.has(key)) m.set(key, label);
+  }
+  return [...m.entries()].map(([key, label]) => ({ key, label })).concat({ key: "geral", label: "Geral (sem cor)" });
+}
+
+export function photosForColorBlock(photos: PhotoRow[], key: string, blocks: PhotoBlock[]): PhotoRow[] {
+  const knownKeys = new Set(blocks.map((block) => block.key));
+  return photos.filter((photo) => key === "geral"
+    ? photo.color_key === "geral" || !knownKeys.has(photo.color_key)
+    : photo.color_key === key
+  ).sort((a, b) => a.position - b.position);
+}
 
 class Boundary extends Component<{ children: ReactNode }, { err: boolean }> {
   state = { err: false };
@@ -62,16 +82,7 @@ function Inner({ masterId, variantColors }: Props) {
     return () => { off = true; };
   }, [masterId]);
 
-  const blocks = useMemo(() => {
-    const m = new Map<string, string>();
-    const labels = [...variantColors.filter(Boolean), ...codes.map((c) => c.color || "")].filter(Boolean);
-    for (const label of labels) {
-      const code = codes.find((c) => (c.color || "").trim().toLowerCase() === label.trim().toLowerCase());
-      const key = colorSlug(code?.color_key, label);
-      if (!m.has(key)) m.set(key, label);
-    }
-    return [...m.entries()].map(([key, label]) => ({ key, label }));
-  }, [variantColors, codes]);
+  const blocks = useMemo(() => buildPhotoBlocks(variantColors, codes), [variantColors, codes]);
 
   async function onFiles(key: string, label: string, files: FileList | null) {
     if (!files?.length) return;
@@ -87,7 +98,7 @@ function Inner({ masterId, variantColors }: Props) {
     await pool(ok, 3, async (f) => {
       try {
         const up = await uploadPhoto(f, masterId, key, t);
-        const pos = photos.filter((x) => x.color_key === key).length + sent;
+        const pos = photosForColorBlock(photos, key, blocks).length + sent;
         const { data: row, error } = await supabase.from("product_color_photos").insert({
           master_id: masterId, color_key: key, color: label, photo_id: up.id,
           url_thumb: up.thumb, url_medium: up.medium, url_full: up.full,
@@ -116,9 +127,10 @@ function Inner({ masterId, variantColors }: Props) {
   async function onDrop(key: string, to: number) {
     const from = dragFrom.current; dragFrom.current = null;
     if (!from || from.key !== key || from.idx === to) return;
-    const list = photos.filter((x) => x.color_key === key).sort((a, b) => a.position - b.position);
+    const list = photosForColorBlock(photos, key, blocks);
     const next = reorderPositions(list, from.idx, to);
-    setPhotos((p) => [...p.filter((x) => x.color_key !== key), ...next]);
+    const reorderedIds = new Set(list.map((photo) => photo.id));
+    setPhotos((p) => [...p.filter((photo) => !reorderedIds.has(photo.id)), ...next]);
     const changed = next.filter((n) => list.find((o) => o.id === n.id)?.position !== n.position);
     const res = await Promise.all(changed.map((n) => supabase.from("product_color_photos").update({ position: n.position }).eq("id", n.id)));
     if (res.some((r) => r.error)) toast.error("Não consegui salvar a nova ordem"); else toast.success("Ordem salva");
@@ -131,10 +143,10 @@ function Inner({ masterId, variantColors }: Props) {
         {loading ? <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /> :
           blocks.length === 0 ? <p className="text-sm text-muted-foreground">Salve as variações com cor para cadastrar fotos.</p> :
           blocks.map(({ key, label }) => {
-            const list = photos.filter((x) => x.color_key === key).sort((a, b) => a.position - b.position);
+            const list = photosForColorBlock(photos, key, blocks);
             const busy = (progress[key] || []).length;
             return (
-              <div key={key} className="flex min-w-0 items-start gap-2">
+              <div key={key} className={`flex min-w-0 items-start gap-2${key === "geral" ? " md:col-span-2" : ""}`}>
                 <div className="w-20 shrink-0 pt-1">
                   <p className="truncate text-sm font-medium" title={label}>{label}</p>
                   <span className="text-xs text-muted-foreground">({list.length})</span>

@@ -1,12 +1,14 @@
 export interface LegacySummary { variant_count: number; total_stock: number; }
-export interface LegacyThumbRow { master_id: string; url_thumb: string; position: number; created_at: string; }
+export interface LegacyThumbRow { master_id: string; color_key: string; url_thumb: string; position: number; created_at: string; }
 
 export function firstLegacyThumbnails(rows: LegacyThumbRow[]): Record<string, string> {
   const first = new Map<string, LegacyThumbRow>();
   for (const row of rows) {
     const current = first.get(row.master_id);
-    if (!current || row.position < current.position ||
-      (row.position === current.position && row.created_at < current.created_at)) first.set(row.master_id, row);
+    const replacesGeneral = current?.color_key === "geral" && row.color_key !== "geral";
+    const keepsColor = current && current.color_key !== "geral" && row.color_key === "geral";
+    if (!current || replacesGeneral || (!keepsColor && (row.position < current.position ||
+      (row.position === current.position && row.created_at < current.created_at)))) first.set(row.master_id, row);
   }
   return Object.fromEntries([...first].map(([id, row]) => [id, row.url_thumb]));
 }

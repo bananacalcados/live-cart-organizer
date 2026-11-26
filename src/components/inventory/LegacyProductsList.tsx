@@ -590,7 +590,7 @@ export function LegacyProductsList() {
     if (!photosVisible || !visiblePhotoIds) return;
     void (async () => {
       const { data, error } = await supabase.from("product_color_photos")
-        .select("master_id,url_thumb,position,created_at")
+        .select("master_id,color_key,url_thumb,position,created_at")
         .in("master_id", visiblePhotoIds.split(","))
         .order("position", { ascending: true }).order("created_at", { ascending: true });
       if (!cancelled && !error) setThumbnails(firstLegacyThumbnails(data || []));
