@@ -2024,6 +2024,13 @@
       "when": 1795640315403,
       "tag": "0288_persistent_instagram_phone_last4",
       "breakpoints": true
+    },
+    {
+      "idx": 289,
+      "version": "7",
+      "when": 1795695083289,
+      "tag": "0289_vip_attendance_instances_only",
+      "breakpoints": true
     }
   ]
 }

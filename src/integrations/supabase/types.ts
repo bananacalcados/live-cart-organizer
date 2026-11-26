@@ -30311,6 +30311,7 @@ export type Database = {
           uazapi_qr_updated_at: string | null
           uazapi_token: string | null
           updated_at: string
+          vip_attendance_enabled: boolean
           wasender_api_key: string | null
           wasender_last_qr: string | null
           wasender_phone_number: string | null
@@ -30351,6 +30352,7 @@ export type Database = {
           uazapi_qr_updated_at?: string | null
           uazapi_token?: string | null
           updated_at?: string
+          vip_attendance_enabled?: boolean
           wasender_api_key?: string | null
           wasender_last_qr?: string | null
           wasender_phone_number?: string | null
@@ -30391,6 +30393,7 @@ export type Database = {
           uazapi_qr_updated_at?: string | null
           uazapi_token?: string | null
           updated_at?: string
+          vip_attendance_enabled?: boolean
           wasender_api_key?: string | null
           wasender_last_qr?: string | null
           wasender_phone_number?: string | null
@@ -31412,6 +31415,7 @@ export type Database = {
           uazapi_proxy_managed_state: string | null
           uazapi_proxy_mode: string | null
           updated_at: string | null
+          vip_attendance_enabled: boolean | null
           wasender_phone_number: string | null
           wasender_session_id: number | null
           zapi_instance_id: string | null
@@ -31439,6 +31443,7 @@ export type Database = {
           uazapi_proxy_managed_state?: string | null
           uazapi_proxy_mode?: string | null
           updated_at?: string | null
+          vip_attendance_enabled?: boolean | null
           wasender_phone_number?: string | null
           wasender_session_id?: number | null
           zapi_instance_id?: string | null
@@ -31466,6 +31471,7 @@ export type Database = {
           uazapi_proxy_managed_state?: string | null
           uazapi_proxy_mode?: string | null
           updated_at?: string | null
+          vip_attendance_enabled?: boolean | null
           wasender_phone_number?: string | null
           wasender_session_id?: number | null
           zapi_instance_id?: string | null

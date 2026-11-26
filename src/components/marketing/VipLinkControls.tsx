@@ -111,7 +111,7 @@ export function VipDayLock({ day, onState, contactPhones, onUseForContacts }: {
     (async () => {
       const { data } = await supabase.from("whatsapp_numbers_safe")
         .select("id, label, provider, phone_display, uazapi_owner, wasender_phone_number")
-        .eq("is_active", true).in("provider", ["meta", "uazapi", "wasender"]);
+        .eq("is_active", true).eq("vip_attendance_enabled", true);
       setNumbers((data || []).map((n: any) => ({
         id: n.id, label: n.label || "Número", provider: n.provider,
         phone: String(n.phone_display || n.uazapi_owner || n.wasender_phone_number || "").replace(/\D/g, ""),
