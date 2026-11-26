@@ -25,7 +25,9 @@ const Checkout = lazy(() => import("./pages/Checkout"));
 const CustomerRegister = lazy(() => import("./pages/CustomerRegister"));
 const TransparentCheckout = lazy(() => import("./pages/TransparentCheckout"));
 const POS = lazy(() => import("./pages/POS"));
+import { MobileInventoryRedirect } from "./mobile/inventory/MobileInventoryRedirect";
 const Inventory = lazy(() => import("./pages/Inventory"));
+const MobileInventoryApp = lazy(() => import("./mobile/inventory/MobileInventoryApp"));
 const InventoryCategories = lazy(() => import("./pages/InventoryCategories"));
 const InventoryProductCodes = lazy(() => import("./pages/InventoryProductCodes"));
 const ProductStockManager = lazy(() => import("./pages/ProductStockManager"));
@@ -182,7 +184,8 @@ const App = () => (
               <Route path="/expedition" element={<ProtectedRoute requiredModule="expedition"><Navigate to="/pos?section=expedition" replace /></ProtectedRoute>} />
               <Route path="/expedition-beta" element={<ProtectedRoute requiredModule="expedition"><Navigate to="/pos?section=expedition" replace /></ProtectedRoute>} />
               <Route path="/pos" element={<ProtectedRoute requiredModule={["pos", "expedition"]}><POS /></ProtectedRoute>} />
-              <Route path="/inventory" element={<ProtectedRoute requiredModule="inventory"><Inventory /></ProtectedRoute>} />
+              <Route path="/inventory" element={<ProtectedRoute requiredModule="inventory"><MobileInventoryRedirect><Inventory /></MobileInventoryRedirect></ProtectedRoute>} />
+              <Route path="/m/estoque/*" element={<ProtectedRoute requiredModule="inventory"><MobileInventoryApp /></ProtectedRoute>} />
               <Route path="/inventory/categorias" element={<ProtectedRoute requiredModule="inventory"><InventoryCategories /></ProtectedRoute>} />
               <Route path="/inventory/codigos" element={<ProtectedRoute requiredModule="inventory"><InventoryProductCodes /></ProtectedRoute>} />
               <Route path="/inventory/produto/:masterId/estoque" element={<ProtectedRoute requiredModule="inventory"><ProductStockManager /></ProtectedRoute>} />
