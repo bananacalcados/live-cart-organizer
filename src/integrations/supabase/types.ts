@@ -22779,6 +22779,30 @@ export type Database = {
           },
         ]
       }
+      product_photo_ai_presets: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          id: string
+          name: string
+          options: Json
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          name: string
+          options: Json
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          name?: string
+          options?: Json
+        }
+        Relationships: []
+      }
       product_restock_flags: {
         Row: {
           central_offer_enabled: boolean

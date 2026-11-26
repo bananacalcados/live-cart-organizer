@@ -3,12 +3,15 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Download, Loader2, Trash2, Plus } from "lucide-react";
+import { Download, Loader2, Trash2, Plus, Sparkles, X } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import { useAiPhotoJobs } from "@/hooks/useAiPhotoJobs";
+import { AiPhotoDialog } from "./AiPhotoDialog";
 import { toast } from "sonner";
 import { useProductColorPhotosMode } from "@/hooks/useProductColorPhotosMode";
 import { colorSlug, deletePhoto, reorderPositions, uploadPhoto, validatePhotoFile } from "@/lib/productPhotos";
 
-export interface PhotoRow { id: string; color_key: string; photo_id: string; url_thumb: string; url_medium: string; url_full: string; position: number; }
+export interface PhotoRow { id: string; color_key: string; photo_id: string; url_thumb: string; url_medium: string; url_full: string; position: number; source?: string | null; }
 interface Props { masterId: string; variantColors: string[]; }
 interface PhotoBlock { key: string; label: string; }
 
@@ -64,6 +67,11 @@ function Inner({ masterId, variantColors }: Props) {
   const [progress, setProgress] = useState<Record<string, string[]>>({});
   const [preview, setPreview] = useState<string | null>(null);
   const dragFrom = useRef<{ key: string; idx: number } | null>(null);
+  const [aiBlock, setAiBlock] = useState<{ key: string; label: string } | null>(null);
+  const canUpload = useQuery({ queryKey: ["can_upload_product_photos"], staleTime: 5 * 60_000, queryFn: async () => {
+    const { data } = await supabase.rpc("can_upload_product_photos" as any); return data === true;
+  } });
+  const photosRef = useRef<PhotoRow[]>([]);
 
   useEffect(() => {
     let off = false;
@@ -71,7 +79,7 @@ function Inner({ masterId, variantColors }: Props) {
       setLoading(true);
       const [c, p] = await Promise.all([
         supabase.from("product_color_codes").select("color,color_key").eq("master_id", masterId),
-        supabase.from("product_color_photos").select("id,color_key,photo_id,url_thumb,url_medium,url_full,position").eq("master_id", masterId).order("position"),
+        supabase.from("product_color_photos").select("id,color_key,photo_id,url_thumb,url_medium,url_full,position,source").eq("master_id", masterId).order("position"),
       ]);
       if (off) return;
       if (p.error) toast.error("Erro ao carregar fotos por cor");
@@ -83,6 +91,10 @@ function Inner({ masterId, variantColors }: Props) {
   }, [masterId]);
 
   const blocks = useMemo(() => buildPhotoBlocks(variantColors, codes), [variantColors, codes]);
+  photosRef.current = photos;
+  const ai = useAiPhotoJobs(masterId,
+    (key) => photosForColorBlock(photosRef.current, key, blocks).reduce((m, x) => Math.max(m, x.position + 1), 0),
+    (rows) => { setPhotos((p) => [...p, ...rows.filter((r) => !p.some((x) => x.id === r.id))]); toast.success(`${rows.length} foto(s) da IA salva(s)`); });
 
   async function onFiles(key: string, label: string, files: FileList | null) {
     if (!files?.length) return;
@@ -159,6 +171,7 @@ function Inner({ masterId, variantColors }: Props) {
                       <Button type="button" variant="ghost" className="h-14 w-14 p-0" aria-label={`Ampliar foto de ${label}`} onClick={() => setPreview(ph.url_medium)}>
                         <img src={ph.url_thumb} loading="lazy" width={56} height={56} alt={label} className="h-14 w-14 object-cover" />
                       </Button>
+                      {ph.source === "ia" && <span className="pointer-events-none absolute left-0.5 top-0.5 rounded bg-primary px-1 text-[9px] font-bold text-primary-foreground">IA</span>}
                       <div className="pointer-events-none absolute inset-x-0 bottom-0 flex justify-between bg-background/80 opacity-100 [@media(hover:hover)_and_(pointer:fine)]:opacity-0 group-hover:opacity-100 group-focus-within:opacity-100">
                         <Button asChild size="icon" variant="ghost" className="pointer-events-auto h-6 w-7">
                           <a href={ph.url_full} download target="_blank" rel="noreferrer" title="Baixar" aria-label={`Baixar foto de ${label}`}><Download className="h-3.5 w-3.5" /></a>
@@ -172,10 +185,42 @@ function Inner({ masterId, variantColors }: Props) {
                     <input type="file" multiple accept="image/jpeg,image/png,image/webp" className="hidden" disabled={!!busy}
                       onChange={(e) => { onFiles(key, label, e.target.files); e.target.value = ""; }} />
                   </label>
+                  {canUpload.data && list.length > 0 && (() => {
+                    const running = ai.jobs.some((j) => j.color === key && ["fila", "enviando", "gerando"].includes(j.status));
+                    return (
+                      <Button type="button" variant="outline" disabled={running} onClick={() => setAiBlock({ key, label })}
+                        className="h-14 w-14 shrink-0 flex-col gap-0 p-0 text-[10px]" title={`Gerar com IA (${label})`} aria-label={`Gerar com IA (${label})`}>
+                        {running ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}{running ? "gerando…" : "IA"}
+                      </Button>
+                    );
+                  })()}
+                  {ai.jobs.filter((j) => j.color === key).map((j) => {
+                    const st: Record<string, string> = { fila: "na fila", enviando: "enviando", gerando: "gerando…", concluido: `pronto: ${j.saved ?? 0} salva(s)`, falhou: "falhou", expirado: "não terminou; reabra o produto mais tarde", erro: "erro" };
+                    const bad = j.status === "falhou" || (j.failed ?? 0) > 0;
+                    return (
+                      <div key={j.job_id} className={`flex min-h-14 max-w-[220px] items-start gap-1 rounded border p-2 text-[11px] ${bad ? "border-destructive text-destructive" : ""}`}>
+                        {["fila", "enviando", "gerando"].includes(j.status) && <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin" />}
+                        <div className="min-w-0 flex-1">
+                          <p className="font-medium">IA: {st[j.status]}</p>
+                          {!!j.failed && <p>{j.failed} foto(s) falharam</p>}
+                          {j.error && <p className="break-words">{j.error}</p>}
+                        </div>
+                        {!["fila", "enviando", "gerando"].includes(j.status) && (
+                          <button type="button" aria-label="Fechar aviso" onClick={() => ai.dismiss(j.job_id)}><X className="h-3.5 w-3.5" /></button>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             );
           })}
+        {aiBlock && (
+          <AiPhotoDialog open={!!aiBlock} onOpenChange={(v) => !v && setAiBlock(null)} masterId={masterId}
+            colorKey={aiBlock.key} label={aiBlock.label} getToken={token}
+            sources={photosForColorBlock(photos, aiBlock.key, blocks)}
+            onStarted={(job_id) => ai.track({ job_id, master: masterId, color: aiBlock.key, label: aiBlock.label, started_at: Date.now() })} />
+        )}
         <Dialog open={!!preview} onOpenChange={(v) => !v && setPreview(null)}>
           <DialogContent className="max-w-3xl">
             <DialogHeader><DialogTitle>Foto</DialogTitle></DialogHeader>

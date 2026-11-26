@@ -2052,6 +2052,13 @@
       "when": 1795723662665,
       "tag": "0292_pos_item_photos",
       "breakpoints": true
+    },
+    {
+      "idx": 293,
+      "version": "7",
+      "when": 1795724504630,
+      "tag": "0293_product_photo_ai_presets",
+      "breakpoints": true
     }
   ]
 }
