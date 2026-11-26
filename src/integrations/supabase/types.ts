@@ -31895,6 +31895,7 @@ export type Database = {
         Returns: boolean
       }
       can_upload_product_photos: { Args: never; Returns: boolean }
+      can_view_product_photos: { Args: never; Returns: boolean }
       cashback_return_stats: {
         Args: { p_days?: number }
         Returns: {
@@ -34333,6 +34334,7 @@ export type Database = {
       }
       phone_ddd: { Args: { e164: string }; Returns: string }
       phone_suffix8: { Args: { e164: string }; Returns: string }
+      photo_color_slug: { Args: { p: string }; Returns: string }
       pickup_delivery_guard: {
         Args: { p: Database["public"]["Tables"]["pos_sales"]["Row"] }
         Returns: Json
@@ -34386,6 +34388,15 @@ export type Database = {
         Returns: {
           stage: string
           total: number
+        }[]
+      }
+      pos_item_photos: {
+        Args: { p_keys: string[] }
+        Returns: {
+          full_url: string
+          key: string
+          medium: string
+          thumb: string
         }[]
       }
       pos_reverse_stock_transfer: {

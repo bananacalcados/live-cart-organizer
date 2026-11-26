@@ -1,3 +1,6 @@
+import { useItemPhotos } from "@/hooks/useItemPhotos";
+import { itemPhotoKey } from "@/lib/pos/itemPhotoCache";
+import { ItemPhotoThumb } from "@/components/pos/ItemPhotoThumb";
 import { syncWaitingProductsFlag } from "./waitingFlag";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
@@ -1818,7 +1821,8 @@ export function POSExpedition({ storeId, storeName, focusSaleId }: Props) {
                         {stage === "concluido" && <ExpCorreiosShipmentPanel saleId={o.id} printOnly />}
                         {o.items.map((it) => (
                           <div key={it.id} className="flex items-start justify-between gap-3 py-2 border-b border-pos-border/60 last:border-0">
-                            <div>
+                            <ExpandedItemPhoto it={it} />
+                            <div className="flex-1 min-w-0">
                               <p className="text-lg font-bold text-pos-text">{it.product_name}</p>
                               {stage === "conferencia" ? (
                                 <div className="mt-2 flex items-stretch gap-3 flex-wrap">
@@ -2006,3 +2010,11 @@ export function POSExpedition({ storeId, storeName, focusSaleId }: Props) {
 }
 
 export default POSExpedition;
+
+/** Thumbnail for an expanded order item; batch cache dedupes keys of the same order. */
+function ExpandedItemPhoto({ it }: { it: { barcode: string | null; sku: string | null; product_name: string | null } }) {
+  const k = itemPhotoKey(it);
+  const photos = useItemPhotos([k]);
+  if (!photos.enabled) return null;
+  return <ItemPhotoThumb photo={photos.get(k)} size={48} alt={it.product_name || ""} />;
+}

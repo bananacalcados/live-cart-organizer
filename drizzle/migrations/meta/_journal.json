@@ -2045,6 +2045,13 @@
       "when": 1795716406863,
       "tag": "0291_legacy_masters_summary_set_based",
       "breakpoints": true
+    },
+    {
+      "idx": 292,
+      "version": "7",
+      "when": 1795723662665,
+      "tag": "0292_pos_item_photos",
+      "breakpoints": true
     }
   ]
 }

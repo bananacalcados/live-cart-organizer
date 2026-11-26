@@ -1,3 +1,6 @@
+import { useItemPhotos } from "@/hooks/useItemPhotos";
+import { itemPhotoKey } from "@/lib/pos/itemPhotoCache";
+import { ItemPhotoThumb } from "@/components/pos/ItemPhotoThumb";
 import { syncWaitingProductsFlag } from "./waitingFlag";
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
@@ -131,6 +134,7 @@ export function ExpPickingList({ orders, stage, onRefresh, storeId }: Props) {
   }, [allEntries]);
 
   const lines = useMemo(() => sections.flatMap((s) => s.lines), [sections]);
+  const photos = useItemPhotos(lines.map((l) => itemPhotoKey(l)));
 
   const loadStock = async () => {
     const barcodes = [...new Set(lines.map((l) => (l.barcode || "").trim()).filter(Boolean))];
@@ -533,6 +537,7 @@ export function ExpPickingList({ orders, stage, onRefresh, storeId }: Props) {
                 checked={done > 0}
                 onCheckedChange={(v) => toggleLine(l, !!v)}
               />
+              {photos.enabled && <ItemPhotoThumb photo={photos.get(itemPhotoKey(l))} size={48} alt={displayName || ""} />}
               <div className="min-w-0 flex-1">
                 <p className="text-xl font-black text-pos-text">{displayName}</p>
                 {res && res.name !== l.product_name && (

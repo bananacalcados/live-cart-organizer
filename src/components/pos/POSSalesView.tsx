@@ -42,6 +42,9 @@ import { useWaMessageBroadcast } from "@/hooks/useWaMessageBroadcast";
 import { toast } from "sonner";
 import { POSCrediarioSchedule, buildSchedule, type CrediarioInstallment } from "./POSCrediarioSchedule";
 import { openFiscalDocument } from "@/lib/openFiscalDocument";
+import { useItemPhotos } from "@/hooks/useItemPhotos";
+import { itemPhotoKey } from "@/lib/pos/itemPhotoCache";
+import { ItemPhotoThumb } from "@/components/pos/ItemPhotoThumb";
 import { searchUnifiedCustomers, materializePosCustomer } from "@/lib/posCustomerResolve";
 import { fetchProviders, createDeliveryCost, storeNameToSource, ServiceProvider, ProviderType } from "@/lib/deliveryProviders";
 
@@ -201,6 +204,7 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
 
   const subtotal = cart.reduce((s, item) => s + item.price * item.quantity, 0);
   const totalItems = cart.reduce((s, item) => s + item.quantity, 0);
+  const cartPhotos = useItemPhotos(cart.map(itemPhotoKey));
   const parsedDiscount = parseFloat((discount || "0").replace(',', '.')) || 0;
   const discountValue = discountType === "percent"
     ? subtotal * (parsedDiscount / 100)
@@ -2476,9 +2480,13 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
                         : "border-amber-500/40 bg-amber-500/5"
                     )}>
                       <div className="flex items-start gap-3">
+                        {cartPhotos.enabled ? (
+                          <ItemPhotoThumb photo={cartPhotos.get(itemPhotoKey(item))} size={48} alt={item.name} />
+                        ) : (
                         <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-pos-orange/10 flex-shrink-0">
                           <Package className="h-5 w-5 text-pos-orange" />
                         </div>
+                        )}
                         <div className="flex-1 min-w-0">
                           <p className="font-bold text-base text-pos-white whitespace-normal break-words leading-tight">{item.name}</p>
                           <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
@@ -2841,6 +2849,7 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
                   <p className="text-xs text-pos-white/50 text-center py-3">Sem itens. Volte pra etapa Produtos.</p>
                 ) : cart.map(item => (
                   <div key={item.id} className="flex items-start gap-2 p-2 rounded-lg bg-pos-black/40 border border-pos-white/10">
+                    {cartPhotos.enabled && <ItemPhotoThumb photo={cartPhotos.get(itemPhotoKey(item))} size={36} alt={item.name} />}
                     <div className="flex-1 min-w-0">
                       <p className="text-xs font-medium text-pos-white whitespace-normal break-words leading-tight">{item.name}</p>
                       <div className="flex flex-wrap gap-1 mt-0.5">

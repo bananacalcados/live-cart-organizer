@@ -1,3 +1,6 @@
+import { useItemPhotos } from "@/hooks/useItemPhotos";
+import { itemPhotoKey } from "@/lib/pos/itemPhotoCache";
+import { ItemPhotoThumb } from "@/components/pos/ItemPhotoThumb";
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -30,6 +33,7 @@ export function ExpAdvancePickDialog({ orders, open, onOpenChange, onDone }: Pro
     [list],
   );
   const [have, setHave] = useState<Record<string, boolean>>({});
+  const photos = useItemPhotos(open ? rows.map((r) => itemPhotoKey(r.item)) : []);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -114,6 +118,7 @@ export function ExpAdvancePickDialog({ orders, open, onOpenChange, onDone }: Pro
                   ok ? "border-exp-done/60 bg-exp-done/5" : "border-destructive/60 bg-destructive/5"
                 }`}
               >
+                {photos.enabled && <ItemPhotoThumb photo={photos.get(itemPhotoKey(item))} size={40} alt={item.product_name || ""} />}
                 <div className="min-w-0 flex-1">
                   <p className="text-lg font-black text-pos-text">{item.product_name}</p>
                   <p className="text-sm font-semibold text-pos-muted-text">

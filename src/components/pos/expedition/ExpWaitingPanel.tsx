@@ -1,3 +1,6 @@
+import { useItemPhotos } from "@/hooks/useItemPhotos";
+import { itemPhotoKey } from "@/lib/pos/itemPhotoCache";
+import { ItemPhotoThumb } from "@/components/pos/ItemPhotoThumb";
 import { syncWaitingProductsFlag } from "./waitingFlag";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
@@ -113,6 +116,7 @@ export function ExpWaitingPanel({ storeId, onRefresh, reloadKey }: Props) {
   }, [orders]);
 
   const saleIds = useMemo(() => [...new Set(orders.map((o) => o.id))], [orders]);
+  const photos = useItemPhotos(lines.map((l) => itemPhotoKey(l)));
 
   /** Marca o produto como chegado/separado em todos os pedidos que dependem dele. */
   const markArrived = async (deps: WaitDep[], label: string) => {
@@ -178,6 +182,7 @@ export function ExpWaitingPanel({ storeId, onRefresh, reloadKey }: Props) {
         lines.map((l) => (
           <div key={l.key} className="rounded-xl bg-pos-card border-2 border-amber-500/50 p-4">
             <div className="flex items-start gap-3 flex-wrap">
+              {photos.enabled && <ItemPhotoThumb photo={photos.get(itemPhotoKey(l))} size={48} alt={l.product_name || ""} />}
               <div className="min-w-0 flex-1">
                 <p className="text-xl font-black text-pos-text">{l.product_name}</p>
                 <p className="text-base font-semibold text-pos-muted-text">

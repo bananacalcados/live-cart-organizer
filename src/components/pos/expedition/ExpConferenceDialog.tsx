@@ -1,3 +1,6 @@
+import { useItemPhotos } from "@/hooks/useItemPhotos";
+import { itemPhotoKey } from "@/lib/pos/itemPhotoCache";
+import { ItemPhotoThumb } from "@/components/pos/ItemPhotoThumb";
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -63,6 +66,7 @@ export function ExpConferenceDialog({ order, storeId, open, onOpenChange, onFini
   );
   const isUnified = groupIds.length > 1;
   const [checks, setChecks] = useState<Record<string, CheckState>>({});
+  const photos = useItemPhotos(open && order ? order.items.map(itemPhotoKey) : []);
   const [scanInput, setScanInput] = useState("");
   const [tracking, setTracking] = useState(order.tracking_code || "");
   const [trackingUrl, setTrackingUrl] = useState<string>((order as any).tracking_url || "");
@@ -578,7 +582,8 @@ export function ExpConferenceDialog({ order, storeId, open, onOpenChange, onFini
                     className={`rounded-lg p-3 border-2 ${c?.scanned ? "border-exp-done bg-exp-done/10" : "border-pos-border"}`}
                   >
                     <div className="flex items-center justify-between gap-2 flex-wrap">
-                      <div className="min-w-0">
+                      {photos.enabled && <ItemPhotoThumb photo={photos.get(itemPhotoKey(it))} size={56} alt={it.product_name || ""} />}
+                      <div className="min-w-0 flex-1">
                         <p className="text-lg font-bold">{it.product_name}</p>
                         {it.barcode && (
                           <p className="text-sm font-semibold text-pos-muted-text">Código {it.barcode}</p>
