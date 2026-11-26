@@ -1,83 +1,114 @@
-# Porta de leitura para a VPS (somente leitura)
+# Fotos por cor no produto pai (links do serviço externo)
 
-Só adições. Nada existente é alterado (tabelas, funções, gatilhos, telas, crons).
+## Resumo
+Nova seção "Fotos por cor" na edição do produto do Estoque. A foto vai do navegador direto para fotos.servidorbanana.com; o ERP guarda só os links. Tudo atrás de um interruptor (padrão: só admin). Nada existente muda: campo "Imagens", botão "Salvar Alterações" e tabelas atuais ficam intactos.
 
-## 1. Desenho da função `vps-reader`
-Um único endpoint, só GET (qualquer outro método = 405). Header `x-vps-reader-key`.
+## Respostas pedidas
 
-Rotas (parâmetro `op`):
-- `op=tables` — lista da allowlist: nome, chave do cursor, se tem incremental, colunas que saem.
-- `op=count&table=X[&since=ISO]` — contagem exata (ou estimada para tabelas gigantes com `mode=estimate`), para conferir backup = origem.
-- `op=read&table=X&cursor=...&limit=N` — leitura paginada por chave primária (`id > cursor order by id`).
-- `op=changes&table=X&since=ISO&cursor=...` — incremental por `(updated_at, id) > (since, cursor_id)` ordenado por `updated_at, id`. Só para tabelas com `updated_at` indexado; as demais usam `created_at` ou só leitura completa (marcado no catálogo).
-- `op=health` — tempos de resposta de consultas leves fixas (contagem estimada, ping) para medir lentidão. Sem consulta pesada.
+### a) Origens para o CORS
+- https://checkout.bananacalcados.com.br (domínio próprio, principal)
+- https://live-cart-organizer.lovable.app (publicado)
+- https://id-preview--79193b8b-9883-4f3b-a197-18d0ddc1605a.lovable.app (prévia)
+- Recomendado também: https://79193b8b-9883-4f3b-a197-18d0ddc1605a.lovableproject.com (prévia dentro do editor)
+- Método POST + OPTIONS; cabeçalhos permitidos: Authorization, Content-Type.
 
-Resposta: `{ table, rows:[...], next_cursor, has_more, server_ms }`. `limit` padrão 200, teto 500 (tabelas de mensagens teto 200). Teto de tempo por chamada (~8s): se aproximar, devolve o que tem com `next_cursor`.
+### b) Formato real de color_key (consultado agora)
+1.143 códigos; 287 NÃO casam com o regex. Exemplos:
+- casam: preto (319), marrom, branco, nude, caramelo, dourado, bege, bronze
+- não casam: vazio (87), "café" (acento), "branco off" e "off white" (espaço)
 
-Implementação: cliente de serviço só com `.from(tabela).select(colunas_fixas)` + filtros `gt/gte/order/limit`. Nenhuma `.insert/.update/.delete/.upsert/.rpc` no arquivo (exceto as duas RPCs internas próprias de auditoria/bloqueio abaixo). Nome da tabela e colunas nunca vêm do cliente: o cliente só escolhe uma chave da allowlist; filtros são montados no servidor. Teste automático varre o código e falha se aparecer método de escrita.
+Solução: gerar no front um slug a partir do color_key (ou do rótulo da cor quando vazio): minúsculas, sem acento, espaços/símbolos viram "-", corta em 60; vazio vira "sem-cor". Ex.: café -> cafe, branco off -> branco-off, off white -> off-white. Esse slug é o que vai no envio e na coluna color_key da tabela nova; o rótulo original vai em color. Nada é gravado em product_color_codes.
 
-## 2. Allowlist (arquivo único `_shared/vps-reader-allowlist.ts`)
-Cada entrada: tabela, colunas permitidas (lista explícita, nunca `*`), chave do cursor, coluna incremental.
+### c) Arquivos
+Criados:
+- src/lib/productPhotos.ts — URL base, slug da cor, envio/exclusão, mensagens de erro em português
+- src/components/inventory/ProductColorPhotos.tsx — a seção
+- src/hooks/useProductColorPhotosMode.ts — lê o interruptor
+- src/test/productPhotos.test.ts
+- migração nova em drizzle/migrations (via ferramenta)
+Alterado:
+- src/components/inventory/ProductEditDialog.tsx — só 1 import + 1 linha renderizando a seção abaixo de "Dados do Produto" (quando há produto salvo)
+- AGENTS.md — 1 regra (fotos em serviço externo, só links no banco)
 
-Incluídas (todas as de negócio), por grupo:
-- Vendas/pedidos: orders (sem checkout_token), order items, pos_sales, pos_sale_items, payment_splits, expedition_*, gateway_refunds, chargebacks, cash_flow_entries, bank_transactions, financeiros/DRE.
-- Clientes/contatos: customers, customers_unified, customer_registrations, chat_contacts, leads (lp_leads, event_leads sem referral_token, ad_leads), zoppy_customers, ravena_customers.
-- Produtos/estoque: pos_products, variações, pos_stock_adjustments, stock labels, transferências, pos_stores (sem tiny_token).
-- Eventos/lives: events (sem overlay_token), event_*, live_comments, raffles/prêmios.
-- Mensagens: whatsapp_messages, whatsapp_messages_archive, whatsapp_conversations, chat_* , dispatch_history, dispatch_recipients.
-- Marketing/configs: campanhas, automações, templates, grupos VIP, ig_comment_moderation.
-- Fiscal: fiscal_documents, fiscal_operations, sequências (só metadados, sem XML/certificado se houver coluna de arquivo).
-- Logs: access_log, security_events, ai_error_logs, email_send_log.
-A lista final completa (uma linha por tabela, ~350) é gerada na implementação a partir do banco, e te mando para conferir antes de ligar.
+Migração SQL:
+```sql
+CREATE TABLE public.product_color_photos (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  master_id uuid NOT NULL REFERENCES public.products_master(id) ON DELETE CASCADE,
+  color_key text NOT NULL CHECK (color_key ~ '^[a-z0-9][a-z0-9_-]{0,59}$'),
+  color text,
+  photo_id text NOT NULL CHECK (photo_id ~ '^[0-9a-f]{32}$'),
+  url_thumb text NOT NULL CHECK (url_thumb LIKE 'https://fotos.servidorbanana.com/%'),
+  url_medium text NOT NULL CHECK (url_medium LIKE 'https://fotos.servidorbanana.com/%'),
+  url_full text NOT NULL CHECK (url_full LIKE 'https://fotos.servidorbanana.com/%'),
+  width int, height int,
+  position int NOT NULL DEFAULT 0,
+  source text NOT NULL DEFAULT 'upload',
+  created_by uuid DEFAULT auth.uid(),
+  created_at timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (master_id, color_key, photo_id)
+);
+CREATE INDEX idx_product_color_photos_master_color_pos
+  ON public.product_color_photos (master_id, color_key, position);
 
-## 3. Exclusões propostas (para sua aprovação)
-Tabelas inteiras fora:
-- appmax_installations, mercadopago_accounts, correios_settings, meta_ads_token_state, webhook_signature_state — credenciais de gateway/integração.
-- dispatch_links, dispatch_link_sessions, fiscal_access_settings, financial_agent_invite_tokens, financial_agent_sessions, member_area_magic_links, live_member_sessions, support_links, review_tokens, model_number_tokens, live_catalog_links, customer_access_codes — senhas, hashes ou tokens que dão acesso.
-- app_settings inteira (pode guardar chaves); se quiser, só uma lista curta de chaves não sensíveis, aprovada por você.
-- Tabelas `_backup_*`, `audit_*_tmp`, `_perf_snap`, `central_rate_limits`, `fiscal_access_attempts` — temporárias/internas.
-- A própria auditoria da porta (não se lê pela porta).
-Colunas cortadas em tabelas incluídas:
-- whatsapp_numbers: access_token, zapi_token, zapi_client_token, uazapi_token, wasender_api_key, wasender_webhook_secret (resto sai).
-- companies: certificate_password, brasilnfe_token, certificate_path.
-- pos_stores: tiny_token. orders: checkout_token. events: overlay_token. live_overlay_templates: fixed_token. event_leads: referral_token. ig_live_cart_notifications: link_token.
-- Claims internos (claim_token) saem por não terem valor de backup.
-Observação: dados pessoais de clientes (CPF, telefone, endereço) SAEM, porque é backup. Isso torna o segredo da VPS tão sensível quanto o próprio banco (ver riscos).
+REVOKE ALL ON public.product_color_photos FROM anon, PUBLIC;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.product_color_photos TO authenticated;
+GRANT ALL ON public.product_color_photos TO service_role;
+ALTER TABLE public.product_color_photos ENABLE ROW LEVEL SECURITY;
 
-## 4. Segredo e rotação
-- Gerado aleatório (64+ caracteres) como `VPS_READER_SECRET`; você copia de Configurações > Segredos? Não dá para ver valor gerado, então o valor será criado por você (ex. `openssl rand -hex 32`) e salvo nos Segredos, e colocado na VPS.
-- Rotação sem queda: aceita `VPS_READER_SECRET` e opcional `VPS_READER_SECRET_NEXT`. Você cria o NEXT, troca na VPS, depois copia para o principal e apaga o NEXT.
-- Comparação em tempo constante; sem header ou errado = 401 com corpo vazio genérico.
-- Opcional recomendado: allowlist de IP da VPS (`VPS_READER_ALLOWED_IPS`).
+CREATE POLICY "inventory users view color photos" ON public.product_color_photos
+  FOR SELECT TO authenticated
+  USING (public.has_module_access(auth.uid(),'inventory') OR public.has_role(auth.uid(),'admin'));
+CREATE POLICY "inventory users insert color photos" ON public.product_color_photos
+  FOR INSERT TO authenticated
+  WITH CHECK (public.has_module_access(auth.uid(),'inventory') OR public.has_role(auth.uid(),'admin'));
+CREATE POLICY "inventory users update color photos" ON public.product_color_photos
+  FOR UPDATE TO authenticated
+  USING (public.has_module_access(auth.uid(),'inventory') OR public.has_role(auth.uid(),'admin'))
+  WITH CHECK (public.has_module_access(auth.uid(),'inventory') OR public.has_role(auth.uid(),'admin'));
+CREATE POLICY "inventory users delete color photos" ON public.product_color_photos
+  FOR DELETE TO authenticated
+  USING (public.has_module_access(auth.uid(),'inventory') OR public.has_role(auth.uid(),'admin'));
 
-## 5. Rate limit e bloqueio
-- Tabela nova `vps_reader_guard` (RLS ligada, sem políticas, só serviço): contagem por IP/minuto. 120 chamadas/min válidas; 5 chaves inválidas em 15 min bloqueiam o IP por 1h. Feito por RPC própria atômica (única escrita, só nessa tabela).
+CREATE OR REPLACE FUNCTION public.can_upload_product_photos()
+RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS $$
+  SELECT CASE WHEN auth.uid() IS NULL THEN false
+    ELSE (public.has_module_access(auth.uid(),'inventory') OR public.has_role(auth.uid(),'admin')) END
+$$;
+REVOKE ALL ON FUNCTION public.can_upload_product_photos() FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.can_upload_product_photos() TO authenticated;
+```
+(Políticas idênticas às de products_master, conferidas agora. A função só responde sobre o próprio usuário logado, por isso DEFINER é seguro.)
 
-## 6. Auditoria
-- Tabela nova `vps_reader_audit` (RLS ligada, sem políticas, só serviço): quando, op, tabela, linhas devolvidas, ms, IP, status (ok/401/429/erro), cursor resumido. Nunca os dados. Limpeza de registros >90 dias junto de um cron já existente (sem cron novo).
+Interruptor: a linha product_color_photos_mode = 'admin' em app_settings é inserida pela ferramenta de dados (não pela migração). Antes, confiro a estrutura e quem lê/escreve app_settings.
 
-## 7. Interruptor de emergência
-- Flag `vps_reader_enabled` em app_settings (nova linha, padrão DESLIGADO). Lido a cada chamada (consulta por chave primária). Desligado = 503 genérico. Ligar exige sua autorização.
+### d) Riscos e como "off" desfaz
+- Diálogo de edição: única mudança é uma linha; se a seção der erro, fica isolada num limite de erro e o resto do diálogo continua.
+- Banco: tabela nova, nenhuma trigger, nenhuma tabela existente tocada; 1 consulta por abertura do diálogo (+1 leitura do interruptor, em cache).
+- Foto órfã: se o envio funciona mas gravar o link falha, chamo /api/delete na hora para não sobrar arquivo.
+- Excluir: apago no serviço e depois a linha; se o serviço falhar, a linha fica e aviso.
+- CORS/servidor fora do ar: só a seção mostra erro; nada mais é afetado.
+- Cores sem variação salva (produto novo): seção aparece só depois de salvar.
+- "off": o componente retorna nada antes de qualquer consulta; a tela fica exatamente como hoje. Fotos já gravadas continuam no banco, só não aparecem.
 
-## 8. Peso no sistema
-- Sem gatilhos, sem cron, sem polling: a VPS chama quando quiser (sugerir madrugada, fora de 9h–20h).
-- Só cursor por chave primária ou `(updated_at,id)`. Antes de liberar incremental numa tabela grande, conferir índice com EXPLAIN; se não houver índice, a tabela fica só no modo completo (sem criar índice novo sem sua aprovação).
-- Contagem exata em tabelas gigantes (whatsapp_messages etc.) só sob pedido; padrão estimado.
+Como alterar o interruptor: me peça ("muda fotos por cor para on/off/admin") e eu troco o valor; vale na próxima abertura do diálogo, sem publicar.
 
-## 9. Não coberto (só descrito)
-- Usuários do login (auth): não estão nas tabelas de negócio; exigiriam rota própria com cuidado (sem hashes de senha) — fica para depois.
-- Arquivos (fotos, PDFs, XMLs de notas no Storage): exigiria URLs assinadas por arquivo — fase separada.
-- Estrutura do banco (tabelas, funções, políticas): a porta só lê dados; o clone precisa das migrações do próprio repositório.
-- Exclusões (linhas apagadas) não aparecem no incremental; conferência pela contagem + leitura completa periódica.
-- Consistência: leitura em páginas não é um retrato instantâneo; pode haver pequenas diferenças entre tabelas.
-- Risco principal: vazar o segredo = vazar dados de clientes. Mitigações: IP fixo, rotação, interruptor, auditoria.
+### e) Testes
+- slug da cor: preto, café, branco off, off white, vazio, 80 caracteres -> sempre casa o regex
+- regra do interruptor: off nunca mostra; admin só admin; on quem tem estoque
+- validação de arquivo antes do envio: tipo e 15 MB
+- tradução de erros 400/401/413/415/422/429
+- resposta do serviço: rejeita URL fora de fotos.servidorbanana.com ou id inválido
+- reordenação recalcula position 0..n
+- SQL: anon sem acesso; usuário sem estoque não lê/grava; função devolve false sem login
 
-## 10. Como testar sem risco
-1. Implantar com interruptor DESLIGADO; confirmar 503.
-2. Testes automáticos: sem chave → 401; chave errada 5x → bloqueio; tabela fora da lista → 400; coluna sensível nunca aparece; varredura do código sem métodos de escrita; `limit` acima do teto é cortado.
-3. Ligar por alguns minutos, ler 1 página de 3 tabelas pequenas e fazer `count`, conferir auditoria; desligar.
-4. Nenhuma escrita em tabela de negócio em nenhum passo.
+## Detalhes da seção (UI)
+- Um bloco por cor distinta das variações salvas do produto (cor da variação + código de cor daquele produto).
+- Miniaturas 96x96 fixas, lazy; clique abre a média; botão baixar a full.
+- Enviar várias (JPG/PNG/WEBP), no máx. 3 ao mesmo tempo, barra por arquivo.
+- Arrastar para reordenar grava position na hora; excluir pede confirmação.
+- Tudo grava na hora com aviso; não depende do "Salvar Alterações".
+- Envio: fetch direto com o token da sessão, corpo = arquivo cru.
 
-## Detalhes técnicos
-- Arquivos novos: `supabase/functions/vps-reader/index.ts`, `_shared/vps-reader-allowlist.ts`, testes Deno, migração com as 2 tabelas + 1 RPC de guarda (EXECUTE só service_role) + linha do flag.
-- Alterações em existentes: nenhuma.
+## Não será feito
+Sem proxy de arquivo, sem segredo novo, sem uso do armazenamento do Lovable, sem mexer em "Imagens", handleSave, listas, Shopify ou PDV. Sem publicar.
