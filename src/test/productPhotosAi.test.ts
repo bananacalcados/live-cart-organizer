@@ -12,7 +12,7 @@ describe("opções da IA", () => {
   it("ensaio remove pose/enquadramento/distância/quantidade e rebaixa 4K", () => {
     const b = buildGenerateBody("m", "preto", "x", { ...DEFAULT_OPTIONS, mode: "photoshoot", resolution: "4k", image_count: 2,
       model: { type: "selected", id: "m1" }, pose_id: "p1", framing: "f", camera_distance: "close", shadow: "soft" });
-    expect(b.options).toEqual({ mode: "photoshoot", aspect_ratio: "1:1", resolution: "2k", model: { type: "selected", id: "m1" }, background: { type: "automatic" } });
+    expect(b.options).toEqual({ mode: "photoshoot", aspect_ratio: "1:1", resolution: "2k", model: { type: "selected", id: "m1" }, background: { type: "automatic" }, output_format: "jpeg" });
   });
   it("sem modelo não manda pose; avulsas mantém quantidade 1..4", () => {
     const n = normalizeOptions({ ...DEFAULT_OPTIONS, pose_id: "p1", image_count: 9 });
@@ -84,5 +84,28 @@ describe("gerações pendentes", () => {
     addPending("u1", { job_id: "j2", master: "m", color: "preto", label: "Preto", started_at: Date.now() }, st);
     removePending("u1", "j2", st);
     expect(readPending("u1", Date.now(), st)).toHaveLength(0);
+  });
+});
+
+describe("tipo de arquivo", () => {
+  const lib = { styles: [], models: [], poses: [], backgrounds: [], ratios: [] } as unknown as AiLibrary;
+  it("manda jpeg, png ou webp no pedido", () => {
+    for (const f of ["jpeg", "png", "webp"] as const) {
+      expect(buildGenerateBody("M", "preto", "a".repeat(32), { ...DEFAULT_OPTIONS, output_format: f }).options.output_format).toBe(f);
+    }
+    expect(buildGenerateBody("M", "preto", "x", DEFAULT_OPTIONS).options.output_format).toBe("jpeg");
+  });
+  it("fundo transparente troca JPG por PNG e mantém WebP", () => {
+    expect(normalizeOptions({ ...DEFAULT_OPTIONS, background: { type: "transparent" }, output_format: "jpeg" }).output_format).toBe("png");
+    expect(normalizeOptions({ ...DEFAULT_OPTIONS, background: { type: "transparent" }, output_format: "webp" }).output_format).toBe("webp");
+  });
+  it("kit antigo sem o campo vira JPG; kit com PNG mantém", () => {
+    expect(applyPreset({ mode: "single_shots", image_count: 1, aspect_ratio: "1:1", resolution: "2k", model: { type: "none" }, background: { type: "automatic" } }, lib).options.output_format).toBe("jpeg");
+    expect(applyPreset({ ...DEFAULT_OPTIONS, output_format: "png" }, lib).options.output_format).toBe("png");
+  });
+  it("aceita foto grande .png e .webp", () => {
+    const base = "https://fotos.servidorbanana.com/x/";
+    const j = parseJob({ id: "j", status: "concluido", photos: ["png", "webp"].map((e, i) => ({ id: String(i).repeat(32), thumb: base + "t.webp", medium: base + "m.webp", full: base + `f_g.${e}` })) });
+    expect(j?.photos.length).toBe(2);
   });
 });

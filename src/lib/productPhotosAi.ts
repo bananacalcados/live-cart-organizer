@@ -20,6 +20,13 @@ export interface AiOptions {
   background: BgChoice;
   style_id?: string;
   directions?: string;
+  output_format?: OutputFormat;
+}
+export type OutputFormat = "jpeg" | "png" | "webp";
+/** JPG cannot hold transparency: a transparent background forces PNG. */
+export function fixFormat(o: AiOptions): AiOptions {
+  const f: OutputFormat = o.output_format === "png" || o.output_format === "webp" ? o.output_format : "jpeg";
+  return { ...o, output_format: o.background?.type === "transparent" && f === "jpeg" ? "png" : f };
 }
 export interface AiPhoto { id: string; thumb: string; medium: string; full: string; width?: number; height?: number }
 export interface AiJob { id: string; status: "fila" | "enviando" | "gerando" | "concluido" | "falhou"; photos: AiPhoto[]; failed: number; error?: string | null; cost?: number; credits?: number }
@@ -28,7 +35,7 @@ export const FEATURED_RATIOS = ["1:1", "4:5", "3:4", "9:16", "16:9"];
 
 export const DEFAULT_OPTIONS: AiOptions = {
   mode: "single_shots", image_count: 1, aspect_ratio: "1:1", resolution: "2k",
-  model: { type: "none" }, background: { type: "automatic" },
+  model: { type: "none" }, background: { type: "automatic" }, output_format: "jpeg",
 };
 
 const LABELS: Record<string, string> = {
@@ -42,7 +49,7 @@ export const ptLabel = (v: string) => LABELS[v] || v.replace(/_/g, " ").replace(
 export const FIELD_LABELS: Record<string, string> = {
   master: "produto", color: "cor", source_photo_id: "foto de origem", mode: "modo", image_count: "quantidade",
   aspect_ratio: "proporção", resolution: "resolução", model: "modelo", pose_id: "pose", framing: "enquadramento",
-  shadow: "sombra", camera_distance: "distância da câmera", background: "fundo", style_id: "estilo", directions: "orientações",
+  shadow: "sombra", camera_distance: "distância da câmera", background: "fundo", style_id: "estilo", directions: "orientações", output_format: "tipo de arquivo",
 };
 
 /** Cleans options so only fields the contract allows for the mode are sent. */
@@ -54,6 +61,7 @@ export function normalizeOptions(o: AiOptions): AiOptions {
     aspect_ratio: o.aspect_ratio,
     resolution: shoot && o.resolution === "4k" ? "2k" : o.resolution,
     model: o.model, background: o.background,
+    output_format: fixFormat(o).output_format,
   };
   if (!shoot && o.model.type !== "none" && o.pose_id) out.pose_id = o.pose_id;
   if (!shoot && o.framing) out.framing = o.framing;

@@ -12,6 +12,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import {
   AiError, DEFAULT_OPTIONS, FEATURED_RATIOS, applyPreset, buildGenerateBody, estimateCost, fetchLibrary,
   normalizeOptions, ptLabel, remainingToday, startGeneration, type AiOptions,
+  fixFormat, type OutputFormat,
 } from "@/lib/productPhotosAi";
 import { AiPhotoPicker } from "./AiPhotoPicker";
 
@@ -59,7 +60,8 @@ export function AiPhotoDialog({ open, onOpenChange, masterId, colorKey, label, s
   useEffect(() => { if (open) { setSrc(sources[0]?.photo_id || ""); setBadField(null); } }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const L = lib.data;
-  const set = (p: Partial<AiOptions>) => setO((x) => ({ ...x, ...p }));
+  const set = (p: Partial<AiOptions>) => setO((x) => fixFormat({ ...x, ...p }));
+  const transparent = o.background.type === "transparent";
   const shoot = o.mode === "photoshoot";
   const cost = estimateCost(o);
   const left = L ? remainingToday(L) : 0;
@@ -179,6 +181,10 @@ export function AiPhotoDialog({ open, onOpenChange, masterId, colorKey, label, s
               {ratios.length > shownRatios.length && <Button type="button" size="sm" variant="ghost" onClick={() => setShowRatios(true)}>mais</Button>}
             </div>
             <Seg value={o.resolution} onChange={(v) => set({ resolution: v })} options={[{ v: "1k", l: "1K" }, { v: "2k", l: "2K" }, { v: "4k", l: "4K", off: shoot }]} />
+            <Label className="text-xs">Tipo de arquivo</Label>
+            <Seg value={o.output_format || "jpeg"} onChange={(v) => set({ output_format: v as OutputFormat })}
+              options={[{ v: "jpeg", l: "JPG", off: transparent }, { v: "png", l: "PNG" }, { v: "webp", l: "WebP" }]} />
+            {transparent && <p className="text-xs text-muted-foreground">JPG não tem transparência.</p>}
           </div>
           {!shoot && (
             <Collapsible className="rounded-md border p-3">
