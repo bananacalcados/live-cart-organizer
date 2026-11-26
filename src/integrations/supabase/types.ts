@@ -31601,6 +31601,10 @@ export type Database = {
       _is_group_staff: { Args: never; Returns: boolean }
       _norm_concrete_gateway: { Args: { p: string }; Returns: string }
       _pm_pmd_sync_in_progress: { Args: never; Returns: boolean }
+      _pos_ids_for_variants: {
+        Args: { p_gtins: string[]; p_skus: string[]; p_tiny: string[] }
+        Returns: string[]
+      }
       _support_move_to_support_line: {
         Args: { p_by: string; p_number: string; p_phone: string }
         Returns: boolean

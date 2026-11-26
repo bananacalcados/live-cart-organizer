@@ -2066,6 +2066,13 @@
       "when": 1795727057742,
       "tag": "0294_variant_price_follows_master",
       "breakpoints": true
+    },
+    {
+      "idx": 295,
+      "version": "7",
+      "when": 1795727230274,
+      "tag": "0295_variant_price_to_pos_by_index",
+      "breakpoints": true
     }
   ]
 }
