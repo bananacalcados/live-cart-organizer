@@ -3,7 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Download, Loader2, Trash2, Upload } from "lucide-react";
+import { Download, Loader2, Trash2, Plus } from "lucide-react";
 import { toast } from "sonner";
 import { useProductColorPhotosMode } from "@/hooks/useProductColorPhotosMode";
 import { colorSlug, deletePhoto, reorderPositions, uploadPhoto, validatePhotoFile } from "@/lib/productPhotos";
@@ -32,7 +32,9 @@ async function token() {
 
 async function pool<T>(items: T[], n: number, fn: (x: T) => Promise<void>) {
   const q = [...items];
-  await Promise.all(Array.from({ length: Math.min(n, q.length) }, async () => { while (q.length) await fn(q.shift()!); }));
+  await Promise.all(Array.from({ length: Math.min(n, q.length) }, async () => {
+    while (q.length) { const item = q.shift(); if (item !== undefined) await fn(item); }
+  }));
 }
 
 function Inner({ masterId, variantColors }: Props) {
@@ -125,30 +127,36 @@ function Inner({ masterId, variantColors }: Props) {
   return (
     <Card>
       <CardHeader><CardTitle className="text-base">Fotos por cor</CardTitle></CardHeader>
-      <CardContent className="space-y-4">
+      <CardContent className="grid grid-cols-1 gap-x-4 gap-y-3 md:grid-cols-2">
         {loading ? <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /> :
           blocks.length === 0 ? <p className="text-sm text-muted-foreground">Salve as variações com cor para cadastrar fotos.</p> :
           blocks.map(({ key, label }) => {
             const list = photos.filter((x) => x.color_key === key).sort((a, b) => a.position - b.position);
             const busy = (progress[key] || []).length;
             return (
-              <div key={key} className="space-y-2">
-                <p className="text-sm font-medium">{label} <span className="text-xs text-muted-foreground">({list.length})</span></p>
-                <div className="flex flex-wrap gap-2">
+              <div key={key} className="flex min-w-0 items-start gap-2">
+                <div className="w-20 shrink-0 pt-1">
+                  <p className="truncate text-sm font-medium" title={label}>{label}</p>
+                  <span className="text-xs text-muted-foreground">({list.length})</span>
+                </div>
+                <div className="flex min-w-0 flex-1 flex-wrap gap-2">
                   {list.map((ph, i) => (
                     <div key={ph.id} draggable onDragStart={() => (dragFrom.current = { key, idx: i })}
                       onDragOver={(e) => e.preventDefault()} onDrop={() => onDrop(key, i)}
-                      className="relative w-24 h-24 rounded border overflow-hidden bg-muted cursor-move group">
-                      <img src={ph.url_thumb} loading="lazy" width={96} height={96} alt={label}
-                        className="w-24 h-24 object-cover" onClick={() => setPreview(ph.url_medium)} />
-                      <div className="absolute inset-x-0 bottom-0 flex justify-between bg-background/80 p-0.5 opacity-0 group-hover:opacity-100">
-                        <a href={ph.url_full} download target="_blank" rel="noreferrer" title="Baixar"><Download className="h-4 w-4" /></a>
-                        <button type="button" onClick={() => onDelete(ph)} title="Excluir"><Trash2 className="h-4 w-4 text-destructive" /></button>
+                      className="relative h-14 w-14 shrink-0 rounded border overflow-hidden bg-muted cursor-move group">
+                      <Button type="button" variant="ghost" className="h-14 w-14 p-0" aria-label={`Ampliar foto de ${label}`} onClick={() => setPreview(ph.url_medium)}>
+                        <img src={ph.url_thumb} loading="lazy" width={56} height={56} alt={label} className="h-14 w-14 object-cover" />
+                      </Button>
+                      <div className="pointer-events-none absolute inset-x-0 bottom-0 flex justify-between bg-background/80 opacity-100 [@media(hover:hover)_and_(pointer:fine)]:opacity-0 group-hover:opacity-100 group-focus-within:opacity-100">
+                        <Button asChild size="icon" variant="ghost" className="pointer-events-auto h-6 w-7">
+                          <a href={ph.url_full} download target="_blank" rel="noreferrer" title="Baixar" aria-label={`Baixar foto de ${label}`}><Download className="h-3.5 w-3.5" /></a>
+                        </Button>
+                        <Button type="button" size="icon" variant="ghost" className="pointer-events-auto h-6 w-7 text-destructive" onClick={() => onDelete(ph)} title="Excluir" aria-label={`Excluir foto de ${label}`}><Trash2 className="h-3.5 w-3.5" /></Button>
                       </div>
                     </div>
                   ))}
-                  <label className="w-24 h-24 rounded border-2 border-dashed flex flex-col items-center justify-center cursor-pointer hover:bg-muted text-xs">
-                    {busy ? <><Loader2 className="h-5 w-5 animate-spin" />{busy} enviando</> : <><Upload className="h-5 w-5" />Enviar</>}
+                  <label title={`Enviar fotos de ${label}`} aria-label={`Enviar fotos de ${label}`} className="h-14 w-14 shrink-0 rounded border-2 border-dashed flex flex-col items-center justify-center cursor-pointer hover:bg-muted text-[10px]">
+                    {busy ? <><Loader2 className="h-4 w-4 animate-spin" />{busy} enviando</> : <Plus className="h-5 w-5" />}
                     <input type="file" multiple accept="image/jpeg,image/png,image/webp" className="hidden" disabled={!!busy}
                       onChange={(e) => { onFiles(key, label, e.target.files); e.target.value = ""; }} />
                   </label>

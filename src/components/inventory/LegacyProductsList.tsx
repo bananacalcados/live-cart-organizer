@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -24,6 +24,8 @@ import { ProductEditDialog } from "./ProductEditDialog";
 import { ProductLabelPrintDialog, type LabelItem } from "./ProductLabelPrintDialog";
 import { ProductFiltersBar, matchesProductFilters, emptyProductFilters, type ProductFilters } from "./ProductFiltersBar";
 import { toast } from "sonner";
+import { useProductColorPhotosMode } from "@/hooks/useProductColorPhotosMode";
+import { firstLegacyThumbnails, legacySummaryMap } from "./legacyProductSummary";
 
 interface Master {
   id: string;
@@ -70,6 +72,11 @@ export function LegacyProductsList() {
   const [items, setItems] = useState<Master[]>([]);
   const [summary, setSummary] = useState<Record<string, Summary>>({});
   const [loading, setLoading] = useState(true);
+  const [summaryLoading, setSummaryLoading] = useState(false);
+  const [thumbnails, setThumbnails] = useState<Record<string, string>>({});
+  const { data: photosMode } = useProductColorPhotosMode(true);
+  const photosVisible = photosMode?.visible === true;
+  const loadVersion = useRef(0);
   const [search, setSearch] = useState("");
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -109,9 +116,10 @@ export function LegacyProductsList() {
   const [posPresent, setPosPresent] = useState<Set<string>>(new Set());
 
   async function load() {
+    const version = ++loadVersion.current;
     setLoading(true);
     const term = search.trim();
-    let query = supabase.from("products_master").select("*");
+    let query = supabase.from("products_master").select("id,sku_root,name,brand,brand_id,category,category_id,gender,cost_price,sale_price,is_active,shopify_product_id,tiny_product_id,created_at,images");
 
 
     if (term) {
@@ -163,6 +171,7 @@ export function LegacyProductsList() {
     if (filters.notInShopify) query = query.is("shopify_product_id", null);
 
     const { data, error } = await query.order("created_at", { ascending: false }).limit(500);
+    if (version !== loadVersion.current) return;
     if (error) {
       toast.error("Erro ao carregar produtos: " + error.message);
       setLoading(false);
@@ -170,41 +179,49 @@ export function LegacyProductsList() {
     }
     const list = (data || []) as Master[];
     setItems(list);
+    setLoading(false);
+    setSummary({});
+    setSummaryLoading(list.length > 0);
     setExpanded(new Set());
     setVariants({});
 
     // resumo (variações + estoque REAL em pares)
     if (list.length > 0) {
       const ids = list.map((d) => d.id);
-      const { data: sum } = await (supabase.rpc as any)("legacy_masters_summary", { p_master_ids: ids });
-      const map: Record<string, Summary> = {};
-      (sum || []).forEach((r: any) => {
-        map[r.master_id] = { variant_count: r.variant_count || 0, total_stock: toNumber(r.total_stock) };
-      });
-      setSummary(map);
-
-      // Presença no PDV via parent_sku = sku_root
       const roots = Array.from(new Set(list.map((d) => d.sku_root).filter(Boolean)));
-      if (roots.length > 0) {
+      await Promise.all([
+        (async () => {
+          try {
+            const { data: sum, error: sumError } = await supabase.rpc("legacy_masters_summary", { p_master_ids: ids });
+            if (version !== loadVersion.current) return;
+            if (sumError) {
+              toast.error("Não consegui carregar os pares dos produtos.");
+              return;
+            }
+            setSummary(legacySummaryMap(ids, sum || []));
+          } catch {
+            if (version === loadVersion.current) toast.error("Não consegui carregar os pares dos produtos.");
+          } finally {
+            if (version === loadVersion.current) setSummaryLoading(false);
+          }
+        })(),
+        (async () => {
+        // Presença no PDV via parent_sku = sku_root, independente do resumo.
         const present = new Set<string>();
         const CHUNK = 200;
-        for (let i = 0; i < roots.length; i += CHUNK) {
-          const slice = roots.slice(i, i + CHUNK);
-          const { data: pos } = await supabase
-            .from("pos_products")
-            .select("parent_sku")
-            .in("parent_sku", slice);
+        const batches = await Promise.all(Array.from({ length: Math.ceil(roots.length / CHUNK) }, (_, i) =>
+          supabase.from("pos_products").select("parent_sku").in("parent_sku", roots.slice(i * CHUNK, (i + 1) * CHUNK))
+        ));
+        for (const { data: pos } of batches) {
           (pos || []).forEach((r: any) => { if (r.parent_sku) present.add(r.parent_sku); });
         }
-        setPosPresent(present);
-      } else {
-        setPosPresent(new Set());
-      }
+        if (version === loadVersion.current) setPosPresent(present);
+        })(),
+      ]);
     } else {
       setSummary({});
       setPosPresent(new Set());
     }
-    setLoading(false);
   }
 
   useEffect(() => {
@@ -565,6 +582,22 @@ export function LegacyProductsList() {
     });
   }, [items, summary, posPresent, filters]);
 
+  // Stable IDs prevent summary/PDV state changes from repeating an unchanged photo batch.
+  const visiblePhotoIds = filteredItems.map(item => item.id).join(",");
+  useEffect(() => {
+    let cancelled = false;
+    setThumbnails({});
+    if (!photosVisible || !visiblePhotoIds) return;
+    void (async () => {
+      const { data, error } = await supabase.from("product_color_photos")
+        .select("master_id,url_thumb,position,created_at")
+        .in("master_id", visiblePhotoIds.split(","))
+        .order("position", { ascending: true }).order("created_at", { ascending: true });
+      if (!cancelled && !error) setThumbnails(firstLegacyThumbnails(data || []));
+    })();
+    return () => { cancelled = true; };
+  }, [visiblePhotoIds, photosVisible]);
+
   const allVisibleSelected = useMemo(
     () => filteredItems.length > 0 && filteredItems.every((i) => selected.has(i.id)),
     [filteredItems, selected]
@@ -640,6 +673,7 @@ export function LegacyProductsList() {
           <div className="hidden md:flex items-center gap-3 px-3 py-2 bg-muted/50 text-xs font-medium text-muted-foreground border-b">
             <Checkbox checked={allVisibleSelected} onCheckedChange={toggleSelectAll} className="shrink-0" />
             <span className="w-6 shrink-0" />
+            {photosVisible && <span className="w-10 shrink-0" />}
             <span className="flex-1">Produto</span>
             <span className="w-24 text-right shrink-0">Custo</span>
             <span className="w-24 text-right shrink-0">Venda</span>
@@ -669,6 +703,11 @@ export function LegacyProductsList() {
                       {isOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
                     </button>
 
+                    {photosVisible && (
+                      <div className="h-10 w-10 shrink-0 overflow-hidden rounded bg-muted">
+                        {thumbnails[p.id] && <img src={thumbnails[p.id]} alt="" loading="lazy" width={40} height={40} className="h-10 w-10 object-cover" />}
+                      </div>
+                    )}
                     <div className="flex-1 min-w-0 cursor-pointer" onClick={() => setEditingId(p.id)}>
                       <div className="font-medium leading-tight hover:text-primary transition-colors">{p.name}</div>
                       <div className="flex items-center gap-2 flex-wrap mt-0.5">
@@ -684,7 +723,7 @@ export function LegacyProductsList() {
                     <div className="w-24 text-right shrink-0 hidden md:block text-sm font-semibold text-primary">{brl(p.sale_price)}</div>
                     <div className="w-16 text-center shrink-0 hidden md:block text-sm">{s?.variant_count ?? "—"}</div>
                     <div className="w-20 text-center shrink-0 hidden md:block text-sm font-semibold">
-                      {s ? s.total_stock : <Loader2 className="h-3 w-3 animate-spin inline" />}
+                      {s ? s.total_stock : summaryLoading ? <Loader2 className="h-3 w-3 animate-spin inline" /> : "—"}
                     </div>
 
                     {/* ações rápidas */}

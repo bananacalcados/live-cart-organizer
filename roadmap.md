@@ -83,3 +83,9 @@
 - [x] Guardar o final no cadastro e recuperar em próximos carrinhos, incluindo cancelados
 - [x] Preservar edição manual e aceitar novo final informado nos comentários
 - [x] Testar em ambiente isolado sem mensagens e conferir os dígitos recuperados
+
+# Estoque — Legacy e fotos compactas
+- [x] Comparar 30 produtos antes de substituir o resumo, preservando regra e permissões
+- [x] Liberar lista antes do resumo/PDV, tratar falha e buscar miniaturas em lote com interruptor
+- [x] Compactar fotos por cor e manter ações acessíveis por toque
+- [x] Testar regras e prévia desktop/celular com gravações simuladas; conferir validação automática sem publicar
