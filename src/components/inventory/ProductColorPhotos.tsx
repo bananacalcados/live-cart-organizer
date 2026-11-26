@@ -3,10 +3,11 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Download, Loader2, Trash2, Plus, Sparkles, X } from "lucide-react";
+import { Crop, Download, Loader2, Trash2, Plus, Sparkles, X } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { useAiPhotoJobs } from "@/hooks/useAiPhotoJobs";
 import { AiPhotoDialog } from "./AiPhotoDialog";
+import { PhotoEditDialog } from "./PhotoEditDialog";
 import { toast } from "sonner";
 import { useProductColorPhotosMode } from "@/hooks/useProductColorPhotosMode";
 import { reorderPositions, validatePhotoFile } from "@/lib/productPhotos";
@@ -43,6 +44,7 @@ function Inner({ masterId, variantColors }: Props) {
   const [preview, setPreview] = useState<string | null>(null);
   const dragFrom = useRef<{ key: string; idx: number } | null>(null);
   const [aiBlock, setAiBlock] = useState<{ key: string; label: string } | null>(null);
+  const [editing, setEditing] = useState<{ ph: PhotoRow; key: string; label: string } | null>(null);
   const canUpload = useQuery({ queryKey: ["can_upload_product_photos"], staleTime: 5 * 60_000, queryFn: async () => {
     const { data } = await supabase.rpc("can_upload_product_photos" as any); return data === true;
   } });
@@ -136,11 +138,13 @@ function Inner({ masterId, variantColors }: Props) {
                         <img src={ph.url_thumb} loading="lazy" width={56} height={56} alt={label} className="h-14 w-14 object-cover" />
                       </Button>
                       {ph.source === "ia" && <span className="pointer-events-none absolute left-0.5 top-0.5 rounded bg-primary px-1 text-[9px] font-bold text-primary-foreground">IA</span>}
+                      {ph.source === "edit" && <span className="pointer-events-none absolute left-0.5 top-0.5 rounded bg-background/80 px-1 text-[8px] text-muted-foreground">editada</span>}
                       <div className="pointer-events-none absolute inset-x-0 bottom-0 flex justify-between bg-background/80 opacity-100 [@media(hover:hover)_and_(pointer:fine)]:opacity-0 group-hover:opacity-100 group-focus-within:opacity-100">
-                        <Button asChild size="icon" variant="ghost" className="pointer-events-auto h-6 w-7">
+                        <Button asChild size="icon" variant="ghost" className="pointer-events-auto h-6 w-[18px] p-0">
                           <a href={ph.url_full} download target="_blank" rel="noreferrer" title="Baixar" aria-label={`Baixar foto de ${label}`}><Download className="h-3.5 w-3.5" /></a>
                         </Button>
-                        <Button type="button" size="icon" variant="ghost" className="pointer-events-auto h-6 w-7 text-destructive" onClick={() => onDelete(ph)} title="Excluir" aria-label={`Excluir foto de ${label}`}><Trash2 className="h-3.5 w-3.5" /></Button>
+                        {canUpload.data && <Button type="button" size="icon" variant="ghost" className="pointer-events-auto h-6 w-[18px] p-0" onClick={() => setEditing({ ph, key, label })} title="Editar" aria-label={`Editar foto de ${label}`}><Crop className="h-3.5 w-3.5" /></Button>}
+                        <Button type="button" size="icon" variant="ghost" className="pointer-events-auto h-6 w-[18px] p-0 text-destructive" onClick={() => onDelete(ph)} title="Excluir" aria-label={`Excluir foto de ${label}`}><Trash2 className="h-3.5 w-3.5" /></Button>
                       </div>
                     </div>
                   ))}
@@ -184,6 +188,11 @@ function Inner({ masterId, variantColors }: Props) {
             colorKey={aiBlock.key} label={aiBlock.label} getToken={token}
             sources={photosForColorBlock(photos, aiBlock.key, blocks)}
             onStarted={(job_id) => ai.track({ job_id, master: masterId, color: aiBlock.key, label: aiBlock.label, started_at: Date.now() })} />
+        )}
+        {editing && (
+          <PhotoEditDialog photo={editing.ph} colorKey={editing.key} masterId={masterId} label={editing.label} getToken={token} onClose={() => setEditing(null)}
+            nextPosition={photosForColorBlock(photos, editing.key, blocks).reduce((m, x) => Math.max(m, x.position + 1), 0)}
+            onSaved={(row) => setPhotos((p) => [...p, row])} />
         )}
         <Dialog open={!!preview} onOpenChange={(v) => !v && setPreview(null)}>
           <DialogContent className="max-w-3xl">

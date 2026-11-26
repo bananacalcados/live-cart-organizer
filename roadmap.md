@@ -93,4 +93,4 @@
 # Estoque no celular + editor de foto
 - [x] A) Convite no lugar do desvio (chave invite/auto/off)
 - [x] B) Fotos por cor na ficha do celular
-- [ ] Editor de foto no "Fotos por cor" do computador
+- [x] Editor de foto no "Fotos por cor" do computador
