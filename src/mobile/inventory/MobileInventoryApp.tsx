@@ -1,13 +1,16 @@
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { Link, Route, Routes, useNavigate, useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { ArrowLeft, Camera, Loader2, Monitor, Package, Search } from "lucide-react";
+import { ArrowLeft, Camera, Loader2, Monitor, Package, Search, Tag } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useProductColorPhotosMode } from "@/hooks/useProductColorPhotosMode";
 import { loadSheet, searchMasters, stockByVariant, MobileMasterHit } from "./data";
 import { setDesktopPreference } from "./redirect";
 import { MobileColorPhotos } from "./MobileColorPhotos";
+import { MobileLabelCount } from "./MobileLabelCount";
+import { supabase } from "@/integrations/supabase/client";
+import { firstLegacyThumbnails } from "@/components/inventory/legacyProductSummary";
 
 const POSBarcodeScanner = lazy(() => import("@/components/pos/POSBarcodeScanner").then((m) => ({ default: m.POSBarcodeScanner })));
 const brl = (n: number | null | undefined) => (n == null ? "—" : n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }));
@@ -35,7 +38,20 @@ function SearchHome() {
   const [hits, setHits] = useState<MobileMasterHit[] | null>(null);
   const [busy, setBusy] = useState(false);
   const [scan, setScan] = useState(false);
+  const [thumbs, setThumbs] = useState<Record<string, string>>({});
+  const { data: photosMode } = useProductColorPhotosMode(true);
+  const photosVisible = photosMode?.visible === true;
+  const hitIds = (hits || []).map((h) => h.id).join(",");
   useEffect(() => { inputRef.current?.focus(); }, []);
+  useEffect(() => {
+    let cancelled = false;
+    setThumbs({});
+    if (!photosVisible || !hitIds) return;
+    void supabase.from("product_color_photos").select("master_id,color_key,url_thumb,position,created_at")
+      .in("master_id", hitIds.split(",")).order("position").order("created_at")
+      .then(({ data, error }) => { if (!cancelled && !error) setThumbs(firstLegacyThumbnails((data || []) as any)); });
+    return () => { cancelled = true; };
+  }, [hitIds, photosVisible]);
 
   async function run(q: string) {
     if (!q.trim()) return;
@@ -64,7 +80,9 @@ function SearchHome() {
         {(hits || []).map((h) => (
           <li key={h.id}>
             <Link to={`/m/estoque/produto/${h.id}`} className="flex min-h-[56px] items-center gap-3 rounded-lg border bg-card p-3">
-              <Package className="h-5 w-5 shrink-0 text-muted-foreground" />
+              {thumbs[h.id]
+                ? <img src={thumbs[h.id]} alt="" loading="lazy" width={56} height={56} className="h-14 w-14 shrink-0 rounded-md bg-muted object-cover" />
+                : <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-md bg-muted"><Package className="h-5 w-5 text-muted-foreground" /></span>}
               <span className="min-w-0 flex-1">
                 <span className="block truncate font-medium">{h.name}</span>
                 <span className="block text-xs text-muted-foreground">{h.sku_root} · {brl(h.sale_price)}</span>
@@ -110,6 +128,9 @@ function ProductSheet() {
           {data.photos.map((p, i) => <img key={i} src={p.url_thumb} alt="" loading="lazy" className="h-16 w-16 shrink-0 rounded bg-muted object-cover" />)}
         </div>
       )}
+      <Button asChild variant="outline" className="h-14 w-full text-base">
+        <Link to={`/m/estoque/produto/${masterId}/etiquetas`}><Tag className="mr-2 h-5 w-5" /> Etiquetas / contagem</Link>
+      </Button>
       {photosOn && <MobileColorPhotos masterId={masterId} variantColors={[...new Set(data.variants.map((v) => v.color || "").filter(Boolean))]} />}
       <ul className="space-y-2">
         {rows.map(({ variant: v, total: t, perStore }) => (
@@ -132,6 +153,7 @@ export default function MobileInventoryApp() {
     <Routes>
       <Route index element={<SearchHome />} />
       <Route path="produto/:masterId" element={<ProductSheet />} />
+      <Route path="produto/:masterId/etiquetas" element={<MobileLabelCount shell={Shell} />} />
     </Routes>
   );
 }

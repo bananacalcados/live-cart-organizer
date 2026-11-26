@@ -21,6 +21,7 @@ import {
   buildStockLabelItems, fillableLabelQuantity, isExpiredLabelCount,
   parseLabelQuantity, previewStockAfter, type StockLabelMode, type StockLabelScope,
 } from "@/lib/labels/stockLabelBatch";
+import { applyStockLabelBatch, fetchVariantCodes, loadStockLabelPreview } from "@/lib/labels/stockLabelApi";
 import { useTeamIdentity } from "@/hooks/chat/useTeamIdentity";
 
 export interface LabelItem {
@@ -242,13 +243,7 @@ export function ProductLabelPrintDialog({ masterId, masterSku, productName, item
   };
 
   const attachCodes = async (list: Variant[]) => {
-    const ids = list.map((v) => v.id);
-    const map = new Map<string, string>();
-    for (let i = 0; i < ids.length; i += 200) {
-      const { data } = await (supabase.from("product_variant_codes" as any) as any)
-        .select("variant_id, code").in("variant_id", ids.slice(i, i + 200));
-      (data || []).forEach((r: any) => map.set(r.variant_id, r.code));
-    }
+    const map = await fetchVariantCodes(list.map((v) => v.id));
     return list.map((v) => ({ ...v, code: map.get(v.id) || v.code || null }));
   };
 
@@ -295,26 +290,9 @@ export function ProductLabelPrintDialog({ masterId, masterSku, productName, item
     setStoreId(id);
     setFilling(true);
     try {
-      const { data: now, error: nowError } = await supabase.rpc("server_now");
-      if (nowError) throw nowError;
       const masterIds = Array.from(new Set(variants.map((v) => v.masterId).filter(Boolean))) as string[];
-      if (!masterIds.length) throw new Error("Não foi possível identificar o produto das variações.");
-      const responses = await Promise.all(masterIds.map((idMaster) =>
-        supabase.rpc("stock_label_preview", { p_master_id: idMaster, p_store_id: id })
-      ));
+      const { openedAt: now, preview: next } = await loadStockLabelPreview(masterIds, id);
       if (request !== previewRequest.current) return;
-      const next: Record<string, StorePreview> = {};
-      for (const response of responses) {
-        if (response.error) throw response.error;
-        for (const row of response.data || []) {
-          next[row.variant_id] = {
-            stock: Number(row.stock || 0),
-            pending: Number(row.pending_expedition || 0),
-            posProductId: row.pos_product_id || null,
-            code: row.code || null,
-          };
-        }
-      }
       setOpenedAt(now);
       setStorePreview(next);
       setVariants((current) => current.map((v) => next[v.id]?.code ? { ...v, code: next[v.id].code } : v));
@@ -440,18 +418,10 @@ export function ProductLabelPrintDialog({ masterId, masterSku, productName, item
     setApplying(true);
     try {
       const itemsToApply = buildStockLabelItems(variantIds, qty, applyMode, scope);
-      const { data, error } = await supabase.rpc("apply_stock_label_batch", {
-        p_store_id: storeId,
-        p_mode: applyMode,
-        p_items: itemsToApply as unknown as Json,
-        p_opened_at: openedAt,
-        p_master_id: singleProduct ? masterIds[0] : undefined,
-        p_scope: applyMode === "balance" ? scope : "selected",
-        p_user_name: senderName || undefined,
+      const result = await applyStockLabelBatch({
+        storeId, mode: applyMode, items: itemsToApply, openedAt,
+        masterId: singleProduct ? masterIds[0] : undefined, scope, userName: senderName || undefined,
       });
-      if (error) throw error;
-      const result = data as unknown as ApplyResult;
-      if (!result?.batch_id) throw new Error("O lote não foi confirmado pelo banco.");
       const skipped = result.skipped || [];
       if (applyMode === "print_only") {
         toast.success(`Impressão registrada no lote #${result.numero}.`);
