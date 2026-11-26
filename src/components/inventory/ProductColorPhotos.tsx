@@ -9,30 +9,12 @@ import { useAiPhotoJobs } from "@/hooks/useAiPhotoJobs";
 import { AiPhotoDialog } from "./AiPhotoDialog";
 import { toast } from "sonner";
 import { useProductColorPhotosMode } from "@/hooks/useProductColorPhotosMode";
-import { colorSlug, deletePhoto, reorderPositions, uploadPhoto, validatePhotoFile } from "@/lib/productPhotos";
+import { reorderPositions, validatePhotoFile } from "@/lib/productPhotos";
+import { buildPhotoBlocks, deleteColorPhoto, loadColorPhotoData, photoSessionToken as token, photosForColorBlock, uploadAndSaveColorPhoto, type PhotoRow } from "@/lib/productColorPhotoBlocks";
 
-export interface PhotoRow { id: string; color_key: string; photo_id: string; url_thumb: string; url_medium: string; url_full: string; position: number; source?: string | null; }
+export type { PhotoRow } from "@/lib/productColorPhotoBlocks";
+export { buildPhotoBlocks, photosForColorBlock } from "@/lib/productColorPhotoBlocks";
 interface Props { masterId: string; variantColors: string[]; }
-interface PhotoBlock { key: string; label: string; }
-
-export function buildPhotoBlocks(variantColors: string[], codes: { color: string | null; color_key: string | null }[]): PhotoBlock[] {
-  const m = new Map<string, string>();
-  const labels = [...variantColors.filter(Boolean), ...codes.map((c) => c.color || "")].filter(Boolean);
-  for (const label of labels) {
-    const code = codes.find((c) => (c.color || "").trim().toLowerCase() === label.trim().toLowerCase());
-    const key = colorSlug(code?.color_key, label);
-    if (key !== "geral" && !m.has(key)) m.set(key, label);
-  }
-  return [...m.entries()].map(([key, label]) => ({ key, label })).concat({ key: "geral", label: "Geral (sem cor)" });
-}
-
-export function photosForColorBlock(photos: PhotoRow[], key: string, blocks: PhotoBlock[]): PhotoRow[] {
-  const knownKeys = new Set(blocks.map((block) => block.key));
-  return photos.filter((photo) => key === "geral"
-    ? photo.color_key === "geral" || !knownKeys.has(photo.color_key)
-    : photo.color_key === key
-  ).sort((a, b) => a.position - b.position);
-}
 
 class Boundary extends Component<{ children: ReactNode }, { err: boolean }> {
   state = { err: false };
@@ -44,13 +26,6 @@ export function ProductColorPhotos(props: Props) {
   const { data } = useProductColorPhotosMode(!!props.masterId);
   if (!data?.visible) return null;
   return <Boundary><Inner {...props} /></Boundary>;
-}
-
-async function token() {
-  const { data } = await supabase.auth.getSession();
-  const t = data.session?.access_token;
-  if (!t) throw new Error("Sessão expirada. Entre de novo.");
-  return t;
 }
 
 async function pool<T>(items: T[], n: number, fn: (x: T) => Promise<void>) {
@@ -77,14 +52,11 @@ function Inner({ masterId, variantColors }: Props) {
     let off = false;
     (async () => {
       setLoading(true);
-      const [c, p] = await Promise.all([
-        supabase.from("product_color_codes").select("color,color_key").eq("master_id", masterId),
-        supabase.from("product_color_photos").select("id,color_key,photo_id,url_thumb,url_medium,url_full,position,source").eq("master_id", masterId).order("position"),
-      ]);
+      const r = await loadColorPhotoData(masterId);
       if (off) return;
-      if (p.error) toast.error("Erro ao carregar fotos por cor");
-      setCodes(c.data || []);
-      setPhotos((p.data as PhotoRow[]) || []);
+      if (r.error) toast.error("Erro ao carregar fotos por cor");
+      setCodes(r.codes);
+      setPhotos(r.photos);
       setLoading(false);
     })();
     return () => { off = true; };
@@ -109,16 +81,10 @@ function Inner({ masterId, variantColors }: Props) {
     let sent = 0;
     await pool(ok, 3, async (f) => {
       try {
-        const up = await uploadPhoto(f, masterId, key, t);
         const pos = photosForColorBlock(photos, key, blocks).length + sent;
-        const { data: row, error } = await supabase.from("product_color_photos").insert({
-          master_id: masterId, color_key: key, color: label, photo_id: up.id,
-          url_thumb: up.thumb, url_medium: up.medium, url_full: up.full,
-          width: up.width ?? null, height: up.height ?? null, position: pos,
-        }).select("id,color_key,photo_id,url_thumb,url_medium,url_full,position").single();
-        if (error) { await deletePhoto(up.id, t).catch(() => {}); throw new Error("Não consegui salvar o link da foto."); }
+        const row = await uploadAndSaveColorPhoto(f, masterId, key, label, pos, t);
         sent++;
-        setPhotos((p) => [...p, row as PhotoRow]);
+        setPhotos((p) => [...p, row]);
       } catch (e: any) { toast.error(`${f.name}: ${e.message}`); }
       finally { setProgress((p) => ({ ...p, [key]: (p[key] || []).filter((n) => n !== f.name) })); }
     });
@@ -128,9 +94,7 @@ function Inner({ masterId, variantColors }: Props) {
   async function onDelete(ph: PhotoRow) {
     if (!confirm("Excluir esta foto?")) return;
     try {
-      await deletePhoto(ph.photo_id, await token());
-      const { error } = await supabase.from("product_color_photos").delete().eq("id", ph.id);
-      if (error) throw new Error("Foto apagada no serviço, mas o link não saiu do ERP.");
+      await deleteColorPhoto(ph);
       setPhotos((p) => p.filter((x) => x.id !== ph.id));
       toast.success("Foto excluída");
     } catch (e: any) { toast.error(e.message); }

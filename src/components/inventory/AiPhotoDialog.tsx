@@ -22,6 +22,8 @@ interface Props {
   masterId: string; colorKey: string; label: string; sources: Src[];
   getToken: () => Promise<string>;
   onStarted: (jobId: string) => void;
+  /** Tela cheia, uma coluna e toques ≥44px (Estoque no celular). Mesmas opções e regras. */
+  mobile?: boolean;
 }
 
 function Seg<T extends string>({ value, options, onChange, disabled }: { value: T; options: { v: T; l: string; off?: boolean }[]; onChange: (v: T) => void; disabled?: boolean }) {
@@ -34,7 +36,7 @@ function Seg<T extends string>({ value, options, onChange, disabled }: { value: 
   );
 }
 
-export function AiPhotoDialog({ open, onOpenChange, masterId, colorKey, label, sources, getToken, onStarted }: Props) {
+export function AiPhotoDialog({ open, onOpenChange, masterId, colorKey, label, sources, getToken, onStarted, mobile }: Props) {
   const qc = useQueryClient();
   const lib = useQuery({
     queryKey: ["ai_photo_library"], enabled: open, staleTime: 10 * 60_000, retry: false,
@@ -110,7 +112,7 @@ export function AiPhotoDialog({ open, onOpenChange, masterId, colorKey, label, s
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="flex max-h-[92vh] max-w-2xl flex-col p-0">
+      <DialogContent className={mobile ? "flex h-[100dvh] max-h-[100dvh] w-screen max-w-none flex-col rounded-none p-0 [&_button]:min-h-11" : "flex max-h-[92vh] max-w-2xl flex-col p-0"}>
         <DialogHeader className="px-4 pt-4"><DialogTitle>Gerar com IA · {label}</DialogTitle></DialogHeader>
         {lib.isLoading ? <div className="p-8"><Loader2 className="mx-auto h-6 w-6 animate-spin" /></div> :
          lib.error || !L ? <p className="p-4 text-sm text-destructive">{(lib.error as any)?.message || "Biblioteca da IA indisponível."}</p> : (
