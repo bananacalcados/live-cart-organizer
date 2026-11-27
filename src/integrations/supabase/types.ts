@@ -35608,6 +35608,7 @@ export type Database = {
         Args: { p_base: string; p_days: string }
         Returns: Json
       }
+      shipment_real_post_base: { Args: { p_events: Json }; Returns: string }
       shopify_missing_colors: {
         Args: { p_limit?: number; p_offset?: number; p_search?: string }
         Returns: {
