@@ -118,3 +118,7 @@
 - [x] Desenhar troca de item pago antes do despacho, com cobrança da diferença e Expedição atualizada
   - Valor menor: escolher crédito ou estorno no modal; depois de despachado, usar troca/devolução normal
 - [ ] Implementar a troca rápida de pedido pago antes do despacho (aguarda aprovação do desenho)
+
+# Diagnóstico do rastreio Jadlog
+- [x] Consultar os dois códigos reais em todos os formatos pedidos e cotar serviços da conta
+- [x] Nenhum formato trouxe eventos; manter o rastreio inalterado e apagar o diagnóstico temporário
