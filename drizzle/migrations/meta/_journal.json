@@ -2171,6 +2171,13 @@
       "when": 1795800927286,
       "tag": "0309_erp_crossell_phase_b",
       "breakpoints": true
+    },
+    {
+      "idx": 310,
+      "version": "7",
+      "when": 1795801859609,
+      "tag": "0310_product_source_whatsapp_switch",
+      "breakpoints": true
     }
   ]
 }

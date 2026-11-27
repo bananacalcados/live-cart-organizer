@@ -22,6 +22,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { fetchProducts } from "@/lib/shopify";
+import { getProductSource, isShopifyVariantGid, searchErpCatalog } from "@/lib/liveProductSource";
 import { toast } from "sonner";
 import { POSCustomerForm } from "./POSCustomerForm";
 import type { SplitPartInput } from "@/lib/splitPayment";
@@ -43,6 +44,9 @@ interface CartItem {
   compareAtPrice: number | null;
   quantity: number;
   imageUrl: string | null;
+  /** Item vindo do ERP (product_source_whatsapp="erp"). */
+  erpVariantId?: string;
+  erpMasterId?: string;
 }
 
 interface FoundCustomer {
@@ -178,6 +182,29 @@ export function POSOnlineSales({ storeId, sellers }: Props) {
 
   const loadProducts = async () => {
     setLoading(true);
+    if ((await getProductSource("product_source_whatsapp")) === "erp") {
+      // ERP: busca no servidor, 30 produtos por vez; todas as variações ativas (vender sem estoque continua permitido).
+      const items: CartItem[] = [];
+      const sizes = new Set<string>();
+      try {
+        const { items: erp } = await searchErpCatalog({ term: debouncedSearch.trim() || null, limit: 30 });
+        for (const it of erp) for (const v of it.variants) {
+          if (v.size) sizes.add(v.size);
+          const variantId = v.shopify_variant_id ? `gid://shopify/ProductVariant/${v.shopify_variant_id}` : `erp-variant:${v.variant_id}`;
+          items.push({
+            id: `erp:${v.variant_id}`, productId: it.shopify_product_id ? `gid://shopify/Product/${it.shopify_product_id}` : `erp-product:${it.master_id}`,
+            variantId, title: it.name, variantLabel: [v.color, v.size].filter(Boolean).join(" / "),
+            sku: v.gtin || v.sku || "", price: Number(v.price ?? it.sale_price ?? 0), compareAtPrice: null, quantity: 1,
+            imageUrl: v.image || null, erpVariantId: v.variant_id, erpMasterId: it.master_id,
+          });
+        }
+      } catch (e) { console.error("erp online sales", e); }
+      setProducts(items);
+      setAllCollections([]);
+      setAllSizes(Array.from(sizes).sort((a, b) => a.localeCompare(b, "pt-BR", { numeric: true })));
+      setLoading(false);
+      return;
+    }
     const query = debouncedSearch.trim() ? `title:*${debouncedSearch}*` : undefined;
     const shopifyProducts = await fetchProducts(250, query);
 
@@ -358,7 +385,8 @@ export function POSOnlineSales({ storeId, sellers }: Props) {
         quantity: c.quantity,
         image: c.imageUrl,
         sku: c.sku,
-        shopifyId: c.variantId,
+        shopifyId: c.erpVariantId && !isShopifyVariantGid(c.variantId) ? "" : c.variantId,
+        ...(c.erpVariantId ? { erp_variant_id: c.erpVariantId, erp_master_id: c.erpMasterId } : {}),
       }));
 
       const { data: order } = await supabase
@@ -391,6 +419,8 @@ export function POSOnlineSales({ storeId, sellers }: Props) {
       if (gateway === "delivery" || gateway === "pickup") {
         link = "";
       } else if (gateway === "yampi") {
+        // Yampi monta o carrinho pela variação da Shopify: item só do ERP não entra.
+        if (cart.some(c => !isShopifyVariantGid(c.variantId))) throw new Error("Há produto só do ERP no carrinho: use Pix ou o checkout da loja.");
         const items = cart.map(c => ({
           sku: c.sku,
           shopify_variant_id: c.variantId,

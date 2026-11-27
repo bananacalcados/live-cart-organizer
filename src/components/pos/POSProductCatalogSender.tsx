@@ -9,7 +9,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { supabase } from "@/integrations/supabase/client";
 import { fetchProducts, ShopifyProduct } from "@/lib/shopify";
 import { useWhatsAppNumberStore } from "@/stores/whatsappNumberStore";
-import { posSendMedia, type PosSendProvider } from "@/lib/pos/posWhatsappSend";
+import { posSendMedia, posSendText, type PosSendProvider } from "@/lib/pos/posWhatsappSend";
+import { getProductSource, searchErpCatalog } from "@/lib/liveProductSource";
+import { cardStoreStock, erpCardCaption, erpColorCards, erpStoreStock, resolveSendableImage, type ErpColorCard } from "@/lib/whatsapp/erpProductPhotos";
 import { toast } from "sonner";
 import { EmbeddedDialog, EmbeddedDialogContent } from "@/components/chat/EmbeddedDialog";
 
@@ -36,6 +38,9 @@ interface ProductItem {
   collections: string[];
   size: string | null;
   color: string | null;
+  /** Só com product_source_whatsapp="erp": cartão por cor do ERP. */
+  erp?: ErpColorCard;
+  storeStock?: Array<{ store: string; stock: number }>;
 }
 
 export function POSProductCatalogSender({ storeId, phone, sendVia, selectedNumberId, open, onOpenChange, embedded = false }: Props) {
@@ -62,6 +67,24 @@ export function POSProductCatalogSender({ storeId, phone, sendVia, selectedNumbe
 
   const loadProducts = async () => {
     setLoading(true);
+    if ((await getProductSource("product_source_whatsapp")) === "erp") {
+      // ERP: busca no servidor (nome, código da live, etiqueta, código de barras, SKU), 30 por vez.
+      try {
+        const { items } = await searchErpCatalog({ term: debouncedSearch.trim() || null, limit: 30 });
+        const cards = erpColorCards(items);
+        const stock = await erpStoreStock(cards.flatMap((c) => c.variants.map((v) => v.sku))).catch(() => new Map());
+        setProducts(cards.map((c) => ({
+          id: c.id, productName: c.productName, variantLabel: [c.color, c.liveCode].filter(Boolean).join(" · "),
+          sku: c.variants[0]?.sku || "", price: c.price, compare_at_price: null, image_url: c.image,
+          available: true, collections: [], size: null, color: c.color, erp: c, storeStock: cardStoreStock(c, stock),
+        })));
+      } catch (e) {
+        console.error("erp whatsapp catalog", e);
+        setProducts([]);
+      }
+      setLoading(false);
+      return;
+    }
     const query = debouncedSearch.trim() ? `title:*${debouncedSearch}*` : undefined;
     const shopifyProducts = await fetchProducts(250, query);
 
@@ -177,6 +200,25 @@ export function POSProductCatalogSender({ storeId, phone, sendVia, selectedNumbe
     }
 
     for (const product of selected) {
+      if (product.erp) {
+        try {
+          const caption = erpCardCaption(product.erp);
+          const img = await resolveSendableImage(product.image_url, sendVia);
+          if (img) {
+            const messageId = await posSendMedia({ provider: sendVia, phone, mediaUrl: img, mediaType: "image", caption, numberId: resolvedNumberId });
+            await supabase.from("whatsapp_messages").insert({ phone, message: caption, direction: "outgoing", status: "sent", media_type: "image", media_url: img, message_id: messageId, whatsapp_number_id: resolvedNumberId || null });
+          } else {
+            // Sem foto (ou foto que não abre): manda só o texto, nunca imagem quebrada.
+            const messageId = await posSendText({ provider: sendVia, phone, message: caption, numberId: resolvedNumberId });
+            await supabase.from("whatsapp_messages").insert({ phone, message: caption, direction: "outgoing", status: "sent", message_id: messageId, whatsapp_number_id: resolvedNumberId || null });
+          }
+          successCount++;
+          if (selected.indexOf(product) < selected.length - 1) await new Promise(r => setTimeout(r, 1500));
+        } catch (error) {
+          console.error(`Error sending product ${product.productName}:`, error);
+        }
+        continue;
+      }
       try {
         const hasDiscount = product.compare_at_price && product.compare_at_price > product.price;
         // Nome do produto SEM tamanho/cor na legenda
@@ -333,6 +375,11 @@ export function POSProductCatalogSender({ storeId, phone, sendVia, selectedNumbe
                       <p className="text-[11px] font-semibold text-[#00a884] line-clamp-1">{p.variantLabel}</p>
                     )}
                     {p.sku && <p className="text-[10px] text-muted-foreground">SKU: {p.sku}</p>}
+                    {p.erp && !p.image_url && <Badge variant="outline" className="mt-0.5 h-4 px-1 text-[9px] border-amber-400 text-amber-700">sem foto · vai só o texto</Badge>}
+                    {p.erp && p.erp.sizes.length > 0 && <p className="text-[10px] text-muted-foreground line-clamp-1">Tam.: {p.erp.sizes.join(", ")}</p>}
+                    {p.storeStock && p.storeStock.length > 0 && (
+                      <p className="text-[10px] text-muted-foreground line-clamp-2">{p.storeStock.map((s) => `${s.store}: ${s.stock}`).join(" · ")}</p>
+                    )}
                     <div className="mt-1">
                       {hasDiscount ? (
                         <>

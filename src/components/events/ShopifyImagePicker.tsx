@@ -4,6 +4,8 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { fetchProducts, ShopifyProduct } from "@/lib/shopify";
+import { getProductSource, searchErpCatalog } from "@/lib/liveProductSource";
+import { resolveSendableImage } from "@/lib/whatsapp/erpProductPhotos";
 
 interface ShopifyImagePickerProps {
   onPick: (imageUrl: string) => void;
@@ -21,15 +23,37 @@ export function ShopifyImagePicker({ onPick }: ShopifyImagePickerProps) {
   const [search, setSearch] = useState("");
   const [debounced, setDebounced] = useState("");
   const [openProductId, setOpenProductId] = useState<string | null>(null);
+  const [erpMode, setErpMode] = useState(false);
+  const [picking, setPicking] = useState<string | null>(null);
 
   useEffect(() => {
     (async () => {
       setLoading(true);
+      if ((await getProductSource("product_source_whatsapp")) === "erp") { setErpMode(true); setLoading(false); return; }
       const data = await fetchProducts(250);
       setAllProducts(data);
       setLoading(false);
     })();
   }, []);
+
+  // ERP: a busca vai ao servidor (nome, código da live, etiqueta, GTIN, SKU), 30 por vez.
+  useEffect(() => {
+    if (!erpMode) return;
+    let alive = true;
+    searchErpCatalog({ term: debounced.trim() || null, limit: 30 })
+      .then(({ products }) => { if (alive) setAllProducts(products); })
+      .catch(() => { if (alive) setAllProducts([]); });
+    return () => { alive = false; };
+  }, [erpMode, debounced]);
+
+  /** Card de carrossel vai pela Meta: foto do ERP é trocada pela versão JPG; foto que não abre não é aplicada. */
+  const pick = async (url: string) => {
+    if (!erpMode) { onPick(url); return; }
+    setPicking(url);
+    const ok = await resolveSendableImage(url, "meta");
+    setPicking(null);
+    if (ok) onPick(ok);
+  };
 
   useEffect(() => {
     const t = setTimeout(() => setDebounced(search), 300);
@@ -38,7 +62,7 @@ export function ShopifyImagePicker({ onPick }: ShopifyImagePickerProps) {
 
   const filtered = useMemo(() => {
     const q = debounced.trim().toLowerCase();
-    if (!q) return allProducts;
+    if (!q || erpMode) return allProducts;
     return allProducts.filter((p) => {
       if (p.node.title.toLowerCase().includes(q)) return true;
       return p.node.variants.edges.some(
@@ -47,7 +71,7 @@ export function ShopifyImagePicker({ onPick }: ShopifyImagePickerProps) {
           (v.node.barcode && v.node.barcode.toLowerCase().includes(q)),
       );
     });
-  }, [debounced, allProducts]);
+  }, [debounced, allProducts, erpMode]);
 
   const openProduct = openProductId
     ? allProducts.find((p) => p.node.id === openProductId) || null
@@ -98,7 +122,8 @@ export function ShopifyImagePicker({ onPick }: ShopifyImagePickerProps) {
                 <button
                   key={img.url}
                   type="button"
-                  onClick={() => onPick(img.url)}
+                  onClick={() => pick(img.url)}
+                  disabled={!!picking}
                   className="group relative aspect-square overflow-hidden rounded-md border border-border hover:border-primary transition-colors"
                 >
                   <img
@@ -149,6 +174,7 @@ export function ShopifyImagePicker({ onPick }: ShopifyImagePickerProps) {
               return (
                 <button
                   key={p.node.id}
+                  disabled={erpMode && imgCount === 0}
                   type="button"
                   onClick={() => setOpenProductId(p.node.id)}
                   className="w-full flex items-center gap-3 p-3 rounded-lg border border-border hover:border-primary/60 hover:bg-muted/40 transition-colors text-left"
@@ -163,7 +189,8 @@ export function ShopifyImagePicker({ onPick }: ShopifyImagePickerProps) {
                   <div className="flex-1 min-w-0">
                     <p className="font-medium text-sm truncate">{p.node.title}</p>
                     <p className="text-xs text-muted-foreground">
-                      {imgCount} {imgCount === 1 ? "imagem" : "imagens"} disponíveis
+                      {erpMode && imgCount === 0 ? "sem foto" : null}
+                      {erpMode && imgCount === 0 ? null : imgCount} {erpMode && imgCount === 0 ? "" : `${imgCount === 1 ? "imagem" : "imagens"} disponíveis`}
                     </p>
                   </div>
                   <span className="text-xs text-primary font-medium">Ver imagens →</span>
