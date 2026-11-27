@@ -141,6 +141,17 @@ export function ExchangeInProgressCard({ saleId, onChanged }: { saleId: string; 
     setLinkFor(null); done();
   };
 
+  const startManualPaidNoLink = async (e: Ex) => {
+    setSaving(true);
+    const { data, error } = await supabase.rpc("exchange_create_difference_link" as any, { p_troca_id: e.id, p_frete: 0, p_frete_modo: "gratis" });
+    setSaving(false);
+    if (error) { toast.error(error.message); return; }
+    const r = data as any;
+    setDiffSales((m) => ({ ...m, [r.sale_id]: { status: "pending", total: Number(r.total || 0), store_id: r.store_id, payment_gateway: null } }));
+    setManualMethod("PIX"); setManualPixKey(""); setManualInstallments("2");
+    setManualPaidFor({ ...e, diferenca_venda_id: r.sale_id });
+  };
+
   const closeManualPaid = () => {
     setManualPaidFor(null); setManualMethod("PIX"); setManualPixKey(""); setManualInstallments("2");
   };
@@ -218,6 +229,11 @@ export function ExchangeInProgressCard({ saleId, onChanged }: { saleId: string; 
                         <Button size="sm" variant="secondary" className="h-7" onClick={() => { setManualMethod("PIX"); setManualPixKey(""); setManualInstallments("2"); setManualPaidFor(e); }}><CheckCircle2 className="h-3 w-3 mr-1" /> Marcar pago por fora</Button>
                       )}
                     </div>
+                  )}
+                  {OPEN_EXCHANGE_STATUSES.includes(e.status) && diff > 0.009 && (!ds || ds.status === "cancelled") && (
+                    <Button size="sm" variant="secondary" className="w-full h-auto whitespace-normal py-1.5" disabled={saving} onClick={() => startManualPaidNoLink(e)}>
+                      <CheckCircle2 className="h-3 w-3 mr-1" /> Marcar pago por fora (sem frete)
+                    </Button>
                   )}
                   {OPEN_EXCHANGE_STATUSES.includes(e.status) && !paid && (
                     <Button size="sm" variant="secondary" className="w-full h-auto whitespace-normal py-1.5" onClick={() => { setFreteModo("gratis"); setFrete(0); setQuotes([]); setLinkFor(e); }}>

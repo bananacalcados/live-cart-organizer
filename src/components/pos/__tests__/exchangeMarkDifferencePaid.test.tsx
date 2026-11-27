@@ -79,7 +79,8 @@ describe("Confirmar diferença recebida por fora", () => {
     const onChanged = vi.fn();
     render(<ExchangeInProgressCard saleId="sale-1" onChanged={onChanged} />);
 
-    const openButton = await screen.findByRole("button", { name: /Marcar pago por fora/ });
+    await screen.findByText(/Link aguardando pagamento/);
+    const openButton = screen.getByRole("button", { name: /Marcar pago por fora/ });
     fireEvent.click(openButton);
     fireEvent.change(screen.getByPlaceholderText("CNPJ, CPF, e-mail ou outra chave"), { target: { value: "pix-da-loja" } });
     fireEvent.click(screen.getByRole("button", { name: /Confirmar pagamento/ }));
@@ -100,7 +101,8 @@ describe("Confirmar diferença recebida por fora", () => {
     const onChanged = vi.fn();
     render(<ExchangeInProgressCard saleId="sale-1" onChanged={onChanged} />);
 
-    fireEvent.click(await screen.findByRole("button", { name: /Marcar pago por fora/ }));
+    await screen.findByText(/Link aguardando pagamento/);
+    fireEvent.click(screen.getByRole("button", { name: /Marcar pago por fora/ }));
     fireEvent.change(screen.getByPlaceholderText("CNPJ, CPF, e-mail ou outra chave"), { target: { value: "pix-da-loja" } });
     fireEvent.click(screen.getByRole("button", { name: /Confirmar pagamento/ }));
 
