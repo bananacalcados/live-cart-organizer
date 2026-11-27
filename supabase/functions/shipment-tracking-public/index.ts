@@ -18,8 +18,8 @@ import {
   naturalTime,
   sanitize,
   stageTimes,
-  translateRealEvent,
 } from '../_shared/shipment-stages.ts';
+import { publicRealTrackingEvents } from '../_shared/shipment-origin-event.ts';
 import {
   fetchFrenetEvents,
   guessServiceCode,
@@ -326,41 +326,9 @@ Deno.serve(withAccessLog("shipment-tracking-public", async (req) => {
       // Eventos reais da transportadora, já traduzidos e sem citar a empresa.
       const real = Array.isArray(sim.real_events) ? (sim.real_events as any[]) : [];
       const sentAt = events.length ? new Date(events[events.length - 1].at).getTime() : 0;
-      let last = sentAt;
-
-      const norm = (s: string) =>
-        String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
-      const cityOf = (ev: any) => {
-        const loc = sanitize(String(ev.location || ev.EventLocation || ''));
-        const [city, state] = loc.split(/[\/-]/).map((s: string) => s.trim());
-        return { city: city || '', state: state || '' };
-      };
-      // Cidade de origem: a da primeira movimentação real (onde o pedido foi postado).
-      const originCity = norm(
-        String(sim.origin_city || '') || (real.map(cityOf).find((c) => c.city)?.city ?? ''),
-      );
-
-      for (const ev of real) {
-        const when = new Date(ev.at || ev.EventDateTime || now).getTime();
-        const tr = translateRealEvent(String(ev.description || ev.EventDescription || ''), fulfillment, ev);
-        if (!tr) continue;
-        const { city, state } = cityOf(ev);
-        // Escondemos as movimentações que ainda estão na nossa própria cidade
-        // (pré-postagem, postagem e primeira transferência): o cliente já viu
-        // "Pedido enviado" e não pode perceber a diferença de datas.
-        const atOrigin = !city || (originCity && norm(city) === originCity);
-        if (atOrigin && tr.title === 'Pedido em trânsito') continue;
-        // Trava de coerência: nunca voltar no tempo.
-        const at = new Date(Math.max(when, last + 60000));
-        last = at.getTime();
-        events.push({
-          title: tr.title,
-          detail: tr.detail,
-          city: city || undefined,
-          state: state || undefined,
-          at: at.toISOString(),
-        });
-      }
+      // NÃO REMOVER: mostrar só a primeira saída real da origem, sem cidade/estado;
+      // demais eventos de origem seguem ocultos e a trava de coerência é preservada.
+      events.push(...publicRealTrackingEvents(real, String(sim.origin_city || ''), fulfillment, sentAt, now));
 
       // Aviso manual da equipe (extravio, atraso, conferência de endereço...).
       // Entra na data em que foi marcado; se depois disso chegou movimentação
