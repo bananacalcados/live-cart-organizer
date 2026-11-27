@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef, memo } from "react";
+import { erpOnlyItems } from "@/lib/liveProductSource";
 import { registrationByOrder, eventInfoById, latestRegistrationByCustomer, successAttemptBySale, liveIncomingByPhone, expeditionBySuffix } from "@/lib/orderCardBatches";
 import { Instagram, Phone, Package, Trash2, Edit2, MessageCircle, MessagesSquare, Gift, Truck, Percent, DollarSign, Wallet, ClipboardCopy, ExternalLink, UserCheck, ShoppingBag, Loader2, AlertTriangle, Store, CreditCard, CheckCircle2, Pencil, Bot, Bike, MapPin, Check } from "lucide-react";
 import { DbOrder } from "@/types/database";
@@ -447,6 +448,12 @@ function OrderCardDbComponent({ order, onEdit, onDelete, isDragging }: OrderCard
 
   const handleCreateShopifyOrder = async (e: React.MouseEvent) => {
     e.stopPropagation();
+    const erpOnly = erpOnlyItems((order.products || []) as any[]);
+    if (erpOnly.length) {
+      // Produto só do ERP fica só no PDV: nunca vira item avulso na Shopify.
+      toast.warning(`${erpOnly.length} item(ns) só do ERP (${erpOnly.map((p: any) => p.title).join(", ")}) não vão para a Shopify. Esse pedido segue só pelo PDV.`);
+      return;
+    }
     setIsCreatingShopifyOrder(true);
     try {
       const { data, error } = await supabase.functions.invoke("shopify-create-order", {

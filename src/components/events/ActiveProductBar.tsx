@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { fetchProducts, type ShopifyProduct } from "@/lib/shopify";
+import { type ShopifyProduct } from "@/lib/shopify";
+import { fetchLiveProducts as fetchProducts, isErpOnlyId } from "@/lib/liveProductSource";
 import { toast } from "sonner";
 import { Zap, Search, Copy, ExternalLink, Clock, Package, Loader2, Plus, X, ArrowUp, Eye } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -209,6 +210,10 @@ export function ActiveProductBar({ eventId, eventName }: ActiveProductBarProps) 
     let newIds: string[];
     if (selectedProductIds.includes(productId)) {
       newIds = selectedProductIds.filter(x => x !== productId);
+    } else if (isErpOnlyId(productId)) {
+      // Catálogo público ainda lê a Shopify (Fase B): produto só do ERP não entra aqui.
+      toast.warning("Produto ainda não está na Shopify: não pode entrar no catálogo da live por enquanto.");
+      return;
     } else {
       newIds = [productId, ...selectedProductIds]; // Add to front = active
     }
@@ -530,16 +535,21 @@ export function ActiveProductBar({ eventId, eventName }: ActiveProductBarProps) 
                       )}
                       <div className="flex gap-3">
                         <button onClick={() => toggleProduct(p.id)} className="flex-shrink-0">
-                          <img
-                            src={p.imageUrl}
-                            alt={p.title}
-                            className="w-16 h-16 object-cover rounded-md"
-                            loading="lazy"
-                          />
+                          {p.imageUrl || !isErpOnlyId(p.id) ? (
+                            <img
+                              src={p.imageUrl}
+                              alt={p.title}
+                              className="w-16 h-16 object-cover rounded-md"
+                              loading="lazy"
+                            />
+                          ) : (
+                            <div className="w-16 h-16 rounded-md bg-muted" aria-label="Sem foto" />
+                          )}
                         </button>
                         <div className="flex-1 min-w-0">
                           <button onClick={() => toggleProduct(p.id)} className="text-left w-full">
                             <p className="text-sm font-medium truncate">{p.title}</p>
+                            {isErpOnlyId(p.id) && <p className="text-[10px] text-amber-600">Só no ERP (fora da Shopify)</p>}
                             <p className="text-xs text-muted-foreground">{fmt(p.price)}</p>
                           </button>
                           

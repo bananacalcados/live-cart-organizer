@@ -5,6 +5,20 @@ const SHOPIFY_STORE_PERMANENT_DOMAIN = 'ftx2e2-np.myshopify.com';
 const SHOPIFY_STOREFRONT_URL = `https://${SHOPIFY_STORE_PERMANENT_DOMAIN}/api/${SHOPIFY_API_VERSION}/graphql.json`;
 const SHOPIFY_STOREFRONT_TOKEN = '01d9be4b81f3be57729bc07e9d552252';
 
+export interface ErpVariantInfo {
+  masterId: string;
+  variantId: string;
+  sku: string;
+  color: string | null;
+  size: string | null;
+  liveCode: string | null;
+  stockPerola: number;
+  shopifyLinked: boolean;
+  imageSource: "erp" | "shopify" | null;
+  /** Variação que casou com o código bipado/digitado. */
+  isHit?: boolean;
+}
+
 export interface ShopifyProduct {
   node: {
     id: string;
@@ -58,6 +72,8 @@ export interface ShopifyProduct {
           image: {
             url: string;
           } | null;
+          /** Presente só quando o produto veio da fonte do ERP (lib/liveProductSource). */
+          erp?: ErpVariantInfo;
         };
       }>;
     };

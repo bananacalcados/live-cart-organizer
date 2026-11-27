@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { fetchProducts } from "@/lib/shopify";
+import { fetchLiveProducts as fetchProducts, isErpOnlyId } from "@/lib/liveProductSource";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -136,7 +136,10 @@ function PromotionDialog({ eventId, promo, onClose, onSaved }: { eventId: string
         setResults([]); return;
       }
       const ps = await fetchProducts(20, `title:*${term}*`);
-      setResults(ps.map((p) => ({ id: numId(p.node.id), title: p.node.title })));
+      // Promoção casa pelo produto da Shopify: produto só do ERP ainda não entra.
+      const erpOnly = ps.filter((p) => isErpOnlyId(p.node.id)).length;
+      if (erpOnly) toast.info(`${erpOnly} produto(s) só do ERP não podem entrar em promoção por enquanto.`);
+      setResults(ps.filter((p) => !isErpOnlyId(p.node.id)).map((p) => ({ id: numId(p.node.id), title: p.node.title })));
     } catch (e: any) { toast.error(e?.message || "Erro na busca"); } finally { setSearching(false); }
   };
 

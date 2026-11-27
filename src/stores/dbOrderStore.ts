@@ -132,7 +132,7 @@ export const useDbOrderStore = create<DbOrderStore>()((set, get) => ({
               // Delay logic: we trust the presenter already set it correctly
               // (the delay is handled by the bar — product changes are delayed)
               try {
-                const { fetchProducts: fetchShopify } = await import('@/lib/shopify');
+                const { fetchLiveProducts: fetchShopify } = await import('@/lib/liveProductSource');
                 const activeGid = activeIds[0];
                 const numericId = activeGid.split('/').pop() || activeGid;
                 const raw = await fetchShopify(1, `id:${numericId}`);
@@ -142,7 +142,8 @@ export const useDbOrderStore = create<DbOrderStore>()((set, get) => ({
                   if (firstVariant) {
                     products = [{
                       id: crypto.randomUUID(),
-                      shopifyId: p.id,
+                      shopifyId: firstVariant.erp ? (firstVariant.erp.shopifyLinked ? firstVariant.id : '') : p.id,
+                      ...(firstVariant.erp ? { erp_variant_id: firstVariant.erp.variantId, erp_master_id: firstVariant.erp.masterId } : {}),
                       title: p.title,
                       variant: firstVariant.title || 'Default',
                       price: Number(firstVariant.price.amount),

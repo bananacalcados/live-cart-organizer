@@ -38,6 +38,9 @@ export interface DbOrderProduct {
   id: string;
   shopifyId: string;
   sku?: string;
+  /** Variação/produto do ERP (gravados quando o item vem da fonte do ERP). */
+  erp_variant_id?: string;
+  erp_master_id?: string;
   title: string;
   variant: string;
   price: number;

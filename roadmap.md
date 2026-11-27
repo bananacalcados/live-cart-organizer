@@ -104,3 +104,10 @@
 - [x] Novo produto (todos os campos do computador, saldo inicial por loja, PDF de etiquetas)
 - [x] Adicionar cor/tamanho e editar dados na ficha
 - [x] Testes em rollback + comparação com o computador + celular 390x844
+
+# Produtos do ERP na live (aprovado, em fases)
+- [x] Fase 0: conferências, busca do ERP, adaptador, comparação ERP x Shopify
+- [x] Fase A: seletores da live usando o ERP com interruptor (nasce em shopify)
+- [ ] Ligar product_source_live='erp' após teste do Matthews (aguarda ele)
+- [ ] Correção do espelho ao criar variação pela edição do Legacy (aguarda autorização, fora da live)
+- [ ] Fases B, C, D (aguardam autorização)

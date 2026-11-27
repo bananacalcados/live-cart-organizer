@@ -5,7 +5,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { fetchProducts, ShopifyProduct, getVariantImage } from "@/lib/shopify";
+import { ShopifyProduct, getVariantImage } from "@/lib/shopify";
+import { fetchLiveProducts as fetchProducts, orderItemIdentity, useLiveProductSource } from "@/lib/liveProductSource";
 import { DbOrderProduct } from "@/types/database";
 import {
   Select,
@@ -39,6 +40,9 @@ export function ProductSelector({
   const [expandedProduct, setExpandedProduct] = useState<string | null>(null);
   const [selectedVariants, setSelectedVariants] = useState<Record<string, number>>({});
   const pendingAutoAddRef = useRef<{ product: ShopifyProduct; variantIndex: number } | null>(null);
+  // null enquanto carrega; "shopify" = comportamento antigo idêntico.
+  const source = useLiveProductSource();
+  const erpMode = source === "erp";
 
   // Debounce search input
   useEffect(() => {
@@ -50,8 +54,9 @@ export function ProductSelector({
 
   // Load all products once on mount
   useEffect(() => {
+    if (source === null) return;
     loadAllProducts();
-  }, []);
+  }, [source]);
 
   // Process pending auto-add
   useEffect(() => {
@@ -66,8 +71,7 @@ export function ProductSelector({
           const price = parseFloat(variant.price.amount);
           onAddProduct({
             id: existingId,
-            shopifyId: variant.id,
-            sku: variant.sku || undefined,
+            ...orderItemIdentity(variant),
             title: product.node.title,
             variant: variant.title !== "Default Title" ? variant.title : "",
             price,
@@ -88,6 +92,7 @@ export function ProductSelector({
   useEffect(() => {
     const term = debouncedSearch.trim();
     if (term.length < 2) { setRemoteProducts([]); return; }
+    if (source === null) return;
     let cancelled = false;
     const words = term.replace(/["']/g, "").split(/\s+/).filter(Boolean);
     const q = /^[a-z0-9\-]+$/i.test(term) && term.length >= 4
@@ -95,7 +100,7 @@ export function ProductSelector({
       : words.map((w) => `title:*${w}*`).join(" AND ");
     fetchProducts(50, q).then((res) => { if (!cancelled) setRemoteProducts(res); });
     return () => { cancelled = true; };
-  }, [debouncedSearch]);
+  }, [debouncedSearch, source]);
 
   // Busca por código de produto (letra + 3 dígitos, ex.: A097): resolve master+cor
   // e mostra só as variações daquela cor. Não interfere na busca normal.
@@ -107,6 +112,7 @@ export function ProductSelector({
     let cancelled = false;
     (async () => {
       const db = supabase as any;
+      if (source === null) return;
       const { data: rows } = await db.from("v_product_color_codes").select("master_id, color, product_name, shopify_ok, shopify_status, shopify_sizes_ok, shopify_sizes_total").eq("code", code).limit(1);
       const row = rows?.[0];
       if (!row) { if (!cancelled) setCodeResult({ products: [] }); return; }
@@ -124,19 +130,22 @@ export function ProductSelector({
         .filter((v: any) => (!row.color || norm(v.color) === norm(row.color)) && sizeAllowed(v.size))
         .map((v: any) => String(v.shopify_variant_id).replace(/\D/g, "")));
       const pid = String(masters?.[0]?.shopify_product_id || "").replace(/\D/g, "");
-      const prods = pid ? await fetchProducts(5, `id:${pid}`) : [];
+      // ERP: o código já traz só a cor certa (inclusive cores ainda sem Shopify).
+      const prods = source === "erp" ? await fetchProducts(5, code) : pid ? await fetchProducts(5, `id:${pid}`) : [];
       const out: ShopifyProduct[] = [];
       for (const p of prods) {
-        const edges = p.node.variants.edges.filter((e) => vids.has(e.node.id.replace(/\D/g, "")));
+        const edges = p.node.variants.edges.filter((e) => e.node.erp
+          ? sizeAllowed(e.node.erp.size) && (!row.color || norm(e.node.erp.color) === norm(row.color))
+          : vids.has(e.node.id.replace(/\D/g, "")));
         if (edges.length) out.push({ ...p, node: { ...p.node, variants: { ...p.node.variants, edges } } } as ShopifyProduct);
       }
       const reason = !out.length && allowedSizes != null
         ? "Nenhuma numeração liberada no painel da apresentadora"
-        : codeStatusReason(row);
+        : source === "erp" && out.length ? null : codeStatusReason(row);
       if (!cancelled) setCodeResult(out.length ? { products: out, reason } : { products: [], unlinkedName: `${row.product_name}${row.color ? ` — ${row.color}` : ""}`, reason });
     })().catch((e) => { console.error("code search", e); if (!cancelled) setCodeResult({ products: [] }); });
     return () => { cancelled = true; };
-  }, [debouncedSearch, eventId]);
+  }, [debouncedSearch, eventId, source]);
 
   // Filter products when search changes
   useEffect(() => {
@@ -151,7 +160,10 @@ export function ProductSelector({
     const seen = new Set(allProducts.map((p) => p.node.id));
     const pool = [...allProducts, ...remoteProducts.filter((p) => !seen.has(p.node.id))];
     const words = q.split(/\s+/).filter(Boolean);
+    const remoteIds = new Set(remoteProducts.map((p) => p.node.id));
     const filtered = pool.filter((p) => {
+      // ERP: a busca já foi feita no servidor (nome, código, etiqueta, GTIN, SKU).
+      if (erpMode && remoteIds.has(p.node.id)) return true;
       const title = p.node.title.toLowerCase();
       if (title.includes(q) || words.every((w) => title.includes(w))) return true;
       if (p.node.title.toLowerCase().includes(q)) return true;
@@ -165,7 +177,8 @@ export function ProductSelector({
     // Auto-select and auto-add when SKU/GTIN match found
     if (isSkuOrGtin) {
       for (const p of filtered) {
-        const matchIdx = p.node.variants.edges.findIndex(
+        const hitIdx = p.node.variants.edges.findIndex((v) => v.node.erp?.isHit);
+        const matchIdx = hitIdx >= 0 ? hitIdx : p.node.variants.edges.findIndex(
           (v) =>
             (v.node.sku && v.node.sku.toLowerCase() === q) ||
             (v.node.barcode && v.node.barcode.toLowerCase() === q) ||
@@ -192,7 +205,7 @@ export function ProductSelector({
     }
 
     setProducts(filtered);
-  }, [debouncedSearch, allProducts, remoteProducts, codeResult]);
+  }, [debouncedSearch, allProducts, remoteProducts, codeResult, erpMode]);
 
   const loadAllProducts = async () => {
     setLoading(true);
@@ -211,8 +224,7 @@ export function ProductSelector({
 
     const orderProduct: DbOrderProduct = {
       id: `${product.node.id}-${variant.id}`,
-      shopifyId: variant.id,
-      sku: variant.sku || undefined,
+      ...orderItemIdentity(variant),
       title: product.node.title,
       variant: variant.title !== "Default Title" ? variant.title : "",
       price,
@@ -238,7 +250,8 @@ export function ProductSelector({
   const getVariantLabel = (variant: ShopifyProduct["node"]["variants"]["edges"][0]["node"]) => {
     if (variant.title === "Default Title") return "Padrão";
     const skuLabel = variant.sku ? ` (${variant.sku})` : "";
-    return `${variant.title}${skuLabel}`;
+    const stock = variant.erp ? ` · Pérola: ${variant.erp.stockPerola}` : "";
+    return `${variant.title}${skuLabel}${stock}`;
   };
 
   return (
@@ -321,13 +334,16 @@ export function ProductSelector({
                     }`}
                   >
                     <div className="flex items-center gap-3 p-3">
-                      {product.node.images.edges[0]?.node && (
+                      {(erpMode ? (currentVariant.image?.url || product.node.images.edges[0]?.node) : product.node.images.edges[0]?.node) ? (
                         <img
-                          src={product.node.images.edges[0].node.url}
+                          src={erpMode ? (currentVariant.image?.url || product.node.images.edges[0]?.node.url) : product.node.images.edges[0].node.url}
                           alt={product.node.title}
+                          loading="lazy"
                           className="w-14 h-14 rounded-md object-cover flex-shrink-0"
                         />
-                      )}
+                      ) : erpMode ? (
+                        <div className="w-14 h-14 rounded-md bg-muted flex-shrink-0" aria-label="Sem foto" />
+                      ) : null}
                       <div className="flex-1 min-w-0">
                         <p className="font-medium text-sm truncate">
                           {product.node.title}

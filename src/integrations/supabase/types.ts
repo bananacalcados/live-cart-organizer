@@ -31706,6 +31706,7 @@ export type Database = {
       }
       _can_review_group_drafts: { Args: never; Returns: boolean }
       _dispatch_can_read: { Args: never; Returns: boolean }
+      _erp_fold: { Args: { p: string }; Returns: string }
       _exchange_desk_staff: { Args: { p_uid: string }; Returns: boolean }
       _group_draft_owner: { Args: { p_id: string }; Returns: string }
       _group_draft_signature: { Args: { p_id: string }; Returns: string }
@@ -32751,6 +32752,15 @@ export type Database = {
         Returns: string
       }
       ensure_variant_code: { Args: { p_variant_id: string }; Returns: string }
+      erp_catalog_search: {
+        Args: {
+          p_ids?: string[]
+          p_limit?: number
+          p_offset?: number
+          p_query?: string
+        }
+        Returns: Json
+      }
       event_buyer_origin_matrix: { Args: { p_event_id: string }; Returns: Json }
       event_buyer_origin_matrix_v2: {
         Args: { p_event_id: string }

@@ -16,6 +16,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { supabase } from "@/integrations/supabase/client";
 import { fetchProducts, type ShopifyProduct } from "@/lib/shopify";
+import { erpOnlyItems } from "@/lib/liveProductSource";
 import { createYampiPaymentLinkFromOrder } from "@/lib/yampi";
 import { toast } from "sonner";
 
@@ -1205,6 +1206,7 @@ export function LiveSessionManager() {
                         <Button size="sm" variant="outline" className="gap-1 text-xs h-7" onClick={async () => {
                           const cartItems = Array.isArray(v.cart_items) ? v.cart_items : [];
                           if (cartItems.length === 0) { toast.error("Carrinho vazio"); return; }
+                          if (erpOnlyItems(cartItems as any[]).length) { toast.warning("Carrinho tem produto só do ERP: esse pedido segue só pelo PDV, sem pedido na Shopify."); return; }
                           try {
                             const dedupeKey = buildLiveShopifyDedupeKey(adminSessionId, v.phone, cartItems);
                             toast.loading("Criando pedido na Shopify...", { id: "force-shopify" });

@@ -6,3 +6,5 @@
 - Support agent tracking/lane: tracking links come only from shipment_simulations.tracking_code (same /rastreio URL as the payment confirmation) inserted by the server via {{rastreio}}; moving to the PDV SUPORTE lane reuses chat_conversation_lanes through _support_move_to_support_line, automatic only with auto_route_support_line on and mode 'auto'. Training runs (support-ai-training) are read-only, one conversation per call (CPU limit). Central test links (is_test) open while the Central is closed; their requests never get reverse or troca records and can be deleted.
 
 - Pasted tracking links: normalized by DB trigger parse_tracking_input; logistics/trackingInput.ts mirrors it.
+
+- Live product source: app_settings.product_source_live ('shopify' default keeps the old path; 'erp' uses RPC erp_catalog_search via liveProductSource.ts adapted to ShopifyProduct). ERP-only items store shopifyId "" + erp_variant_id/erp_master_id and sku=GTIN||SKU (PDV stock match); Shopify order buttons refuse them so they never become avulso Shopify lines.

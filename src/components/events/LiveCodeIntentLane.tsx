@@ -11,6 +11,7 @@ import { OrderDialogDb } from "@/components/OrderDialogDb";
 import { toast } from "sonner";
 import type { DbOrderProduct } from "@/types/database";
 import { fetchProducts, getVariantImage } from "@/lib/shopify";
+import { getLiveProductSource, orderItemIdentity, searchErpCatalog } from "@/lib/liveProductSource";
 import type { DbOrder } from "@/types/database";
 import { useDbOrderStore } from "@/stores/dbOrderStore";
 import { codeIntentDirectConfirmBlocked, computeLiveConditions, conditionsSummary, confirmCodeIntentOrder, mergeProducts, type LiveConditions } from "@/lib/liveCodeOrder";
@@ -66,7 +67,41 @@ export function matchCatalogItem(item: CodeIntentItem, catalog: CatalogRow[]): D
   return null;
 }
 
+const normTxt = (v?: string | null) => String(v || "").trim().toLowerCase();
+/** Chave do item fora do catálogo: variação da Shopify, ou produto+cor+tamanho do ERP. */
+export const intentHitKey = (it: CodeIntentItem) => it.shopify_variant_id
+  ? numId(it.shopify_variant_id)
+  : `erp:${it.master_id || ""}:${normTxt(it.color)}:${normTxt(it.size)}`;
+
+async function lookupErpHits(intent: CodeIntent, catalog: CatalogRow[]): Promise<Record<string, DbOrderProduct>> {
+  const pending = (intent.items || []).filter((it) => it.master_id && !matchCatalogItem(it, catalog));
+  const hits: Record<string, DbOrderProduct> = {};
+  if (pending.length === 0) return hits;
+  try {
+    const ids = [...new Set(pending.map((it) => it.master_id as string))].slice(0, 50);
+    const { products } = await searchErpCatalog({ ids, limit: 50 });
+    for (const it of pending) {
+      const product = products.find((p) => p.node.variants.edges[0]?.node.erp?.masterId === it.master_id);
+      const variant = product?.node.variants.edges.find((e) => it.shopify_variant_id
+        ? numId(e.node.id) === numId(it.shopify_variant_id)
+        : normTxt(e.node.erp?.color) === normTxt(it.color) && normTxt(e.node.erp?.size) === normTxt(it.size))?.node;
+      if (!product || !variant) continue;
+      hits[intentHitKey(it)] = {
+        id: `${product.node.id}-${variant.id}`,
+        ...orderItemIdentity(variant),
+        title: product.node.title,
+        variant: variant.title !== "Default Title" ? variant.title : "",
+        price: Number(it.price ?? parseFloat(variant.price.amount)),
+        quantity: Number(it.quantity) || 1,
+        image: getVariantImage(product, variant),
+      };
+    }
+  } catch (e) { console.error("code-intent erp lookup", e); }
+  return hits;
+}
+
 async function lookupShopifyHits(intent: CodeIntent, catalog: CatalogRow[]): Promise<Record<string, DbOrderProduct>> {
+  if ((await getLiveProductSource()) === "erp") return lookupErpHits(intent, catalog);
   const pending = (intent.items || []).filter((it) => it.shopify_variant_id && it.master_id && !matchCatalogItem(it, catalog));
   const hits: Record<string, DbOrderProduct> = {};
   if (pending.length === 0) return hits;
@@ -101,7 +136,7 @@ function resolveIntent(intent: CodeIntent, catalog: CatalogRow[], hits: Record<s
   const products: DbOrderProduct[] = []; const missing: CodeIntentItem[] = [];
   for (const it of intent.items || []) {
     const m = (it.shopify_variant_id || it.sku ? matchCatalogItem(it, catalog) : null)
-      || (it.shopify_variant_id ? hits?.[numId(it.shopify_variant_id)] : null) || null;
+      || (it.shopify_variant_id ? hits?.[numId(it.shopify_variant_id)] : it.master_id ? hits?.[intentHitKey(it)] : null) || null;
     if (m) products.push(m); else missing.push(it);
   }
   return { products, missing };

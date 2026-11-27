@@ -2115,6 +2115,41 @@
       "when": 1795792682074,
       "tag": "0301_mobile_product_code_lookup",
       "breakpoints": true
+    },
+    {
+      "idx": 302,
+      "version": "7",
+      "when": 1795795639023,
+      "tag": "0302_erp_catalog_search_live",
+      "breakpoints": true
+    },
+    {
+      "idx": 303,
+      "version": "7",
+      "when": 1795795660399,
+      "tag": "0303_erp_catalog_search_accent_fix",
+      "breakpoints": true
+    },
+    {
+      "idx": 304,
+      "version": "7",
+      "when": 1795795704185,
+      "tag": "0304_erp_catalog_search_null_filter_fix",
+      "breakpoints": true
+    },
+    {
+      "idx": 305,
+      "version": "7",
+      "when": 1795795735682,
+      "tag": "0305_erp_catalog_search_stock_speed",
+      "breakpoints": true
+    },
+    {
+      "idx": 306,
+      "version": "7",
+      "when": 1795795759096,
+      "tag": "0306_erp_catalog_search_barcode_index",
+      "breakpoints": true
     }
   ]
 }

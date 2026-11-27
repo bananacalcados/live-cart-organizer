@@ -16,6 +16,27 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { printProductCodeLabels } from "@/lib/productCodeLabels";
 import { buildCodeImageMap, type MirrorImageRow } from "@/lib/productCodeImages";
+import { searchErpCatalog, useLiveProductSource } from "@/lib/liveProductSource";
+
+/** ERP: foto por código da live (foto da cor no ERP, senão a da Shopify espelhada). */
+async function erpCodeImages(masterIds: string[]): Promise<Map<string, string | null>> {
+  const out = new Map<string, string | null>();
+  if (!masterIds.length) return out;
+  const chunks: string[][] = [];
+  for (let i = 0; i < masterIds.length && i < 200; i += 50) chunks.push(masterIds.slice(i, i + 50));
+  const pages = await Promise.all(chunks.map((ids) => searchErpCatalog({ ids, limit: 50 })));
+  const products = pages.flatMap((r) => r.products);
+  for (const p of products) for (const e of p.node.variants.edges) {
+    const code = e.node.erp?.liveCode;
+    if (code && !out.get(code)) out.set(code, e.node.image?.url || null);
+  }
+  // Sem foto da cor: usa a foto do próprio produto (mesmo critério do espelho).
+  for (const p of products) for (const e of p.node.variants.edges) {
+    const code = e.node.erp?.liveCode;
+    if (code && !out.get(code)) out.set(code, p.node.images.edges[0]?.node.url || null);
+  }
+  return out;
+}
 import {
   buildBulkPresenterPatch,
   groupPresenterSizes,
@@ -63,6 +84,7 @@ interface CodeRow {
   image?: string | null;
 }
 interface BoardRow extends CodeRow {
+  outside_shopify?: boolean;
   id: string;
   preparedId: string | null;
   preparedAt: string | null;
@@ -119,7 +141,10 @@ export function LiveShownProductsPanel({ eventId, compact = false, showAvailable
   const { promos } = useEventPromotions(eventId);
   const activePromos = promos.filter((promo) => promo.is_active);
 
+  const source = useLiveProductSource();
+  const erpMode = source === "erp";
   const load = useCallback(async () => {
+    if (source === null) return;
     const [preparedRes, shownRes] = await Promise.all([
       db.from("live_presenter_products")
         .select("id,code,offer_price,free_shipping,interest_free_installments,available_sizes,promotion_id,created_at")
@@ -157,7 +182,10 @@ export function LiveShownProductsPanel({ eventId, compact = false, showAvailable
           : Promise.resolve({ data: [] }),
       ]);
       const missing = products.filter((r) => !imageCache.current.has(r.code));
-      if (missing.length) {
+      if (missing.length && source === "erp") {
+        const imgs = await erpCodeImages([...new Set(missing.map((r) => r.master_id).filter(Boolean))] as string[]).catch(() => new Map());
+        missing.forEach((r) => imageCache.current.set(r.code, imgs.get(r.code) || null));
+      } else if (missing.length) {
         const imgs = buildCodeImageMap(missing, (mirror || []) as MirrorImageRow[]);
         missing.forEach((r) => imageCache.current.set(r.code, imgs.get(r.code) || null));
       }
@@ -178,7 +206,8 @@ export function LiveShownProductsPanel({ eventId, compact = false, showAvailable
         product_name: product?.product_name || null,
         color: product?.color || null,
         sale_price: product?.sale_price ?? null,
-        shopify_ok: product?.shopify_ok ?? s?.shopify_ok ?? false,
+        shopify_ok: source === "erp" ? true : product?.shopify_ok ?? s?.shopify_ok ?? false,
+        outside_shopify: !(product?.shopify_ok ?? s?.shopify_ok ?? false),
         offer_price: p.offer_price,
         free_shipping: !!p.free_shipping,
         interest_free_installments: p.interest_free_installments,
@@ -202,7 +231,8 @@ export function LiveShownProductsPanel({ eventId, compact = false, showAvailable
         product_name: product.product_name,
         color: product.color,
         sale_price: product.sale_price,
-        shopify_ok: product.shopify_ok ?? s.shopify_ok ?? false,
+        shopify_ok: source === "erp" ? true : product.shopify_ok ?? s.shopify_ok ?? false,
+        outside_shopify: !(product.shopify_ok ?? s.shopify_ok ?? false),
         offer_price: null,
         free_shipping: false,
         interest_free_installments: null,
@@ -225,7 +255,7 @@ export function LiveShownProductsPanel({ eventId, compact = false, showAvailable
     if (key !== lastKey.current) { lastKey.current = key; setRows(merged); }
     setSelectedCodes((current) => current.filter((code) => merged.some((row) => row.code === code && row.preparedId)));
     setLoading(false);
-  }, [eventId]);
+  }, [eventId, source]);
 
   // Consultas em lote; tempo real + revisão de 60 s apenas com a aba visível.
   useEffect(() => {
@@ -242,15 +272,23 @@ export function LiveShownProductsPanel({ eventId, compact = false, showAvailable
   useEffect(() => {
     const term = q.trim();
     if (term.length < 2) { setResults([]); return; }
+    if (source === null) return;
     const timeout = setTimeout(async () => {
       setSearching(true);
       const { data } = await db.rpc("search_product_code_keys", { p_query: term, p_limit: 20 });
       const codes = ((data || []) as any[]).map((r) => typeof r === "string" ? r : r.search_product_code_keys).filter(Boolean);
+      const base = () => db.from("v_product_color_codes").select("code,master_id,product_name,color,sale_price,shopify_ok,shopify_product_id").in("code", codes);
+      // ERP: mostra também cores ainda não espelhadas da Shopify.
       const { data: products } = codes.length
-        ? await db.from("v_product_color_codes").select("code,product_name,color,sale_price,shopify_ok,shopify_product_id")
-          .in("code", codes).eq("shopify_ok", true).order("code").limit(20)
+        ? await (source === "erp" ? base() : base().eq("shopify_ok", true)).order("code").limit(20)
         : { data: [] };
       const found = (products || []) as CodeRow[];
+      if (source === "erp") {
+        const imgs = await erpCodeImages([...new Set(found.map((r) => r.master_id).filter(Boolean))] as string[]).catch(() => new Map());
+        setResults(found.map((r) => ({ ...r, image: imgs.get(r.code) || null })));
+        setSearching(false);
+        return;
+      }
       const productIds = [...new Set(found.map((r) => r.shopify_product_id).filter(Boolean))] as string[];
       const { data: mirror } = productIds.length
         ? await db.from("shopify_variant_mirror")
@@ -262,7 +300,7 @@ export function LiveShownProductsPanel({ eventId, compact = false, showAvailable
       setSearching(false);
     }, 300);
     return () => clearTimeout(timeout);
-  }, [q]);
+  }, [q, source]);
 
   const add = async (code: string) => {
     setBusy(`add:${code}`);
@@ -528,6 +566,7 @@ export function LiveShownProductsPanel({ eventId, compact = false, showAvailable
                     <span className="shrink-0 text-lg font-extrabold leading-none">{r.code}</span>
                     {r.is_current && <Badge className="gap-0.5 px-1 text-[10px]"><Radio className="h-3 w-3" /> No ar</Badge>}
                     {!r.shopify_ok && <Badge variant="destructive" className="px-1 text-[10px]">fora Shopify</Badge>}
+                    {erpMode && r.outside_shopify && <Badge variant="outline" className="px-1 text-[10px]">só ERP / sem espelho</Badge>}
                     <Button size="icon" variant="ghost" className="ml-auto h-6 w-6 shrink-0" aria-label={`Configurar ${r.code}`} onClick={() => openOffer(r)}><Pencil className="h-3.5 w-3.5" /></Button>
                   </div>
                   <p className="mt-1.5 truncate text-xs font-medium" title={r.product_name || ""}>{r.product_name || "—"}</p>

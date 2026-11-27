@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
+import { erpOnlyItems } from "@/lib/liveProductSource";
 import { Instagram, Phone, StickyNote, X, Link, Info, Loader2, RefreshCw, Ban, Gift, Truck, Percent, DollarSign, ShoppingBag, Tag, Wallet, CreditCard, QrCode, Lock, Store, MapPin, Package, Copy, ShieldCheck, AlertTriangle, ExternalLink, User } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { normalizeBRPhone } from "@/lib/phoneUtils";
@@ -594,6 +595,13 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId, prefi
   const handleCreateShopifyOrder = useCallback(async () => {
     if (!editingOrder) {
       toast.error("Salve o pedido primeiro");
+      return;
+    }
+
+    const erpOnly = erpOnlyItems((editingOrder.products || []) as any[]);
+    if (erpOnly.length) {
+      // Produto só do ERP fica só no PDV: nunca vira item avulso na Shopify.
+      toast.warning(`${erpOnly.length} item(ns) só do ERP (${erpOnly.map((p: any) => p.title).join(", ")}) não vão para a Shopify. Esse pedido segue só pelo PDV.`);
       return;
     }
     setIsCreatingShopifyOrder(true);
