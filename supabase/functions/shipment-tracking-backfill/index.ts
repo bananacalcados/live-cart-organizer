@@ -17,12 +17,15 @@ Deno.serve(withAccessLog('shipment-tracking-backfill', async (req) => {
   const parsed = Body.safeParse(await req.json().catch(() => ({})));
   if (!parsed.success) return json({ error: 'Lote inválido' }, 400);
   const sb = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
-  const staleBefore = new Date(Date.now() - 14 * 60e3).toISOString();
+  const staleBefore = new Date(Date.now() - 3 * 60 * 60e3).toISOString();
   let query = sb.from('shipment_simulations')
     .select('id,sale_id,real_tracking_code,real_carrier,real_service_code,real_events,delivered_at,last_real_sync')
     .eq('kind', 'order').is('merged_into_id', null).is('delivered_at', null)
     .not('real_tracking_code', 'is', null)
-    .gte('created_at', new Date(Date.now() - 30 * 864e5).toISOString())
+    .gte('created_at', new Date(Date.now() - 45 * 864e5).toISOString())
+    // NÃO REMOVER: nulos e sincronizações mais antigas primeiro fazem a fila girar;
+    // ordenar só por criação repete os mesmos envios a cada execução do cron.
+    .order('last_real_sync', { ascending: true, nullsFirst: true })
     .order('created_at', { ascending: true }).limit(parsed.data.limit);
   query = parsed.data.refresh ? query.or(`last_real_sync.is.null,last_real_sync.lt.${staleBefore}`) : query.is('last_real_sync', null);
   if (parsed.data.sale_id) query = query.eq('sale_id', parsed.data.sale_id);
