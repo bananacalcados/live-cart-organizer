@@ -226,7 +226,8 @@ export function translateRealEvent(
       terminal: true,
     };
   }
-  if (/saiu para entrega|em rota de entrega|out for delivery/.test(t)) {
+  // Jadlog usa "EM ROTA" imediatamente antes da entrega; é saída do entregador.
+  if (/saiu para entrega|em rota(?: de entrega)?|out for delivery/.test(t)) {
     return { title: 'Saiu para entrega', detail: 'Seu pedido está com o entregador.' };
   }
   if (/aguardando retirada|disponível para retirada|aguardando ser retirado/.test(t)) {

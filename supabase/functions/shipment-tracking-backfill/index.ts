@@ -22,11 +22,12 @@ Deno.serve(withAccessLog('shipment-tracking-backfill', async (req) => {
     .select('id,sale_id,real_tracking_code,real_carrier,real_service_code,real_events,delivered_at,last_real_sync')
     .eq('kind', 'order').is('merged_into_id', null).is('delivered_at', null)
     .not('real_tracking_code', 'is', null)
-    .gte('created_at', new Date(Date.now() - 45 * 864e5).toISOString())
     // NÃO REMOVER: nulos e sincronizações mais antigas primeiro fazem a fila girar;
     // ordenar só por criação repete os mesmos envios a cada execução do cron.
     .order('last_real_sync', { ascending: true, nullsFirst: true })
     .order('created_at', { ascending: true }).limit(parsed.data.limit);
+  // A janela de 45 dias vale para a rotina; uma venda explícita permite reprocessar envio antigo.
+  if (!parsed.data.sale_id) query = query.gte('created_at', new Date(Date.now() - 45 * 864e5).toISOString());
   query = parsed.data.refresh ? query.or(`last_real_sync.is.null,last_real_sync.lt.${staleBefore}`) : query.is('last_real_sync', null);
   if (parsed.data.sale_id) query = query.eq('sale_id', parsed.data.sale_id);
   const { data: rows, error } = await query;
@@ -52,7 +53,7 @@ Deno.serve(withAccessLog('shipment-tracking-backfill', async (req) => {
       }
       const fetched = nativeShipment
         ? await fetchCorreiosEvents(sb, trackingCode)
-        : await fetchFrenetEvents(trackingCode, sim.real_service_code || guessServiceCode(sim.real_carrier));
+        : await fetchFrenetEvents(trackingCode, sim.real_service_code || guessServiceCode(sim.real_carrier), { carrier: sim.real_carrier });
       if (!fetched) { failures.push({ id: sim.id, error: 'transportadora_sem_eventos_ou_indisponivel' }); continue; }
       const merged = mergeRealEvents(Array.isArray(sim.real_events) ? sim.real_events : [], fetched.events);
       const deliveredEvent = [...merged].reverse().find((e) => isDeliveredEvent(e.description, sim.real_carrier, e));

@@ -212,6 +212,7 @@ Deno.serve(withAccessLog("shipment-tracking-public", async (req) => {
           : await fetchFrenetEvents(
             trackingCode,
             (sim.real_service_code as string | null) || guessServiceCode(sim.real_carrier as string | null),
+            { carrier: sim.real_carrier as string | null },
           );
         const patch: Record<string, unknown> = {};
         if (fetched) {

@@ -8,7 +8,7 @@ if (start < 0 || end < 0) throw new Error('Trecho de seleção não encontrado')
 const select = new Function('sb', 'parsed', 'Date', source.slice(start, end) + '\nreturn query;');
 const now = Date.parse('2026-11-27T19:43:00Z');
 
-function selection(refresh: boolean) {
+function selection(refresh: boolean, saleId?: string) {
   const calls: { method: string; args: unknown[] }[] = [];
   const query: Record<string, (...args: unknown[]) => unknown> = {};
   for (const method of ['select', 'eq', 'is', 'not', 'gte', 'order', 'limit', 'or']) {
@@ -18,7 +18,7 @@ function selection(refresh: boolean) {
     };
   }
   class Clock extends Date { static override now() { return now; } }
-  select({ from: () => query }, { data: { refresh, limit: 10 } }, Clock);
+  select({ from: () => query }, { data: { refresh, limit: 10, sale_id: saleId } }, Clock);
   return calls;
 }
 
@@ -46,4 +46,12 @@ Deno.test('Backfill sem refresh: continua selecionando somente last_real_sync nu
   assertEquals(calls.filter((c) => c.method === 'is' && c.args[0] === 'last_real_sync'), [
     { method: 'is', args: ['last_real_sync', null] },
   ]);
+});
+
+Deno.test('Backfill de venda explícita: permite envio antigo sem remover a janela da rotina', () => {
+  const id = '27ded503-d969-491b-9197-46f062659cd8';
+  const calls = selection(false, id);
+  assertEquals(calls.some((c) => c.method === 'gte' && c.args[0] === 'created_at'), false);
+  assertEquals(calls.some((c) => c.method === 'eq' && c.args[0] === 'sale_id' && c.args[1] === id), true);
+  assertEquals(selection(true).some((c) => c.method === 'gte' && c.args[0] === 'created_at'), true);
 });

@@ -122,3 +122,7 @@
 # Diagnóstico do rastreio Jadlog
 - [x] Consultar os dois códigos reais em todos os formatos pedidos e cotar serviços da conta
 - [x] Nenhum formato trouxe eventos; manter o rastreio inalterado e apagar o diagnóstico temporário
+- [x] Testar JADLOG.PACKAGE, CarrierCode e formatos GET na API oficial
+- [x] Inspecionar a página pública e testar uma eventual fonte pública estável
+- [x] Se houver fonte utilizável, adicionar fallback só Jadlog, testes e deploy; apagar o diagnóstico temporário
+- [x] Atualizar um envio antigo entregue e um recente, conferindo os eventos gravados

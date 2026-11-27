@@ -25,8 +25,8 @@ export const SERVICE_CODES = {
 } as const;
 
 export function parseFrenetDate(s: string): string {
-  const m = String(s || '').match(/^(\d{2})\/(\d{2})\/(\d{4})[ T](\d{2}):(\d{2})/);
-  if (m) return new Date(Date.UTC(+m[3], +m[2] - 1, +m[1], +m[4] + 3, +m[5])).toISOString();
+  const m = String(s || '').match(/^(\d{2})\/(\d{2})\/(\d{4})[ T](\d{2}):(\d{2})(?::(\d{2}))?/);
+  if (m) return new Date(Date.UTC(+m[3], +m[2] - 1, +m[1], +m[4] + 3, +m[5], +(m[6] || 0))).toISOString();
   // Formato ISO sem fuso ("2026-09-22 01:27:24") vem no horário de Brasília.
   const iso = String(s || '').match(/^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})(?::(\d{2}))?$/);
   if (iso) return new Date(Date.UTC(+iso[1], +iso[2] - 1, +iso[3], +iso[4] + 3, +iso[5], +(iso[6] || 0))).toISOString();
@@ -71,6 +71,78 @@ async function callFrenet(token: string, serviceCode: string, trackingNumber: st
   return events.length ? events : null;
 }
 
+export function isJadlogTrackingSource(carrier?: string | null, trackingUrl?: string | null): boolean {
+  return String(carrier || '').toLowerCase().includes('jadlog') || /\/JAD\//i.test(String(trackingUrl || ''));
+}
+
+function decodeHtml(value: string): string {
+  const named: Record<string, string> = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ' };
+  return value.replace(/&(#x?[0-9a-f]+|[a-z]+);/gi, (entity, key: string) => {
+    if (key[0] !== '#') return named[key.toLowerCase()] ?? entity;
+    const hex = key[1]?.toLowerCase() === 'x';
+    const code = Number.parseInt(key.slice(hex ? 2 : 1), hex ? 16 : 10);
+    return Number.isFinite(code) ? String.fromCodePoint(code) : entity;
+  });
+}
+
+function cleanHtml(value: string): string {
+  return decodeHtml(value.replace(/<[^>]*>/g, ' ')).replace(/\s+/g, ' ').trim();
+}
+
+/** Converte códigos de unidade da Jadlog em localização sem expor a origem por engano. */
+export function normalizeJadlogLocation(value: unknown): string {
+  const raw = cleanHtml(String(value || ''));
+  const withoutPrefix = raw.replace(/^(?:CO|FL|MT)\s+/i, '').trim();
+  if (/^GOV(?:ERNADOR)?\s+VALADARES(?:\s+\d+)?$/i.test(withoutPrefix)) return 'Governador Valadares';
+  if (/^JADLOG\s+SEDE$/i.test(withoutPrefix)) return '';
+  return withoutPrefix.replace(/\s+\d+$/g, '').trim();
+}
+
+/** A página pública da Frenet já devolve as movimentações Jadlog no HTML, da mais nova à mais antiga. */
+export function parseFrenetPublicTrackingHtml(html: string): RealEvent[] {
+  const events: RealEvent[] = [];
+  const blocks = String(html || '').matchAll(
+    /<div class="tracking-item">[\s\S]*?<div class="title">([\s\S]*?)<\/div>\s*<div class="details">([\s\S]*?)<\/div>/gi,
+  );
+  for (const block of blocks) {
+    const description = cleanHtml(block[1]);
+    const details = cleanHtml(block[2]);
+    const match = details.match(/^(\d{2}\/\d{2}\/\d{4}\s+\d{2}:\d{2}(?::\d{2})?)\s*(?:-\s*(.*))?$/);
+    if (!description || !match) continue;
+    events.push({
+      at: parseFrenetDate(match[1]),
+      description,
+      location: normalizeJadlogLocation(match[2] || ''),
+      type: 'JADLOG',
+    });
+  }
+  return events.sort((a, b) => new Date(a.at).getTime() - new Date(b.at).getTime());
+}
+
+/**
+ * NÃO REMOVER: a API oficial reconhece F_3/Jadlog, mas devolve zero eventos para
+ * esses códigos. A página pública é a reserva SOMENTE para Jadlog, com 8 s de
+ * limite e sem repetição; qualquer falha retorna null e preserva o fluxo atual.
+ */
+export async function fetchFrenetPublicEvents(
+  carrierPath = 'JAD',
+  trackingNumber: string,
+): Promise<{ events: RealEvent[]; serviceCode: string } | null> {
+  const code = String(trackingNumber || '').trim();
+  if (carrierPath.toUpperCase() !== 'JAD' || !/^\d{8,14}$/.test(code)) return null;
+  try {
+    const response = await fetch(`https://rastreio.frenet.com.br/JAD/${encodeURIComponent(code)}`, {
+      headers: { Accept: 'text/html' },
+      signal: AbortSignal.timeout(8000),
+    });
+    if (!response.ok) return null;
+    const events = parseFrenetPublicTrackingHtml(await response.text());
+    return events.length ? { events, serviceCode: SERVICE_CODES.jadlog } : null;
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Busca os eventos reais. Se o serviço não for conhecido, tenta SEDEX e PAC.
  * Retorna também o código de serviço que funcionou, para guardar em cache.
@@ -78,14 +150,20 @@ async function callFrenet(token: string, serviceCode: string, trackingNumber: st
 export async function fetchFrenetEvents(
   trackingNumber: string,
   serviceCode?: string | null,
+  source?: { carrier?: string | null; trackingUrl?: string | null },
 ): Promise<{ events: RealEvent[]; serviceCode: string } | null> {
   const token = Deno.env.get('FRENET_TOKEN');
   if (!token || !trackingNumber) return null;
 
+  const jadlog = isJadlogTrackingSource(source?.carrier, source?.trackingUrl);
   const byFormat = candidatesForCode(trackingNumber);
-  const candidates = serviceCode
-    ? [serviceCode, ...byFormat.filter((c) => c !== serviceCode)]
-    : byFormat;
+  // Jadlog conhecida consulta só o próprio serviço antes da reserva pública;
+  // não tenta códigos de outras transportadoras para o mesmo número.
+  const candidates = jadlog
+    ? [SERVICE_CODES.jadlog]
+    : serviceCode
+      ? [serviceCode, ...byFormat.filter((c) => c !== serviceCode)]
+      : byFormat;
 
   for (const code of candidates) {
     try {
@@ -103,7 +181,7 @@ export async function fetchFrenetEvents(
       console.error('Frenet tracking error', code, (e as Error).message);
     }
   }
-  return null;
+  return jadlog ? fetchFrenetPublicEvents('JAD', trackingNumber) : null;
 }
 
 /** Mescla eventos novos nos já conhecidos, sem duplicar. */
