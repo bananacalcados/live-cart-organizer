@@ -8,6 +8,7 @@ import { toast } from 'sonner';
 import { freightCall } from '@/lib/saleFreight';
 import { getCorreiosLabelFormat, saveCorreiosLabelFormat, correiosLabelUrl, CORREIOS_LABEL_FORMATS, type CorreiosLabelFormat } from '@/lib/correiosLabelFormat';
 import { reserveCorreiosPrintTab, printCorreiosLabel } from '@/lib/openCorreiosLabel';
+import { CorreiosPiPanel } from './CorreiosPiPanel';
 
 export interface CorreiosShipment { id: string; codigo_objeto: string | null; servico_nome: string | null; status: string; error_message: string | null; combined_url?: string | null; label_url?: string | null; thermal_url?: string | null; thermal_label_url?: string | null; a4_url?: string | null; own_url?: string | null; own_a4_url?: string | null; sale_ids?: string[] }
 interface Summary { ok: boolean; problems: string[]; summary: { remetente?: { nome: string; cnpj: string }; servico: string; price: number; package: { peso_g: number; c: number; l: number; a: number }; nfes: { numero: string; chave: string }[]; destinatario: { nome: string; endereco: Record<string, string> } } }
@@ -84,5 +85,6 @@ export function ExpCorreiosShipmentPanel({ saleId, refreshKey, onTracking, print
       </div>
       {cancelOpen && <div className="flex flex-wrap gap-2"><Input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Motivo do cancelamento" className="max-w-sm" /><Button variant="destructive" onClick={cancel} disabled={busy || reason.trim().length < 3}>Confirmar cancelamento</Button></div>}
     </div>}
+    {shipment?.codigo_objeto && <CorreiosPiPanel saleId={saleId} />}
   </div>;
 }

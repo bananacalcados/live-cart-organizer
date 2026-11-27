@@ -1,0 +1,3 @@
+- Correios PI uses the national API contract from the official V2.4 manual, sender contact only, and existing CWS token/settings. Own-contract objects only; no sale, stock or shipment writes.
+- Reserve an active row before opening and reserve reactivation before sending; uncertain provider outcomes stay active and are reconciled by reads, never automatically resent. Checks apply in one service-only batch with optimistic guards.
+- UI reads are paged and manual; the managed six-hour schedule only checks pending requests. Browser calls use the existing authenticated freight helper.

@@ -2192,6 +2192,27 @@
       "when": 1795815433619,
       "tag": "0312_shipment_delay_digest_read_page",
       "breakpoints": true
+    },
+    {
+      "idx": 313,
+      "version": "7",
+      "when": 1795816082582,
+      "tag": "0313_correios_pi_requests",
+      "breakpoints": true
+    },
+    {
+      "idx": 314,
+      "version": "7",
+      "when": 1795816154857,
+      "tag": "0314_correios_pi_apply_checks",
+      "breakpoints": true
+    },
+    {
+      "idx": 315,
+      "version": "7",
+      "when": 1795816868008,
+      "tag": "0315_correios_pi_service_only_writes",
+      "breakpoints": true
     }
   ]
 }

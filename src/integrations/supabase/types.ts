@@ -32,6 +32,33 @@ export type Database = {
         }
         Relationships: []
       }
+      _backup_shipment_tracking_fix: {
+        Row: {
+          id: string | null
+          last_real_sync: string | null
+          real_carrier: string | null
+          real_service_code: string | null
+          real_tracking_code: string | null
+          saved_at: string | null
+        }
+        Insert: {
+          id?: string | null
+          last_real_sync?: string | null
+          real_carrier?: string | null
+          real_service_code?: string | null
+          real_tracking_code?: string | null
+          saved_at?: string | null
+        }
+        Update: {
+          id?: string | null
+          last_real_sync?: string | null
+          real_carrier?: string | null
+          real_service_code?: string | null
+          real_tracking_code?: string | null
+          saved_at?: string | null
+        }
+        Relationships: []
+      }
       _legacy_livete_followups: {
         Row: {
           completed_at: string | null
@@ -4398,6 +4425,147 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      correios_pi_requests: {
+        Row: {
+          answered_at: string | null
+          codigo_objeto: string
+          error_message: string | null
+          id: string
+          last_checked_at: string | null
+          last_status_payload: Json | null
+          motivo_codigo: number
+          motivo_descricao: string
+          opened_at: string
+          opened_by: string | null
+          protocolo: string | null
+          request_payload: Json
+          response_open: Json | null
+          resposta_texto: string | null
+          sale_id: string
+          shipment_id: string | null
+          status: string
+          tipo_manifestacao: string
+        }
+        Insert: {
+          answered_at?: string | null
+          codigo_objeto: string
+          error_message?: string | null
+          id?: string
+          last_checked_at?: string | null
+          last_status_payload?: Json | null
+          motivo_codigo: number
+          motivo_descricao: string
+          opened_at?: string
+          opened_by?: string | null
+          protocolo?: string | null
+          request_payload?: Json
+          response_open?: Json | null
+          resposta_texto?: string | null
+          sale_id: string
+          shipment_id?: string | null
+          status?: string
+          tipo_manifestacao?: string
+        }
+        Update: {
+          answered_at?: string | null
+          codigo_objeto?: string
+          error_message?: string | null
+          id?: string
+          last_checked_at?: string | null
+          last_status_payload?: Json | null
+          motivo_codigo?: number
+          motivo_descricao?: string
+          opened_at?: string
+          opened_by?: string | null
+          protocolo?: string | null
+          request_payload?: Json
+          response_open?: Json | null
+          resposta_texto?: string | null
+          sale_id?: string
+          shipment_id?: string | null
+          status?: string
+          tipo_manifestacao?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "correios_pi_requests_sale_id_fkey"
+            columns: ["sale_id"]
+            isOneToOne: false
+            referencedRelation: "fiscal_report_double_exit_notes"
+            referencedColumns: ["sale_id"]
+          },
+          {
+            foreignKeyName: "correios_pi_requests_sale_id_fkey"
+            columns: ["sale_id"]
+            isOneToOne: false
+            referencedRelation: "fiscal_report_online_nfce"
+            referencedColumns: ["sale_id"]
+          },
+          {
+            foreignKeyName: "correios_pi_requests_sale_id_fkey"
+            columns: ["sale_id"]
+            isOneToOne: false
+            referencedRelation: "pos_sales"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "correios_pi_requests_sale_id_fkey"
+            columns: ["sale_id"]
+            isOneToOne: false
+            referencedRelation: "v_live_buyer_purchase_number"
+            referencedColumns: ["sale_id"]
+          },
+          {
+            foreignKeyName: "correios_pi_requests_sale_id_fkey"
+            columns: ["sale_id"]
+            isOneToOne: false
+            referencedRelation: "v_live_first_purchase_cohort"
+            referencedColumns: ["first_live_sale_id"]
+          },
+          {
+            foreignKeyName: "correios_pi_requests_sale_id_fkey"
+            columns: ["sale_id"]
+            isOneToOne: false
+            referencedRelation: "v_sale_base"
+            referencedColumns: ["sale_id"]
+          },
+          {
+            foreignKeyName: "correios_pi_requests_sale_id_fkey"
+            columns: ["sale_id"]
+            isOneToOne: false
+            referencedRelation: "v_sale_cogs"
+            referencedColumns: ["sale_id"]
+          },
+          {
+            foreignKeyName: "correios_pi_requests_sale_id_fkey"
+            columns: ["sale_id"]
+            isOneToOne: false
+            referencedRelation: "v_sale_discounts"
+            referencedColumns: ["sale_id"]
+          },
+          {
+            foreignKeyName: "correios_pi_requests_sale_id_fkey"
+            columns: ["sale_id"]
+            isOneToOne: false
+            referencedRelation: "v_sale_shipping"
+            referencedColumns: ["sale_id"]
+          },
+          {
+            foreignKeyName: "correios_pi_requests_sale_id_fkey"
+            columns: ["sale_id"]
+            isOneToOne: false
+            referencedRelation: "v_sale_taxes"
+            referencedColumns: ["sale_id"]
+          },
+          {
+            foreignKeyName: "correios_pi_requests_shipment_id_fkey"
+            columns: ["shipment_id"]
+            isOneToOne: false
+            referencedRelation: "shipment_simulations"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       correios_reverse_shipments: {
         Row: {
@@ -32561,6 +32729,7 @@ export type Database = {
         Args: { p_source_trigger_id: string; p_target_trigger_id: string }
         Returns: number
       }
+      correios_pi_apply_checks: { Args: { p_updates: Json }; Returns: number }
       count_campaign_audience: { Args: { p_filtro: Json }; Returns: number }
       count_products_by_brand: {
         Args: never
@@ -35622,6 +35791,10 @@ export type Database = {
       shipment_delivery_range: {
         Args: { p_base: string; p_days: string }
         Returns: Json
+      }
+      shipment_normalize_tracking: {
+        Args: { p_carrier: string; p_code: string }
+        Returns: Record<string, unknown>
       }
       shipment_real_post_base: { Args: { p_events: Json }; Returns: string }
       shopify_missing_colors: {

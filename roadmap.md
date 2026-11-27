@@ -131,3 +131,11 @@
 - [x] Criar leitura em lotes, classificação exclusiva e texto limitado; reutilizar envio interno
 - [x] Testar categorias, prioridade e modo sem envio; implantar função
 - [x] Configurar destino e agenda gerenciada de dias úteis às 12h; executar uma simulação e apresentar texto
+
+# Chamados Correios — Pedido de Informação
+- [x] Confirmar manual V2.4, criar registro protegido e função isolada; 12 testes Deno aprovados
+- [x] Adicionar bloco e lista paginada no PDV; conferir sessão real em desktop e 390×844, sem publicar
+- [x] Implantar e agendar consulta gerenciada a cada 6h; verificar acesso, simulação e consulta vazia
+- [ ] Abrir somente AP696380658BR e consultar — bloqueado: Correios HTTP 403 GTW-012 (API 577 restrita) e e-mail do remetente vazio
+- [ ] Confirmar timeout de 120000 da agenda — ferramenta gerenciada não expõe esse ajuste; chamadas de teste usaram 120000
+- [ ] Verificação Deno completa — erros preexistentes nos helpers compartilhados de autenticação/log; mantidos fora do escopo
