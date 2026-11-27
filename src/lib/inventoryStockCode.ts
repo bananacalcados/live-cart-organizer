@@ -62,6 +62,27 @@ export async function resolveStockLabelCode(code: string, storeId: string | null
   return (data as ResolvedStockCode | null) ?? null;
 }
 
+export interface ResolvedInventoryProductCode {
+  master_id: string;
+  variant_id: string | null;
+  code: string;
+  color: string | null;
+  size: string | null;
+  master_name: string | null;
+  sku_root: string | null;
+  matched_by: "etiqueta_interna" | "gtin" | "sku_variacao" | "barcode_pdv" | "sku_pdv" | "sku_pai";
+}
+
+/** Reconhecimento único usado pela busca inicial e pelo Balanço por bipagem do celular. */
+export async function resolveInventoryProductCode(code: string): Promise<ResolvedInventoryProductCode | null> {
+  const trimmed = code.trim();
+  if (!trimmed) return null;
+  const { data, error } = await (supabase.rpc as any)("mobile_resolve_product_code", { p_code: trimmed });
+  if (error) throw error;
+  if (Array.isArray(data)) return (data[0] as ResolvedInventoryProductCode | undefined) ?? null;
+  return (data as ResolvedInventoryProductCode | null) ?? null;
+}
+
 export function stockCodeCloneLookup(resolved: ResolvedStockCode | null, originalCode: string): string {
   return resolved?.variant_gtin || resolved?.variant_sku || originalCode;
 }

@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
-import { Link, Route, Routes, useNavigate, useParams } from "react-router-dom";
+import { Link, Route, Routes, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { ArrowLeft, Camera, Plus, Pencil, Loader2, Monitor, Package, Search, Tag, ClipboardCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -41,6 +41,7 @@ function SearchHome() {
   const [term, setTerm] = useState("");
   const [hits, setHits] = useState<MobileMasterHit[] | null>(null);
   const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
   const [scan, setScan] = useState(false);
   const [thumbs, setThumbs] = useState<Record<string, string>>({});
   const { data: photosMode } = useProductColorPhotosMode(true);
@@ -67,13 +68,26 @@ function SearchHome() {
     return () => { cancelled = true; };
   }, [hitIds, photosVisible]);
 
-  async function run(q: string) {
-    if (!q.trim()) { setListTerm(""); return; }
+  async function run(q: string, codeOnly = false) {
+    if (!q.trim()) { setListTerm(""); setError(""); return; }
     setBusy(true);
+    setError("");
     try {
-      const r = await searchMasters(q);
-      if (r.exactMasterId) { navigate(`/m/estoque/produto/${r.exactMasterId}`); return; }
+      const r = await searchMasters(q, { codeOnly });
+      if (r.exactMasterId) {
+        const suffix = r.exactVariantId ? `?v=${encodeURIComponent(r.exactVariantId)}` : "";
+        navigate(`/m/estoque/produto/${r.exactMasterId}${suffix}`);
+        return;
+      }
+      if (r.notFoundCode) {
+        setListTerm("");
+        setError(`Código não encontrado: ${r.notFoundCode}`);
+        return;
+      }
       setListTerm(q);
+    } catch {
+      setListTerm("");
+      setError("Não consegui buscar agora. Tente de novo.");
     } finally { setBusy(false); }
   }
 
@@ -86,6 +100,7 @@ function SearchHome() {
           {busy ? <Loader2 className="h-5 w-5 animate-spin" /> : <Search className="h-5 w-5" />}
         </Button>
       </form>
+      {error && <p role="alert" className="rounded-lg border border-destructive/40 p-3 text-sm text-destructive">{error}</p>}
       <FilterChips filters={filters} onChange={setFilters} catNames={catNames} onOpenCats={() => setCatsOpen(true)} />
       <Button asChild variant="outline" className="h-14 w-full text-base">
         <Link to="/m/estoque/novo"><Plus className="mr-2 h-5 w-5" /> Novo produto</Link>
@@ -105,7 +120,7 @@ function SearchHome() {
       {scan && (
         <div className="fixed inset-0 z-50 bg-background p-4">
           <Suspense fallback={<Loader2 className="mx-auto mt-20 h-6 w-6 animate-spin" />}>
-            <POSBarcodeScanner onClose={() => setScan(false)} onScan={(code) => { setScan(false); setTerm(code); run(code); }} />
+            <POSBarcodeScanner onClose={() => setScan(false)} onScan={(code) => { setScan(false); setTerm(code); void run(code, true); }} />
           </Suspense>
         </div>
       )}
@@ -115,15 +130,30 @@ function SearchHome() {
 
 function ProductSheet() {
   const { masterId = "" } = useParams();
+  const [searchParams] = useSearchParams();
+  const highlightId = searchParams.get("v");
   const { data: mode } = useProductColorPhotosMode(true);
   const photosOn = !!mode?.visible;
   const { data, isLoading } = useQuery({ queryKey: ["m-sheet", masterId, photosOn], queryFn: () => loadSheet(masterId, photosOn), enabled: !!masterId });
+  const highlighted = data?.variants.find((v) => v.id === highlightId);
+  useEffect(() => {
+    if (!highlighted) return;
+    const frame = requestAnimationFrame(() => {
+      document.getElementById(`mobile-variant-${highlighted.id}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [highlighted]);
   if (isLoading) return <Shell title="Produto" back><Loader2 className="mx-auto h-6 w-6 animate-spin" /></Shell>;
   if (!data) return <Shell title="Produto" back><p className="text-sm text-muted-foreground">Produto não encontrado.</p></Shell>;
   const rows = stockByVariant(data);
   const total = rows.reduce((a, r) => a + r.total, 0);
   return (
     <Shell title={data.master.name} back>
+      {highlighted && (
+        <section role="status" className="rounded-lg border-2 border-primary bg-primary/5 p-4">
+          <p className="font-semibold">Você bipou: {[highlighted.color, highlighted.size].filter(Boolean).join(" · ") || "Variação única"}</p>
+        </section>
+      )}
       {data.photos[0] && <img src={data.photos[0].url_medium} alt="" loading="lazy" className="aspect-square w-full rounded-lg bg-muted object-cover" />}
       <section className="rounded-lg border bg-card p-4">
         <p className="text-sm text-muted-foreground">{data.master.sku_root}{data.master.brand ? ` · ${data.master.brand}` : ""}</p>
@@ -145,7 +175,8 @@ function ProductSheet() {
       {photosOn && <MobileColorPhotos masterId={masterId} variantColors={[...new Set(data.variants.map((v) => v.color || "").filter(Boolean))]} />}
       <ul className="space-y-2">
         {rows.map(({ variant: v, total: t, perStore }) => (
-          <li key={v.id} className="rounded-lg border bg-card p-3">
+          <li id={`mobile-variant-${v.id}`} key={v.id} aria-current={highlighted?.id === v.id ? "true" : undefined}
+            className={`rounded-lg border bg-card p-3 ${highlighted?.id === v.id ? "border-primary ring-2 ring-primary/30" : ""}`}>
             <div className="flex items-center justify-between gap-2">
               <span className="min-w-0 truncate font-medium">{[v.color, v.size].filter(Boolean).join(" · ") || "Única"}</span>
               <span className={t > 0 ? "font-bold" : "text-muted-foreground"}>{t} un</span>

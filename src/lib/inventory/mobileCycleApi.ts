@@ -1,5 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
-import { isNewStockLabelCode, resolveStockLabelCode } from "@/lib/inventoryStockCode";
+import { resolveInventoryProductCode } from "@/lib/inventoryStockCode";
 
 const rpc = (name: string, args: Record<string, unknown>) => (supabase.rpc as any)(name, args);
 
@@ -20,19 +20,13 @@ export async function openCycle(storeId: string, userName?: string): Promise<str
   return data.cycle_id;
 }
 
-/** Código interno da etiqueta, código de fábrica (GTIN) ou SKU da variação. */
-export async function resolveScannedCode(code: string, storeId: string): Promise<ScannedVariant | null> {
+/** Código interno, GTIN/SKU da variação ou código das linhas do PDV. */
+export async function resolveScannedCode(code: string, _storeId: string): Promise<ScannedVariant | null> {
   const c = code.trim();
   if (!c) return null;
-  if (isNewStockLabelCode(c)) {
-    const r = await resolveStockLabelCode(c, storeId);
-    if (r) return { variant_id: r.variant_id, master_id: null, name: r.master_name || r.product_name || c, color: r.color, size: r.size, code: c };
-  }
-  const { data } = await supabase.from("product_variants").select("id,master_id,color,size,products_master(name)")
-    .or(`gtin.eq.${c.replace(/[,()]/g, "")},sku.eq.${c.replace(/[,()]/g, "")}`).limit(1);
-  const v = (data as any)?.[0];
-  if (!v) return null;
-  return { variant_id: v.id, master_id: v.master_id, name: v.products_master?.name || c, color: v.color, size: v.size, code: c };
+  const r = await resolveInventoryProductCode(c);
+  if (!r?.variant_id) return null;
+  return { variant_id: r.variant_id, master_id: r.master_id, name: r.master_name || c, color: r.color, size: r.size, code: r.code || c };
 }
 
 export async function submitCounts(p: { cycleId: string; deviceId: string; userName?: string;

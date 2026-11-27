@@ -34497,6 +34497,19 @@ export type Database = {
           sku_root: string
         }[]
       }
+      mobile_resolve_product_code: {
+        Args: { p_code: string }
+        Returns: {
+          code: string
+          color: string
+          master_id: string
+          master_name: string
+          matched_by: string
+          size: string
+          sku_root: string
+          variant_id: string
+        }[]
+      }
       next_event_wa_initial_variant: {
         Args: { p_event_id: string }
         Returns: number

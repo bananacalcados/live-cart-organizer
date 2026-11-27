@@ -1,27 +1,39 @@
 import { supabase } from "@/integrations/supabase/client";
+import { resolveInventoryProductCode } from "@/lib/inventoryStockCode";
 
 export interface MobileMasterHit { id: string; name: string; sku_root: string; sale_price: number | null }
 
-/** Código (GTIN/SKU) acha a variação pelo índice; texto busca pelo nome/sku do pai (até 30). */
-export async function searchMasters(term: string): Promise<{ hits: MobileMasterHit[]; exactMasterId?: string }> {
+export function looksLikeStockCode(value: string): boolean {
+  const q = value.trim();
+  return /^[0-9A-Za-z][0-9A-Za-z./-]*$/.test(q) && /\d/.test(q);
+}
+
+/** Primeiro tenta o código exato; só depois busca por nome/sku do pai (até 30). */
+export async function searchMasters(term: string, options: { codeOnly?: boolean } = {}): Promise<{
+  hits: MobileMasterHit[];
+  exactMasterId?: string;
+  exactVariantId?: string;
+  notFoundCode?: string;
+}> {
   const q = term.trim();
   if (!q) return { hits: [] };
-  const looksCode = /^[0-9A-Za-z-]{6,}$/.test(q) && /\d/.test(q);
-  if (looksCode) {
-    const { data } = await supabase.from("product_variants").select("master_id").or(`gtin.eq.${q},sku.eq.${q}`).limit(1);
-    const mid = (data?.[0] as any)?.master_id as string | undefined;
-    if (mid) return { hits: [], exactMasterId: mid };
-    const { data: pm } = await supabase.from("products_master").select("id").eq("sku_root", q).limit(1);
-    if (pm?.[0]) return { hits: [], exactMasterId: (pm[0] as any).id };
+
+  const exact = await resolveInventoryProductCode(q);
+  if (exact) {
+    return { hits: [], exactMasterId: exact.master_id, exactVariantId: exact.variant_id || undefined };
   }
+  if (options.codeOnly) return { hits: [], notFoundCode: q };
+
   const safe = q.replace(/[%,()]/g, " ");
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from("products_master")
     .select("id,name,sku_root,sale_price")
     .or(`name.ilike.%${safe}%,sku_root.ilike.${safe}%`)
     .order("name")
     .limit(30);
-  return { hits: (data || []) as MobileMasterHit[] };
+  if (error) throw error;
+  const hits = (data || []) as MobileMasterHit[];
+  return { hits, notFoundCode: hits.length === 0 && looksLikeStockCode(q) ? q : undefined };
 }
 
 export interface MobileSheet {
