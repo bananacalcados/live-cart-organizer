@@ -94,3 +94,8 @@
 - [x] A) Convite no lugar do desvio (chave invite/auto/off)
 - [x] B) Fotos por cor na ficha do celular
 - [x] Editor de foto no "Fotos por cor" do computador
+
+# Estoque no celular — Fase 3: balanço por bipagem
+- [x] Conferir regra de vendas durante contagem (ajuste B) e prazo de 12h (ajuste C)
+- [x] Contagem somada por aparelho (ajuste A), conferência, zerar (b)/(a), desfazer 2 dias
+- [x] Testes em rollback + celular 390x844; desktop sem mudança

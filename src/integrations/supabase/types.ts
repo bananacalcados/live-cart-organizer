@@ -25943,6 +25943,90 @@ export type Database = {
         }
         Relationships: []
       }
+      stock_cycle_device_counts: {
+        Row: {
+          cycle_id: string
+          device_id: string
+          qty: number
+          updated_at: string
+          user_id: string | null
+          user_name: string | null
+          variant_id: string
+        }
+        Insert: {
+          cycle_id: string
+          device_id: string
+          qty?: number
+          updated_at?: string
+          user_id?: string | null
+          user_name?: string | null
+          variant_id: string
+        }
+        Update: {
+          cycle_id?: string
+          device_id?: string
+          qty?: number
+          updated_at?: string
+          user_id?: string | null
+          user_name?: string | null
+          variant_id?: string
+        }
+        Relationships: []
+      }
+      stock_cycle_devices: {
+        Row: {
+          cycle_id: string
+          device_id: string
+          finished: boolean
+          last_sent_at: string | null
+          pending_left: number
+          user_id: string | null
+          user_name: string | null
+        }
+        Insert: {
+          cycle_id: string
+          device_id: string
+          finished?: boolean
+          last_sent_at?: string | null
+          pending_left?: number
+          user_id?: string | null
+          user_name?: string | null
+        }
+        Update: {
+          cycle_id?: string
+          device_id?: string
+          finished?: boolean
+          last_sent_at?: string | null
+          pending_left?: number
+          user_id?: string | null
+          user_name?: string | null
+        }
+        Relationships: []
+      }
+      stock_cycle_variant_applied: {
+        Row: {
+          applied_at: string
+          applied_total: number
+          batch_id: string | null
+          cycle_id: string
+          variant_id: string
+        }
+        Insert: {
+          applied_at: string
+          applied_total: number
+          batch_id?: string | null
+          cycle_id: string
+          variant_id: string
+        }
+        Update: {
+          applied_at?: string
+          applied_total?: number
+          batch_id?: string | null
+          cycle_id?: string
+          variant_id?: string
+        }
+        Relationships: []
+      }
       stock_grade_templates: {
         Row: {
           created_at: string
@@ -31599,6 +31683,19 @@ export type Database = {
       _group_draft_owner: { Args: { p_id: string }; Returns: string }
       _group_draft_signature: { Args: { p_id: string }; Returns: string }
       _is_group_staff: { Args: never; Returns: boolean }
+      _mobile_cycle_zero_rows: {
+        Args: { p_cycle_id: string; p_scope: string }
+        Returns: {
+          code: string
+          color: string
+          master_id: string
+          pos_product_id: string
+          product_name: string
+          size: string
+          stock: number
+          variant_id: string
+        }[]
+      }
       _norm_concrete_gateway: { Args: { p: string }; Returns: string }
       _pm_pmd_sync_in_progress: { Args: never; Returns: boolean }
       _pos_ids_for_variants: {
@@ -34267,6 +34364,41 @@ export type Database = {
       meta_aud_phone: { Args: { p: string }; Returns: string }
       meta_audience_refresh_candidates: {
         Args: { p_definition_id: string }
+        Returns: Json
+      }
+      mobile_cycle_conference: {
+        Args: {
+          p_cycle_id: string
+          p_limit?: number
+          p_offset?: number
+          p_scope?: string
+          p_search?: string
+        }
+        Returns: Json
+      }
+      mobile_cycle_revert: {
+        Args: { p_cycle_id: string; p_user_name?: string }
+        Returns: Json
+      }
+      mobile_cycle_submit: {
+        Args: {
+          p_cycle_id: string
+          p_device_id: string
+          p_finished?: boolean
+          p_items: Json
+          p_pending_left?: number
+          p_user_name?: string
+        }
+        Returns: Json
+      }
+      mobile_cycle_zero: {
+        Args: {
+          p_confirm: string
+          p_confirm_pairs: number
+          p_cycle_id: string
+          p_scope: string
+          p_user_name?: string
+        }
         Returns: Json
       }
       next_event_wa_initial_variant: {

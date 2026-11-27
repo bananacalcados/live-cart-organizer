@@ -2073,6 +2073,13 @@
       "when": 1795727230274,
       "tag": "0295_variant_price_to_pos_by_index",
       "breakpoints": true
+    },
+    {
+      "idx": 296,
+      "version": "7",
+      "when": 1795771144694,
+      "tag": "0296_mobile_cycle_multi_device_counts",
+      "breakpoints": true
     }
   ]
 }

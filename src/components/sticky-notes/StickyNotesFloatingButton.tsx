@@ -9,7 +9,7 @@ import { useWhatsAppViewStore } from "@/stores/whatsappViewStore";
 import { useStickyNotes } from "./useStickyNotes";
 import { StickyNoteCard } from "./StickyNoteCard";
 
-const HIDE_ON = ["/central/", "/d/", "/vaga/", "/login", "/checkout", "/register", "/lp/", "/live", "/cat/", "/evento/", "/vip/", "/r/", "/typebot/", "/l/", "/banana-verao", "/dose-tripla", "/checkout-loja", "/livete-anotador", "/minha-area", "/rastreio", "/zap/", "/overlay/", "/m/estoque/produto/"];
+const HIDE_ON = ["/central/", "/d/", "/vaga/", "/login", "/checkout", "/register", "/lp/", "/live", "/cat/", "/evento/", "/vip/", "/r/", "/typebot/", "/l/", "/banana-verao", "/dose-tripla", "/checkout-loja", "/livete-anotador", "/minha-area", "/rastreio", "/zap/", "/overlay/", "/m/estoque/produto/", "/m/estoque/balanco"];
 
 export function StickyNotesFloatingButton() {
   const location = useLocation();

@@ -1,2 +1,3 @@
 - Mobile screens live only in src/mobile/ and never import desktop pages/screens (nor are imported by them); share only libs, hooks and small widgets, so desktop changes cannot break mobile. Business rules go to shared libs, never into a screen.
 - /inventory mobile behavior follows app_settings.inventory_mobile_redirect (invite default = banner only, auto = redirect, off = nothing); desktop never queries it, so desktop rendering stays unchanged.
+- Mobile scan balance sums per-device totals server-side (mobile_cycle_submit) and applies only changed sums through apply_stock_label_batch anchored at the last confirmed send, so resends never duplicate and sales after a count stay deducted.

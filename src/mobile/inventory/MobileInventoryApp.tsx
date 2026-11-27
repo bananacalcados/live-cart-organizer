@@ -1,7 +1,7 @@
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { Link, Route, Routes, useNavigate, useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { ArrowLeft, Camera, Loader2, Monitor, Package, Search, Tag } from "lucide-react";
+import { ArrowLeft, Camera, Loader2, Monitor, Package, Search, Tag, ClipboardCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useProductColorPhotosMode } from "@/hooks/useProductColorPhotosMode";
@@ -9,6 +9,7 @@ import { loadSheet, searchMasters, stockByVariant, MobileMasterHit } from "./dat
 import { setDesktopPreference } from "./redirect";
 import { MobileColorPhotos } from "./MobileColorPhotos";
 import { MobileLabelCount } from "./MobileLabelCount";
+import { MobileStockBalance } from "./MobileStockBalance";
 import { supabase } from "@/integrations/supabase/client";
 import { firstLegacyThumbnails } from "@/components/inventory/legacyProductSummary";
 
@@ -72,6 +73,9 @@ function SearchHome() {
           {busy ? <Loader2 className="h-5 w-5 animate-spin" /> : <Search className="h-5 w-5" />}
         </Button>
       </form>
+      <Button asChild className="h-14 w-full text-base">
+        <Link to="/m/estoque/balanco"><ClipboardCheck className="mr-2 h-5 w-5" /> Balanço por bipagem</Link>
+      </Button>
       <Button variant="outline" className="h-14 w-full text-base" onClick={() => setScan(true)}>
         <Camera className="mr-2 h-5 w-5" /> Ler código pela câmera
       </Button>
@@ -153,6 +157,7 @@ export default function MobileInventoryApp() {
     <Routes>
       <Route index element={<SearchHome />} />
       <Route path="produto/:masterId" element={<ProductSheet />} />
+      <Route path="balanco" element={<MobileStockBalance shell={Shell} />} />
       <Route path="produto/:masterId/etiquetas" element={<MobileLabelCount shell={Shell} />} />
     </Routes>
   );
