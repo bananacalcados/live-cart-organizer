@@ -35604,6 +35604,21 @@ export type Database = {
         Args: { p_since?: string; p_until?: string }
         Returns: Json
       }
+      shipment_delay_digest_page: {
+        Args: { p_limit?: number; p_offset?: number }
+        Returns: {
+          customer_name: string
+          delivery_estimate: Json
+          id: string
+          own_correios: boolean
+          real_carrier: string
+          real_events: Json
+          real_post_base: string
+          real_tracking_code: string
+          stage_history: Json
+          tracking_code: string
+        }[]
+      }
       shipment_delivery_range: {
         Args: { p_base: string; p_days: string }
         Returns: Json

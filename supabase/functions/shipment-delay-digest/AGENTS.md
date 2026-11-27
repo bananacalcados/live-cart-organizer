@@ -1,0 +1,1 @@
+- The daily shipment digest uses a service-only paged read RPC and the existing blocked-buyer-sale-alert transport; dry runs stop before sending and shipment/sale data is never written.

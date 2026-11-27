@@ -126,3 +126,8 @@
 - [x] Inspecionar a página pública e testar uma eventual fonte pública estável
 - [x] Se houver fonte utilizável, adicionar fallback só Jadlog, testes e deploy; apagar o diagnóstico temporário
 - [x] Atualizar um envio antigo entregue e um recente, conferindo os eventos gravados
+
+# Resumo diário de envios com problema
+- [x] Criar leitura em lotes, classificação exclusiva e texto limitado; reutilizar envio interno
+- [x] Testar categorias, prioridade e modo sem envio; implantar função
+- [x] Configurar destino e agenda gerenciada de dias úteis às 12h; executar uma simulação e apresentar texto
