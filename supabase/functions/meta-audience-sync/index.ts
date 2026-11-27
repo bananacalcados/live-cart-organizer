@@ -289,8 +289,13 @@ Deno.serve(withAccessLog("meta-audience-sync", async (req) => {
   }
 
   // run: só despacha
-  const slot = body.slot || "manual";
-  if ((slot === "10h" || slot === "12h") && !(await liveToday())) return json({ skipped: "sem live hoje" });
+  // Cron da live roda 10h e 20h (Brasília). O comando antigo pode ainda mandar "12h": o horário real decide o slot.
+  let slot = body.slot || "manual";
+  if (slot === "10h" || slot === "12h" || slot === "20h") {
+    const h = Number(new Intl.DateTimeFormat("en-US", { timeZone: "America/Sao_Paulo", hour: "2-digit", hour12: false }).format(new Date()));
+    slot = h >= 17 ? "20h" : "10h";
+  }
+  if ((slot === "10h" || slot === "20h") && !(await liveToday())) return json({ skipped: "sem live hoje", slot });
   let q = admin.from("meta_audience_definitions").select("id,name").eq("enabled", true).eq("frozen", false).not("audience_id", "is", null);
   if (body.definition_id) q = q.eq("id", body.definition_id);
   if (body.kind) q = q.eq("kind", body.kind);

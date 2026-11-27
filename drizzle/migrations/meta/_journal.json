@@ -2101,6 +2101,13 @@
       "when": 1795781151412,
       "tag": "0299_mobile_product_create_fix",
       "breakpoints": true
+    },
+    {
+      "idx": 300,
+      "version": "7",
+      "when": 1795789725253,
+      "tag": "0300_optimize_meta_audience_refresh",
+      "breakpoints": true
     }
   ]
 }
