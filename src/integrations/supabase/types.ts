@@ -32845,6 +32845,15 @@ export type Database = {
       }
       exchange_desk_sizes: { Args: { p_id: string }; Returns: Json }
       exchange_desk_staff_list: { Args: never; Returns: Json }
+      exchange_mark_difference_paid: {
+        Args: {
+          p_installments?: number
+          p_method: string
+          p_pix_key?: string
+          p_troca_id: string
+        }
+        Returns: Json
+      }
       exchange_recipient_data: { Args: { p_troca_id: string }; Returns: Json }
       exchange_suggested_size: {
         Args: { p_reason: string; p_size: string; p_verbatim: string }

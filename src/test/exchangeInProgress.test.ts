@@ -33,7 +33,22 @@ describe("diferença da troca", () => {
   it("crédito da cliente não abate o frete no link", () => { expect(differenceLinkTotal(-50, 20, "cotado")).toBe(20); });
 });
 
-import { canSwapReplacement as swapOk } from "@/lib/pos/exchangeInProgress";
+import { canSwapReplacement as swapOk, canMarkDifferencePaid, isExchangeDifferencePaid } from "@/lib/pos/exchangeInProgress";
+describe("Diferença paga por fora", () => {
+  it("só oferece confirmação para link pendente com valor", () => {
+    expect(canMarkDifferencePaid("online_pending", 40)).toBe(true);
+    expect(canMarkDifferencePaid("payment_failed", 40)).toBe(true);
+    expect(canMarkDifferencePaid("cancelled", 40)).toBe(false);
+    expect(canMarkDifferencePaid("completed", 40)).toBe(false);
+    expect(canMarkDifferencePaid("online_pending", 0)).toBe(false);
+  });
+  it("pagamento manual ou do gateway libera a mesma trava", () => {
+    expect(isExchangeDifferencePaid("paid")).toBe(true);
+    expect(isExchangeDifferencePaid("completed")).toBe(true);
+    expect(isExchangeDifferencePaid("online_pending")).toBe(false);
+    expect(isExchangeDifferencePaid("cancelled")).toBe(false);
+  });
+});
 describe("Trocar produto", () => {
   const base = { tipo: "troca", status: "recebido_conferencia", pedido_novo_id: "s1" };
   it("libera com produto já na Expedição", () => expect(swapOk(base)).toBe(true));

@@ -31,6 +31,17 @@ export function differenceLinkTotal(diff: number, frete: number, modo: "gratis" 
 }
 
 const UNPAID = ["online_pending", "pending", "payment_failed", "cancelled"];
+const AWAITING_PAYMENT = ["online_pending", "pending", "payment_failed"];
+
+export function isExchangeDifferencePaid(status?: string | null) {
+  return !!status && !UNPAID.includes(status);
+}
+
+/** Pagamento externo só quita um link ainda pendente e com valor conferido no servidor. */
+export function canMarkDifferencePaid(status: string | null | undefined, total: number) {
+  return !!status && AWAITING_PAYMENT.includes(status) && total > 0;
+}
+
 /** "Trocar produto": troca aberta, já com produto na Expedição, sem voucher/estorno e diferença não paga (servidor confere envio e nota). */
 export function canSwapReplacement(
   e: { tipo: string; status: string; pedido_novo_id: string | null; voucher_id?: string | null; gateway_refund_id?: string | null; diferenca_venda_id?: string | null },

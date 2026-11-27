@@ -111,3 +111,10 @@
 - [ ] Ligar product_source_live='erp' após teste do Matthews (aguarda ele)
 - [ ] Correção do espelho ao criar variação pela edição do Legacy (aguarda autorização, fora da live)
 - [ ] Fases B, C, D (aguardam autorização)
+
+# Troca com diferença paga por fora e pedido pago antes do envio
+- [x] Marcar link da diferença como pago por fora, com valor conferido no servidor e registro da forma recebida
+- [x] Testar travas sem alterar pagamentos, estoque ou trocas reais
+- [x] Desenhar troca de item pago antes do despacho, com cobrança da diferença e Expedição atualizada
+  - Valor menor: escolher crédito ou estorno no modal; depois de despachado, usar troca/devolução normal
+- [ ] Implementar a troca rápida de pedido pago antes do despacho (aguarda aprovação do desenho)

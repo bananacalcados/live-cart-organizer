@@ -2150,6 +2150,20 @@
       "when": 1795795759096,
       "tag": "0306_erp_catalog_search_barcode_index",
       "breakpoints": true
+    },
+    {
+      "idx": 307,
+      "version": "7",
+      "when": 1795799852171,
+      "tag": "0307_exchange_mark_difference_paid",
+      "breakpoints": true
+    },
+    {
+      "idx": 308,
+      "version": "7",
+      "when": 1795799953381,
+      "tag": "0308_exchange_mark_difference_paid_followup_cast",
+      "breakpoints": true
     }
   ]
 }

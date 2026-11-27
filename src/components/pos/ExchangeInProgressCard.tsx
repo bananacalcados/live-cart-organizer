@@ -2,16 +2,19 @@ import { useCallback, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Loader2, Plus, RotateCcw, Trash2, XCircle, Undo2, AlertTriangle, Repeat, Link2, Copy } from "lucide-react";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Loader2, Plus, RotateCcw, Trash2, XCircle, Undo2, AlertTriangle, Repeat, Link2, Copy, CheckCircle2 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
+import { MANUAL_PAYMENT_METHODS, PAID_ON_SITE_METHOD } from "@/components/MarkOrderPaidDialog";
 import { POSTinyProductPicker } from "./POSTinyProductPicker";
 import { ConvertExchangeToReturnDialog } from "./ConvertExchangeToReturnDialog";
 import { ConvertReturnToExchangeDialog } from "./ConvertReturnToExchangeDialog";
 import { invalidateExchangeRegistry } from "@/hooks/useExchangeRegistry";
-import { canAddReplacement, canSwapReplacement, canCancelExchange, canConvertToReturn, canConvertToExchange, isPostingOverdue, OPEN_EXCHANGE_STATUSES, exchangeDifference, differenceLinkTotal } from "@/lib/pos/exchangeInProgress";
+import { canAddReplacement, canSwapReplacement, canCancelExchange, canConvertToReturn, canConvertToExchange, isPostingOverdue, OPEN_EXCHANGE_STATUSES, exchangeDifference, differenceLinkTotal, isExchangeDifferencePaid, canMarkDifferencePaid } from "@/lib/pos/exchangeInProgress";
 
+const EXTERNAL_METHODS = MANUAL_PAYMENT_METHODS.filter((m) => m.value !== PAID_ON_SITE_METHOD);
 const SITE_STORE_ID = "2bd2c08d-321c-47ee-98a9-e27e936818ab";
 const PEROLA_STORE_ID = "4ade7b44-5043-4ab1-a124-7a6ab5468e29";
 
@@ -36,8 +39,12 @@ export function ExchangeInProgressCard({ saleId, onChanged }: { saleId: string; 
   const [picks, setPicks] = useState<Pick[]>([]);
   const [motivo, setMotivo] = useState("");
   const [saving, setSaving] = useState(false);
-  const [diffSales, setDiffSales] = useState<Record<string, { status: string; total: number; store_id: string }>>({});
+  const [diffSales, setDiffSales] = useState<Record<string, { status: string; total: number; store_id: string; payment_gateway: string | null }>>({});
   const [linkFor, setLinkFor] = useState<Ex | null>(null);
+  const [manualPaidFor, setManualPaidFor] = useState<Ex | null>(null);
+  const [manualMethod, setManualMethod] = useState("PIX");
+  const [manualPixKey, setManualPixKey] = useState("");
+  const [manualInstallments, setManualInstallments] = useState("2");
   const [freteModo, setFreteModo] = useState<"gratis" | "cotado" | "fixo">("gratis");
   const [frete, setFrete] = useState(0);
   const [quotes, setQuotes] = useState<{ id: string; label: string; price: number }[]>([]);
@@ -59,8 +66,8 @@ export function ExchangeInProgressCard({ saleId, onChanged }: { saleId: string; 
     ]);
     const ids = list.map((x) => x.diferenca_venda_id).filter(Boolean);
     if (ids.length) {
-      const { data: ds } = await supabase.from("pos_sales").select("id, status, total, store_id").in("id", ids);
-      setDiffSales(Object.fromEntries(((ds as any[]) || []).map((d) => [d.id, { status: d.status, total: Number(d.total || 0), store_id: d.store_id }])));
+      const { data: ds } = await supabase.from("pos_sales").select("id, status, total, store_id, payment_gateway").in("id", ids);
+      setDiffSales(Object.fromEntries(((ds as any[]) || []).map((d) => [d.id, { status: d.status, total: Number(d.total || 0), store_id: d.store_id, payment_gateway: d.payment_gateway || null }])));
     } else setDiffSales({});
     setSaleCtx(s ? { store_id: (s as any).store_id, cep: (s as any).customer_cep || null } : null);
     setRev((r as any) || null);
@@ -134,6 +141,28 @@ export function ExchangeInProgressCard({ saleId, onChanged }: { saleId: string; 
     setLinkFor(null); done();
   };
 
+  const closeManualPaid = () => {
+    setManualPaidFor(null); setManualMethod("PIX"); setManualPixKey(""); setManualInstallments("2");
+  };
+  const submitManualPaid = async () => {
+    if (!manualPaidFor?.diferenca_venda_id) return;
+    const ds = diffSales[manualPaidFor.diferenca_venda_id];
+    if (!ds || !canMarkDifferencePaid(ds.status, ds.total)) { toast.error("Esse link não está mais aguardando pagamento"); return; }
+    if (manualMethod === "PIX" && manualPixKey.trim().length < 3) { toast.error("Informe em qual chave PIX o pagamento caiu"); return; }
+    setSaving(true);
+    const { error } = await supabase.rpc("exchange_mark_difference_paid" as any, {
+      p_troca_id: manualPaidFor.id,
+      p_method: manualMethod,
+      p_pix_key: manualMethod === "PIX" ? manualPixKey.trim() : null,
+      p_installments: ["Cartão de Crédito parcelado", "Crediário"].includes(manualMethod) ? Number(manualInstallments) : 1,
+    });
+    setSaving(false);
+    if (error) { toast.error(error.message); return; }
+    toast.success(`Diferença de R$ ${ds.total.toFixed(2)} marcada como paga por fora.`);
+    closeManualPaid(); done();
+  };
+  const manualNeedsInstallments = ["Cartão de Crédito parcelado", "Crediário"].includes(manualMethod);
+
   return (
     <div className="mt-2 space-y-2" onClick={(e) => e.stopPropagation()}>
       {rows.map((e) => {
@@ -174,7 +203,7 @@ export function ExchangeInProgressCard({ saleId, onChanged }: { saleId: string; 
             {e.pedido_novo_id && (() => {
               const { dev, rep, diff } = exchangeDifference(e.trocas_devolucoes_itens);
               const ds = e.diferenca_venda_id ? diffSales[e.diferenca_venda_id] : null;
-              const paid = ds && !["online_pending", "pending", "payment_failed", "cancelled"].includes(ds.status);
+              const paid = isExchangeDifferencePaid(ds?.status);
               return (
                 <div className="mt-2 rounded border bg-background/60 p-2 text-xs space-y-1">
                   <p>Devolvido: R$ {dev.toFixed(2)} · Troca: R$ {rep.toFixed(2)}</p>
@@ -183,8 +212,11 @@ export function ExchangeInProgressCard({ saleId, onChanged }: { saleId: string; 
                   {Math.abs(diff) <= 0.009 && <p className="font-bold">Sem diferença de valor.</p>}
                   {ds && ds.status !== "cancelled" && (
                     <div className="flex items-center gap-2 flex-wrap">
-                      <span className={paid ? "font-bold" : "text-destructive font-bold"}>{paid ? "✅ Link pago" : "⏳ Link aguardando pagamento"}: R$ {ds.total.toFixed(2)}</span>
+                      <span className={paid ? "font-bold" : "text-destructive font-bold"}>{paid ? (ds.payment_gateway === "manual" ? "✅ Pago por fora" : "✅ Link pago") : "⏳ Link aguardando pagamento"}: R$ {ds.total.toFixed(2)}</span>
                       {!paid && <Button size="sm" variant="outline" className="h-7" onClick={() => copy(linkUrl(e.diferenca_venda_id!, ds.store_id))}><Copy className="h-3 w-3 mr-1" /> Copiar link</Button>}
+                      {canMarkDifferencePaid(ds.status, ds.total) && (
+                        <Button size="sm" variant="secondary" className="h-7" onClick={() => { setManualMethod("PIX"); setManualPixKey(""); setManualInstallments("2"); setManualPaidFor(e); }}><CheckCircle2 className="h-3 w-3 mr-1" /> Marcar pago por fora</Button>
+                      )}
                     </div>
                   )}
                   {OPEN_EXCHANGE_STATUSES.includes(e.status) && !paid && (
@@ -284,6 +316,48 @@ export function ExchangeInProgressCard({ saleId, onChanged }: { saleId: string; 
               </div>
             );
           })()}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!manualPaidFor} onOpenChange={(o) => !o && closeManualPaid()}>
+        <DialogContent className="max-w-md" onClick={(e) => e.stopPropagation()}>
+          <DialogHeader>
+            <DialogTitle>Marcar diferença como PAGA</DialogTitle>
+            <DialogDescription>
+              {manualPaidFor?.codigo_devolucao} · {manualPaidFor?.diferenca_venda_id ? `R$ ${(diffSales[manualPaidFor.diferenca_venda_id]?.total || 0).toFixed(2)}` : ""}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 text-sm">
+            <div className="space-y-1">
+              <label className="text-xs font-semibold">Como a cliente pagou?</label>
+              <Select value={manualMethod} onValueChange={setManualMethod}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {EXTERNAL_METHODS.map((m) => <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            {manualMethod === "PIX" && (
+              <div className="space-y-1">
+                <label className="text-xs font-semibold">Em qual chave PIX caiu?</label>
+                <Input value={manualPixKey} onChange={(ev) => setManualPixKey(ev.target.value)} placeholder="CNPJ, CPF, e-mail ou outra chave" autoFocus />
+              </div>
+            )}
+            {manualNeedsInstallments && (
+              <div className="space-y-1">
+                <label className="text-xs font-semibold">Parcelas</label>
+                <Select value={manualInstallments} onValueChange={setManualInstallments}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>{[2, 3, 4, 5, 6].map((n) => <SelectItem key={n} value={String(n)}>{n}x</SelectItem>)}</SelectContent>
+                </Select>
+              </div>
+            )}
+            <p className="text-xs text-muted-foreground">Confirme só depois de conferir o recebimento. O valor é validado pelo sistema e a confirmação fica registrada com o seu usuário.</p>
+            <div className="flex justify-end gap-2">
+              <Button variant="ghost" onClick={closeManualPaid} disabled={saving}>Voltar</Button>
+              <Button onClick={submitManualPaid} disabled={saving || (manualMethod === "PIX" && manualPixKey.trim().length < 3)}>{saving ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <CheckCircle2 className="h-4 w-4 mr-1" />} Confirmar pagamento</Button>
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
 
