@@ -18,7 +18,9 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { WhatsAppFormattingToolbar } from "./WhatsAppFormattingToolbar";
-import { fetchProducts, type ShopifyProduct } from "@/lib/shopify";
+import { type ShopifyProduct } from "@/lib/shopify";
+import { fetchMarketingProducts, erpMasterFromId } from "@/lib/marketing/erpMarketing";
+import { whatsappSendCandidates } from "@/lib/whatsapp/erpProductPhotos";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
@@ -1001,17 +1003,21 @@ export function ScheduledMessageForm({ open, onOpenChange, onSubmit, onSendNow, 
 
   const loadShopifyProducts = async (query?: string) => {
     setIsLoadingProducts(true);
-    try { setShopifyProducts(await fetchProducts(50, query || undefined)); }
+    try { setShopifyProducts(await fetchMarketingProducts(50, query || undefined)); }
     catch { toast.error("Erro ao carregar produtos"); }
     finally { setIsLoadingProducts(false); }
   };
 
-  const selectShopifyProduct = (product: ShopifyProduct, imageUrl: string) => {
+  const selectShopifyProduct = (product: ShopifyProduct, rawImageUrl: string) => {
+    // Foto do ERP é WebP; o grupo recebe o JPG do mesmo arquivo.
+    const imageUrl = whatsappSendCandidates(rawImageUrl)[0] || rawImageUrl;
+    const erpOnly = !!erpMasterFromId(product.node.id);
     const targetBlock = blocks.find(b => b.id === shopifyTargetBlockId);
     if (!targetBlock) return;
     const n: any = product.node;
     const linkProduct: VipLinkProduct = {
-      source: 'shopify', shopify_product_id: n.id, title: n.title,
+      // Produto só do ERP entra como produto avulso do link de atendimento (mesmo motor, sem Shopify).
+      source: erpOnly ? 'avulso' : 'shopify', shopify_product_id: erpOnly ? null : n.id, title: n.title,
       price: n.priceRange?.minVariantPrice?.amount ?? null, image_url: imageUrl || null,
     };
     if (shopifyForLink) {
@@ -1036,7 +1042,12 @@ export function ScheduledMessageForm({ open, onOpenChange, onSubmit, onSendNow, 
     } else {
       const handle = product.node.handle;
       const link = getOfficialProductUrl(handle);
-      if (!link) { toast.error("Produto sem endereço válido no site oficial"); return; }
+      if (!link) {
+        toast.error(erpOnly
+          ? "Esse produto não tem página no site. Use o Link de Atendimento com produto (leva ao WhatsApp)."
+          : "Produto sem endereço válido no site oficial");
+        return;
+      }
       if (targetBlock.type === 'text') {
         updateBlock(targetBlock.id, { ...targetBlock, content: targetBlock.content ? `${targetBlock.content}\n${link}` : link });
       }

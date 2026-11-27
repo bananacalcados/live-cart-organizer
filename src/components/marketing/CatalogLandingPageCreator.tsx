@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { fetchProducts, type ShopifyProduct } from "@/lib/shopify";
+import { type ShopifyProduct } from "@/lib/shopify";
+import { fetchMarketingProducts } from "@/lib/marketing/erpMarketing";
 import { toast } from "sonner";
 import {
   Plus, Save, Trash2, Loader2, Search, Check, X, ExternalLink,
@@ -217,7 +218,7 @@ export function CatalogLandingPageCreator() {
     if (shopifyProducts.length > 0 && !forceReload) return;
     setProductsLoading(true);
     try {
-      const raw = await fetchProducts(250);
+      const raw = await fetchMarketingProducts(250);
       setShopifyProducts(
         raw.map((p) => ({
           id: p.node.id,

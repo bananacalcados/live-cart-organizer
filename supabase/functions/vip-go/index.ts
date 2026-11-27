@@ -24,6 +24,25 @@ function notFound() {
 Deno.serve(withAccessLog("vip-go", async (req) => {
   const url = new URL(req.url);
   const seg = url.pathname.split("/").filter(Boolean).pop() || "";
+  // Produto só do ERP (sem página no site): ?p=<produto do ERP>[&cor=...] → WhatsApp de atendimento
+  // do dia dos Grupos VIP, com o produto na mensagem montada no servidor (nunca texto livre do link).
+  const prod = (url.searchParams.get("p") || "").trim();
+  if (prod) {
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(prod)) return notFound();
+    const color = (url.searchParams.get("cor") || "").trim().slice(0, 60) || null;
+    const pr = await rpc("vip_product_destination", { p_master: prod, p_color: color });
+    const prow = pr.ok ? (await pr.json())?.[0] : null;
+    if (!prow?.message_text) return notFound();
+    let pphone = prow.phone_display;
+    if (prow.provider === "wasender" && !String(pphone || "").replace(/\D/g, "")) pphone = prow.wasender_phone_number;
+    if (!String(pphone || "").replace(/\D/g, "")) pphone = prow.uazapi_owner || prow.wasender_phone_number;
+    const pto = normPhone(pphone);
+    const ptarget = pto
+      ? `https://wa.me/${pto}?text=${encodeURIComponent(prow.message_text)}`
+      : `https://wa.me/?text=${encodeURIComponent(prow.message_text)}`;
+    return new Response(null, { status: 302, headers: { Location: ptarget, "Cache-Control": "no-store" } });
+  }
+
   const code = (url.searchParams.get("c") || (seg !== "vip-go" ? seg : "")).trim().toUpperCase();
   if (!/^[A-Z0-9]{6}$/.test(code)) return notFound();
 

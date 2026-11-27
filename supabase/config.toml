@@ -360,3 +360,6 @@ verify_jwt = false
 
 [functions.support-ai-training]
 verify_jwt = false
+
+[functions.marketing-catalog-public]
+verify_jwt = false

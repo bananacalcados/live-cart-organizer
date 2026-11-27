@@ -2,6 +2,8 @@ import { useState, useEffect, useCallback } from "react";
 import { useParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { fetchProducts, type ShopifyProduct } from "@/lib/shopify";
+import { PublicProductImage } from "@/components/marketing/PublicProductImage";
+import { fetchPublicErpProducts } from "@/lib/marketing/erpMarketing";
 import { createYampiPaymentLinkFromOrder } from "@/lib/yampi";
 import type { DbOrderProduct } from "@/types/database";
 import { toast } from "sonner";
@@ -143,7 +145,7 @@ function filterProducts(products: ShopifyProduct[], config: PageConfig): Filtere
         // Use the variant index to try to get the matching image
         const variantIndex = allVariants.indexOf(v);
         const imageEdges = product.node.images.edges;
-        const imageUrl = imageEdges[Math.min(variantIndex, imageEdges.length - 1)]?.node.url || imageEdges[0]?.node.url || "";
+        const imageUrl = (v.node.erp && v.node.image?.url) || imageEdges[Math.min(variantIndex, imageEdges.length - 1)]?.node.url || imageEdges[0]?.node.url || "";
         
         const gid = v.node.id;
         const numericId = gid.split("/").pop() || gid;
@@ -290,7 +292,9 @@ export default function DoseTriplaCatalog() {
     if (allProducts.length > 0) return;
     setLoading(true);
     try {
-      const raw = await fetchProducts(250);
+      // Páginas novas com fonte ERP guardam "erp-product:<id>"; antigas não têm nenhum e seguem iguais.
+      const [shop, erp] = await Promise.all([fetchProducts(250), fetchPublicErpProducts(config.selected_product_ids || [])]);
+      const raw = [...shop, ...erp];
       setAllProducts(filterProducts(raw, config));
     } catch (e) {
       console.error(e);
@@ -646,7 +650,7 @@ export default function DoseTriplaCatalog() {
                     >
                       {displayProduct.imageUrl && (
                         <div className="aspect-square overflow-hidden">
-                          <img src={displayProduct.imageUrl} alt={displayProduct.title} className="w-full h-full object-cover" loading="lazy" />
+                          <PublicProductImage src={displayProduct.imageUrl} name={displayProduct.title} className="w-full h-full object-cover" loading="lazy" />
                         </div>
                       )}
                       <div className="p-3 flex flex-col gap-2 flex-1">
@@ -737,7 +741,7 @@ export default function DoseTriplaCatalog() {
                     {cart.map((product) => (
                       <div key={product.id} className="flex gap-3 items-center">
                         {product.imageUrl && (
-                          <img src={product.imageUrl} alt="" className="w-14 h-14 rounded-xl object-cover shrink-0" />
+                          <PublicProductImage src={product.imageUrl} name={product.title} className="w-14 h-14 rounded-xl object-cover shrink-0" />
                         )}
                         <div className="flex-1 min-w-0">
                           <p className="text-xs font-bold text-gray-800 line-clamp-1">{product.title}</p>
@@ -791,6 +795,8 @@ export default function DoseTriplaCatalog() {
 
                 {/* Checkout buttons */}
                 <div className="flex flex-col gap-2">
+                  {/* Produto só do ERP não tem página no site: finaliza pelo WhatsApp. */}
+                  {!cart.some((p) => String(p.variantGid).startsWith("erp-")) && (
                   <button
                     onClick={handleYampiCheckout}
                     disabled={checkoutLoading}
@@ -799,6 +805,7 @@ export default function DoseTriplaCatalog() {
                   >
                     {checkoutLoading ? "Gerando link..." : "🛒 Finalizar no Site"}
                   </button>
+                  )}
                   <button
                     onClick={() => handleWhatsAppCheckout("whatsapp")}
                     className="w-full py-3 rounded-xl font-bold text-white text-sm shadow-lg active:scale-95 transition-transform"

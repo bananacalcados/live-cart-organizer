@@ -45,7 +45,8 @@ import {
   Bookmark, Gift, Copy, Search, Monitor,
 } from "lucide-react";
 import EmojiPicker from "emoji-picker-react";
-import { fetchProducts, type ShopifyProduct } from "@/lib/shopify";
+import { type ShopifyProduct } from "@/lib/shopify";
+import { fetchMarketingProducts } from "@/lib/marketing/erpMarketing";
 import { ImageCropDialog } from "@/components/ImageCropDialog";
 
 // ─── Types ──────────────────────────────────────
@@ -735,7 +736,7 @@ function StepEditorDialog({
   // ── Carousel card image: pick from Shopify ──
   const loadShopifyProducts = async (query?: string) => {
     setLoadingShopify(true);
-    try { setShopifyProducts(await fetchProducts(50, query || undefined)); }
+    try { setShopifyProducts(await fetchMarketingProducts(50, query || undefined)); }
     catch { toast.error("Erro ao carregar produtos da Shopify"); }
     setLoadingShopify(false);
   };

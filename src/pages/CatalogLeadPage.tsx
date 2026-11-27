@@ -5,6 +5,8 @@ import { getFbp, getFbc } from "@/lib/metaPixel";
 import { captureAttribution, resolveFbclid } from "@/lib/metaAttribution";
 import { cpGetSale, cpCreateOrder, cpUpdateOrder } from "@/lib/checkoutPublic";
 import { fetchProducts, type ShopifyProduct } from "@/lib/shopify";
+import { PublicProductImage } from "@/components/marketing/PublicProductImage";
+import { fetchPublicErpProducts, erpMasterFromId } from "@/lib/marketing/erpMarketing";
 import { toast } from "sonner";
 import { ShoppingBag, X, ChevronLeft, Instagram, Phone, Loader2, Check, Trash2, Plus, Minus, Sparkles } from "lucide-react";
 import { applyDiscount, discountBadge, type DiscountMap } from "@/lib/catalogDiscount";
@@ -279,10 +281,28 @@ export default function CatalogLeadPage() {
     (async () => {
       setProductsLoading(true);
       const raw = await fetchProducts(250);
-      setProductMap(buildProductMap(raw));
+      // Mantém os produtos do ERP que já chegaram (as duas consultas correm em paralelo).
+      setProductMap((prev) => {
+        const n = buildProductMap(raw);
+        prev.forEach((v, k) => { if (erpMasterFromId(k)) n.set(k, v); });
+        return n;
+      });
       setProductsLoading(false);
     })();
   }, [config?.id]); // Only reload shopify products on initial load
+
+  // Páginas novas criadas com a fonte ERP guardam "erp-product:<id>": resolvidos numa consulta pública.
+  const erpIdsKey = (config?.selected_product_ids || []).filter((id) => erpMasterFromId(id)).join(",");
+  useEffect(() => {
+    if (!erpIdsKey) return;
+    let on = true;
+    fetchPublicErpProducts(erpIdsKey.split(",")).then((erp) => {
+      if (!on || !erp.length) return;
+      const extra = buildProductMap(erp);
+      setProductMap((prev) => { const n = new Map(prev); extra.forEach((v, k) => n.set(k, v)); return n; });
+    });
+    return () => { on = false; };
+  }, [erpIdsKey]);
 
   // Build ordered product list from config.selected_product_ids
   const orderedProducts: CatalogProduct[] = (config?.selected_product_ids || [])
@@ -448,7 +468,10 @@ export default function CatalogLeadPage() {
         const finalPrice = getEffectivePrice(c.productId, Number(c.variant.price));
         return {
           id: crypto.randomUUID(),
-          shopifyId: c.productId,
+          // Produto só do ERP: nunca vai à Shopify; grava variação/produto do ERP.
+          ...(erpMasterFromId(c.productId)
+            ? { shopifyId: "", erp_variant_id: c.variant.gid.replace(/^erp-variant:/, ""), erp_master_id: erpMasterFromId(c.productId) }
+            : { shopifyId: c.productId }),
           title: c.productTitle,
           variant: c.variant.label,
           price: finalPrice,
@@ -536,7 +559,7 @@ export default function CatalogLeadPage() {
             const hasDiscount = finalPrice < basePrice;
             return (
             <div key={item.variant.gid} className="flex gap-3 p-3 bg-gray-50 rounded-xl">
-              <img src={item.imageUrl} alt={item.productTitle} className="w-16 h-16 rounded-lg object-cover flex-shrink-0" />
+              <PublicProductImage src={item.imageUrl} name={item.productTitle} className="w-16 h-16 rounded-lg object-cover flex-shrink-0" />
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-semibold line-clamp-1">{item.productTitle}</p>
                 <p className="text-xs text-gray-500">{item.variant.label}</p>
@@ -616,7 +639,7 @@ export default function CatalogLeadPage() {
             <ChevronLeft className="h-4 w-4" />Voltar
           </button>
           <div className="bg-white rounded-2xl overflow-hidden shadow-xl">
-            <img src={selectedVariant?.imageUrl || selectedProduct.imageUrl} alt={selectedProduct.title} className="w-full aspect-square object-cover" />
+            <PublicProductImage src={selectedVariant?.imageUrl || selectedProduct.imageUrl} name={selectedProduct.title} className="w-full aspect-square object-cover" />
             <div className="p-4 space-y-4">
               <h2 className="text-lg font-bold text-gray-900">{selectedProduct.title}</h2>
               <div className="flex items-center gap-2">
@@ -778,7 +801,7 @@ export default function CatalogLeadPage() {
                   className={`bg-white rounded-xl overflow-hidden shadow-lg text-left active:scale-95 transition-all duration-500 ${inCart ? "ring-2 ring-emerald-500 ring-offset-1" : ""} ${isHighlighted ? "ring-2 ring-yellow-400 ring-offset-2 scale-[1.02] shadow-yellow-400/40 shadow-2xl" : ""}`}
                   style={isHighlighted ? { animation: "pulse 1.5s ease-in-out 3" } : {}}>
                   <div className="relative">
-                    <img src={p.imageUrl} alt={p.title} className="w-full aspect-square object-cover" />
+                    <PublicProductImage src={p.imageUrl} name={p.title} className="w-full aspect-square object-cover" />
                     {isHighlighted && (
                       <div className="absolute top-2 left-2 px-2 py-0.5 rounded-full bg-yellow-400 text-yellow-900 text-[10px] font-bold flex items-center gap-1 shadow-lg animate-bounce">
                         <Sparkles className="h-3 w-3" />NOVO

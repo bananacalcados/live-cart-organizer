@@ -148,9 +148,35 @@ Deno.serve(withAccessLog("link-page-catalog-sync", async (req) => {
       // Reavalia a grade dos produtos já marcados
       const { data: existing } = await supabase
         .from("link_page_catalog_products")
-        .select("id, shopify_product_id")
+        .select("id, shopify_product_id, erp_master_id")
         .eq("page_id", pageId);
+      // Produto só do ERP (sem id da Shopify): grade pelo estoque da Pérola e foto do ERP, numa consulta só.
+      const erpRows = (existing || []).filter((r: any) => r.erp_master_id && !String(r.shopify_product_id).startsWith("gid://"));
+      const erpMap = new Map<string, any>();
+      if (erpRows.length) {
+        const { data: erpItems } = await supabase.rpc("erp_catalog_public_items", { p_master_ids: erpRows.map((r: any) => r.erp_master_id).slice(0, 50) });
+        for (const m of (erpItems || []) as any[]) erpMap.set(String(m.master_id), m);
+      }
       for (const row of existing || []) {
+        if (erpRows.includes(row)) {
+          const m = erpMap.get(String((row as any).erp_master_id));
+          if (!m) { await supabase.from("link_page_catalog_products").update({ is_active: false }).eq("id", row.id); deactivated++; continue; }
+          const vs = (m.variants || []) as any[];
+          const sizes = [...new Set(vs.map((v) => v.size).filter(Boolean))];
+          const okSizes = new Set(vs.filter((v) => v.in_stock).map((v) => v.size).filter(Boolean));
+          const total = sizes.length || vs.length;
+          const available = sizes.length ? okSizes.size : vs.filter((v) => v.in_stock).length;
+          const pct = total ? available / total : 0;
+          const img = vs.find((v) => v.image)?.image || null;
+          const ok = !!img && pct >= MIN_GRADE_PCT;
+          await supabase.from("link_page_catalog_products").update({
+            grade_total: total, grade_available: available, grade_pct: Number(pct.toFixed(3)),
+            is_active: ok, last_synced_at: new Date().toISOString(),
+            image_url: img, price: m.sale_price, compare_at_price: null,
+          }).eq("id", row.id);
+          ok ? activated++ : deactivated++;
+          continue;
+        }
         try {
           const d = await shopify(SINGLE_QUERY, { id: row.shopify_product_id });
           const node = d?.product;

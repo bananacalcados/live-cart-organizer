@@ -12462,6 +12462,7 @@ export type Database = {
           clicks: number
           compare_at_price: number | null
           created_at: string
+          erp_master_id: string | null
           grade_available: number
           grade_pct: number
           grade_total: number
@@ -12484,6 +12485,7 @@ export type Database = {
           clicks?: number
           compare_at_price?: number | null
           created_at?: string
+          erp_master_id?: string | null
           grade_available?: number
           grade_pct?: number
           grade_total?: number
@@ -12506,6 +12508,7 @@ export type Database = {
           clicks?: number
           compare_at_price?: number | null
           created_at?: string
+          erp_master_id?: string | null
           grade_available?: number
           grade_pct?: number
           grade_total?: number
@@ -36579,6 +36582,17 @@ export type Database = {
       vip_photo_internal_name: {
         Args: { p_brief: string; p_product_title?: string }
         Returns: string
+      }
+      vip_product_destination: {
+        Args: { p_color?: string; p_master: string }
+        Returns: {
+          dest_number_id: string
+          message_text: string
+          phone_display: string
+          provider: string
+          uazapi_owner: string
+          wasender_phone_number: string
+        }[]
       }
       vip_set_daily_destination: {
         Args: { p_day: string; p_force?: boolean; p_number_id: string }

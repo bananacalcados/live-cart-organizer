@@ -11,7 +11,9 @@ import {
 } from "lucide-react";
 import { DebouncedInput, DebouncedTextarea } from "@/components/marketing/DebouncedField";
 import { HEADER_FONTS, HEADER_FONTS_URL, headerCss } from "@/lib/marketing/linkPageHeaderStyle";
-import { fetchProducts, computeProductPricing, ShopifyProduct } from "@/lib/shopify";
+import { computeProductPricing, ShopifyProduct } from "@/lib/shopify";
+import { fetchMarketingProducts, erpMasterFromId } from "@/lib/marketing/erpMarketing";
+import { erpMasterOf } from "@/lib/liveProductSource";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -96,14 +98,14 @@ function computeGradeClient(node: ShopifyProduct["node"]): { total: number; avai
     const total = sizeOpt.values.length;
     const set = new Set<string>();
     for (const v of variants) {
-      if (!v.availableForSale) continue;
+      if (!v.availableForSale || (v.erp && v.erp.stockPerola <= 0)) continue; // ERP: grade pelo estoque da Pérola
       const so = (v.selectedOptions || []).find((s) => SIZE_RE.test(s.name));
       if (so) set.add(so.value);
     }
     return { total, available: set.size, pct: total ? set.size / total : 0 };
   }
   const total = variants.length;
-  const available = variants.filter((v) => v.availableForSale).length;
+  const available = variants.filter((v) => v.availableForSale && !(v.erp && v.erp.stockPerola <= 0)).length;
   return { total, available, pct: total ? available / total : 0 };
 }
 
@@ -427,7 +429,7 @@ export function LinkPageManager() {
     setPickerSelected(new Set(catalog.map((c) => c.shopify_product_id)));
     if (shopifyProducts.length === 0) {
       setLoadingProducts(true);
-      try { setShopifyProducts(await fetchProducts(250, undefined, { newestFirst: true })); } catch { toast.error("Erro Shopify"); }
+      try { setShopifyProducts(await fetchMarketingProducts(250, undefined, { newestFirst: true })); } catch { toast.error("Erro Shopify"); }
       setLoadingProducts(false);
     }
   };
@@ -444,7 +446,9 @@ export function LinkPageManager() {
       const img = p.node.images?.edges?.[0]?.node?.url || null;
       const { price, compareAtPrice } = computeProductPricing(p.node);
       await supabase.from("link_page_catalog_products").upsert({
-        page_id: selectedPage.id, shopify_product_id: p.node.id, handle: p.node.handle, title: p.node.title,
+        page_id: selectedPage.id, shopify_product_id: p.node.id, handle: p.node.handle || null, title: p.node.title,
+        // Produto vindo do ERP guarda o id do ERP; sem endereço no site o clique vai ao WhatsApp.
+        erp_master_id: erpMasterFromId(p.node.id) || erpMasterOf(p) || null,
         image_url: img, price, compare_at_price: compareAtPrice,
         product_type: p.node.productType, grade_total: g.total, grade_available: g.available,
         grade_pct: Number(g.pct.toFixed(3)), is_active: !!img && g.pct >= 0.6, sort_order: order++,
@@ -466,7 +470,7 @@ export function LinkPageManager() {
     if (!catalogPickerOpen || term.length < 2) return;
     let cancelled = false;
     const t = setTimeout(async () => {
-      const found = await fetchProducts(100, term, { newestFirst: true });
+      const found = await fetchMarketingProducts(100, term, { newestFirst: true });
       if (cancelled || found.length === 0) return;
       setShopifyProducts((prev) => {
         const ids = new Set(prev.map((p) => p.node.id));

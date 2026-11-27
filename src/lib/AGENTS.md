@@ -9,3 +9,4 @@
 
 - Live product source: app_settings.product_source_live ('shopify' default keeps the old path; 'erp' uses RPC erp_catalog_search via liveProductSource.ts adapted to ShopifyProduct). ERP-only items store shopifyId "" + erp_variant_id/erp_master_id and sku=GTIN||SKU (PDV stock match); Shopify order buttons refuse them so they never become avulso Shopify lines.
 - WhatsApp ERP photos (whatsapp/erpProductPhotos.ts): send the _g.jpg twin of the WebP medium (Meta rejects WebP), HEAD-checked, else text only; switch product_source_whatsapp.
+- Marketing product source (Phase D): app_settings.product_source_marketing ('shopify' default) via marketing/erpMarketing.ts. New pages store "erp-product:<master>" ids; public pages resolve them only through edge marketing-catalog-public (no cost/exact stock). ERP-only products have no site page: click goes to vip-go?p=<master> (daily VIP attendance destination, server-built message), never a broken link.

@@ -5,6 +5,11 @@ import { getFbp, getFbc } from "@/lib/metaPixel";
 import { captureAttribution, resolveFbclid, resolveUtm } from "@/lib/metaAttribution";
 import { decorateOutboundUrl, newClickId } from "@/lib/marketing/linkPageUtm";
 import { getOfficialProductUrl } from "@/lib/marketing/officialProductUrl";
+import { erpProductWhatsAppUrl } from "@/lib/marketing/erpMarketing";
+
+/** Site (Shopify) quando o produto tem página; produto só do ERP vai ao WhatsApp de atendimento. */
+const productDestination = (p: any): string =>
+  getOfficialProductUrl(p?.handle) || (p?.erp_master_id ? erpProductWhatsAppUrl(p.erp_master_id) : "");
 
 import {
   Link as LinkIcon, Phone, MapPin, ShoppingBag, Globe, Instagram, Mail,
@@ -156,6 +161,7 @@ export default function LinkPageView() {
   /** URL de destino já com UTMs da Link Page + id do clique. */
   const buildOutbound = useCallback((item: any, product: any | undefined, clickId: string) => {
     if (!data) return "";
+    if (product && !getOfficialProductUrl(product.handle)) return productDestination(product);
     const baseUrl = product
       ? getOfficialProductUrl(product.handle)
       : item.url || "";
@@ -281,7 +287,7 @@ export default function LinkPageView() {
             return (
               <a
                 key={p.id}
-                href={getOfficialProductUrl(p.handle) || undefined}
+                href={productDestination(p) || undefined}
                 target="_blank" rel="noopener noreferrer"
                 onClick={(e) => {
                   const cid = newClickId();
