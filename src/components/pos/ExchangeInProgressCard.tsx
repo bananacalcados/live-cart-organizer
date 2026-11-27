@@ -18,9 +18,9 @@ const PEROLA_STORE_ID = "4ade7b44-5043-4ab1-a124-7a6ab5468e29";
 interface Ex {
   id: string; codigo_devolucao: string | null; tipo: string; status: string; pedido_novo_id: string | null;
   voucher_id: string | null; gateway_refund_id: string | null; created_at: string; diferenca_venda_id: string | null;
-  trocas_devolucoes_itens: { direcao: string; produto_nome: string | null; tamanho: string | null; quantidade: number | null; valor_unitario: number | null }[];
+  trocas_devolucoes_itens: { direcao: string; sku?: string | null; barcode?: string | null; produto_nome: string | null; tamanho: string | null; quantidade: number | null; valor_unitario: number | null }[];
 }
-interface Pick { key: number; sku: string; barcode?: string; name: string; size?: string; quantity: number }
+interface Pick { key: number; current?: boolean; sku: string; barcode?: string; name: string; size?: string; quantity: number }
 
 /** Cartão "Troca em andamento" — uma consulta ao abrir o modal (troca + itens) e uma da reversa. */
 export function ExchangeInProgressCard({ saleId, onChanged }: { saleId: string; onChanged?: () => void }) {
@@ -46,7 +46,7 @@ export function ExchangeInProgressCard({ saleId, onChanged }: { saleId: string; 
 
   const load = useCallback(async () => {
     const { data } = await supabase.from("trocas_devolucoes")
-      .select("id, codigo_devolucao, tipo, status, pedido_novo_id, voucher_id, gateway_refund_id, created_at, diferenca_venda_id, trocas_devolucoes_itens(direcao, produto_nome, tamanho, quantidade, valor_unitario)")
+      .select("id, codigo_devolucao, tipo, status, pedido_novo_id, voucher_id, gateway_refund_id, created_at, diferenca_venda_id, trocas_devolucoes_itens(direcao, sku, barcode, produto_nome, tamanho, quantidade, valor_unitario)")
       .eq("pedido_original_id", saleId).in("tipo", ["troca", "devolucao"] as any).in("status", OPEN_EXCHANGE_STATUSES as any)
       .order("created_at", { ascending: false }).limit(5);
     const list = (data as any[]) || [];
@@ -200,7 +200,7 @@ export function ExchangeInProgressCard({ saleId, onChanged }: { saleId: string; 
                 <Button size="sm" className="w-full h-auto whitespace-normal py-1.5" onClick={() => { setPicks([]); setSwapMode(false); setAddFor(e); }}><Plus className="h-3 w-3 mr-1" /> Adicionar produto</Button>
               )}
               {canSwapReplacement(e, e.diferenca_venda_id ? diffSales[e.diferenca_venda_id]?.status : null) && (
-                <Button size="sm" variant="outline" className="w-full h-auto whitespace-normal py-1.5" onClick={() => { setPicks([]); setSwapMotivo(""); setSwapMode(true); setAddFor(e); }}><Repeat className="h-3 w-3 mr-1" /> Trocar produto</Button>
+                <Button size="sm" variant="outline" className="w-full h-auto whitespace-normal py-1.5" onClick={() => { setPicks(e.trocas_devolucoes_itens.filter((i) => i.direcao === "reposicao" && i.sku).map((i, n) => ({ key: -1 - n, current: true, sku: i.sku!, barcode: i.barcode || undefined, name: i.produto_nome || i.sku!, size: i.tamanho || undefined, quantity: Number(i.quantidade || 1) }))); setSwapMotivo(""); setSwapMode(true); setAddFor(e); }}><Repeat className="h-3 w-3 mr-1" /> Trocar produto</Button>
               )}
               {canConvertToReturn(e) && (
                 <Button size="sm" variant="secondary" className="w-full h-auto whitespace-normal py-1.5" onClick={() => setConvertFor(e)}><Undo2 className="h-3 w-3 mr-1" /> Converter em devolução</Button>
@@ -221,18 +221,20 @@ export function ExchangeInProgressCard({ saleId, onChanged }: { saleId: string; 
               onSelect={(p) => setPicks((a) => a.length >= 10 ? a : [...a, { key: Date.now(), sku: p.sku, barcode: p.barcode, name: p.product_name, size: p.size, quantity: 1 }])} />
           )}
           <div className="space-y-1">
+            {swapMode && <p className="text-xs font-semibold">Produtos da troca (tire o modelo que não vai mais e adicione o novo pela busca):</p>}
+            {swapMode && !picks.length && <p className="text-xs text-muted-foreground">Nenhum produto na lista.</p>}
             {picks.map((p) => (
               <div key={p.key} className="flex items-center gap-2 text-sm">
-                <span className="flex-1">{p.name}{p.size ? ` (${p.size})` : ""}</span>
+                <span className="flex-1">{p.name}{p.size ? ` (${p.size})` : ""}{swapMode && <span className={`ml-1 text-[10px] font-bold ${p.current ? "text-muted-foreground" : "text-emerald-600"}`}>{p.current ? "ATUAL" : "NOVO"}</span>}</span>
                 <Input type="number" min={1} max={10} value={p.quantity} className="w-16 h-8"
                   onChange={(ev) => setPicks((a) => a.map((x) => x.key === p.key ? { ...x, quantity: Math.max(1, Math.min(10, Number(ev.target.value) || 1)) } : x))} />
-                <Button size="icon" variant="ghost" onClick={() => setPicks((a) => a.filter((x) => x.key !== p.key))}><Trash2 className="h-4 w-4" /></Button>
+                <Button size="icon" variant="ghost" title="Tirar da troca" onClick={() => setPicks((a) => a.filter((x) => x.key !== p.key))}><Trash2 className="h-4 w-4" /></Button>
               </div>
             ))}
           </div>
           {swapMode && (
             <>
-              <p className="text-sm">Escolha o <b>novo</b> produto. O atual sai da Expedição e volta ao estoque.{addFor?.diferenca_venda_id ? " O link da diferença ainda não pago será cancelado — gere outro com o valor novo." : ""}</p>
+              <p className="text-sm">A lista acima é como a troca vai ficar. Modelos tirados saem da Expedição e voltam ao estoque.{addFor?.diferenca_venda_id ? " O link da diferença ainda não pago será cancelado — gere outro com o valor novo." : ""}</p>
               <Textarea placeholder="Motivo (obrigatório) — ex.: cliente preferiu outra cor" value={swapMotivo} onChange={(ev) => setSwapMotivo(ev.target.value)} />
             </>
           )}
