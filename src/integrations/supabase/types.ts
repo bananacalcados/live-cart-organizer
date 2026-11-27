@@ -34401,6 +34401,28 @@ export type Database = {
         }
         Returns: Json
       }
+      mobile_masters_list: {
+        Args: {
+          p_active_only?: boolean
+          p_category_ids?: string[]
+          p_in_stock?: boolean
+          p_limit?: number
+          p_offset?: number
+          p_term?: string
+        }
+        Returns: {
+          color_count: number
+          id: string
+          is_active: boolean
+          name: string
+          sale_price: number
+          size_count: number
+          sku_root: string
+          total_count: number
+          total_stock: number
+          variant_count: number
+        }[]
+      }
       next_event_wa_initial_variant: {
         Args: { p_event_id: string }
         Returns: number

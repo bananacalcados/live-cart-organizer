@@ -12,6 +12,8 @@ import { MobileLabelCount } from "./MobileLabelCount";
 import { MobileStockBalance } from "./MobileStockBalance";
 import { supabase } from "@/integrations/supabase/client";
 import { firstLegacyThumbnails } from "@/components/inventory/legacyProductSummary";
+import { CategorySheet, FilterChips, ProductList } from "./MobileProductList";
+import { loadFilters, saveFilters, shouldList, MobileProductFilters } from "./productFilters";
 
 const POSBarcodeScanner = lazy(() => import("@/components/pos/POSBarcodeScanner").then((m) => ({ default: m.POSBarcodeScanner })));
 const brl = (n: number | null | undefined) => (n == null ? "—" : n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }));
@@ -43,6 +45,16 @@ function SearchHome() {
   const { data: photosMode } = useProductColorPhotosMode(true);
   const photosVisible = photosMode?.visible === true;
   const hitIds = (hits || []).map((h) => h.id).join(",");
+  const [filters, setFiltersState] = useState<MobileProductFilters>(() => loadFilters());
+  const [listTerm, setListTerm] = useState("");
+  const [catsOpen, setCatsOpen] = useState(false);
+  const { data: cats = [] } = useQuery({
+    queryKey: ["m-estoque-categories"], staleTime: 10 * 60_000,
+    queryFn: async () => ((await supabase.from("product_categories").select("id,name").order("name")).data || []) as { id: string; name: string }[],
+  });
+  const catNames = Object.fromEntries(cats.map((c) => [c.id, c.name]));
+  const setFilters = (f: MobileProductFilters) => { setFiltersState(f); saveFilters(f); };
+  const listing = shouldList(filters, listTerm);
   useEffect(() => { inputRef.current?.focus(); }, []);
   useEffect(() => {
     let cancelled = false;
@@ -55,12 +67,12 @@ function SearchHome() {
   }, [hitIds, photosVisible]);
 
   async function run(q: string) {
-    if (!q.trim()) return;
+    if (!q.trim()) { setListTerm(""); return; }
     setBusy(true);
     try {
       const r = await searchMasters(q);
       if (r.exactMasterId) { navigate(`/m/estoque/produto/${r.exactMasterId}`); return; }
-      setHits(r.hits);
+      setListTerm(q);
     } finally { setBusy(false); }
   }
 
@@ -73,28 +85,15 @@ function SearchHome() {
           {busy ? <Loader2 className="h-5 w-5 animate-spin" /> : <Search className="h-5 w-5" />}
         </Button>
       </form>
+      <FilterChips filters={filters} onChange={setFilters} catNames={catNames} onOpenCats={() => setCatsOpen(true)} />
       <Button asChild className="h-14 w-full text-base">
         <Link to="/m/estoque/balanco"><ClipboardCheck className="mr-2 h-5 w-5" /> Balanço por bipagem</Link>
       </Button>
       <Button variant="outline" className="h-14 w-full text-base" onClick={() => setScan(true)}>
         <Camera className="mr-2 h-5 w-5" /> Ler código pela câmera
       </Button>
-      {hits && hits.length === 0 && <p className="text-center text-sm text-muted-foreground">Nenhum produto encontrado.</p>}
-      <ul className="space-y-2">
-        {(hits || []).map((h) => (
-          <li key={h.id}>
-            <Link to={`/m/estoque/produto/${h.id}`} className="flex min-h-[56px] items-center gap-3 rounded-lg border bg-card p-3">
-              {thumbs[h.id]
-                ? <img src={thumbs[h.id]} alt="" loading="lazy" width={56} height={56} className="h-14 w-14 shrink-0 rounded-md bg-muted object-cover" />
-                : <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-md bg-muted"><Package className="h-5 w-5 text-muted-foreground" /></span>}
-              <span className="min-w-0 flex-1">
-                <span className="block truncate font-medium">{h.name}</span>
-                <span className="block text-xs text-muted-foreground">{h.sku_root} · {brl(h.sale_price)}</span>
-              </span>
-            </Link>
-          </li>
-        ))}
-      </ul>
+      {catsOpen && <CategorySheet cats={cats} selected={filters.categoryIds} onClose={(ids) => { setCatsOpen(false); setFilters({ ...filters, categoryIds: ids }); }} />}
+      {listing && <ProductList filters={filters} term={listTerm} photosVisible={photosVisible} />}
       <button className="mx-auto flex min-h-[44px] items-center gap-2 text-sm text-muted-foreground underline"
         onClick={() => { setDesktopPreference(true); navigate("/inventory"); }}>
         <Monitor className="h-4 w-4" /> Ver versão completa
