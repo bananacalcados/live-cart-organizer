@@ -102,3 +102,43 @@ export function labelQuantities(vs: CreatedVariant[]) {
   return Object.fromEntries(vs.filter((v) => v.qty > 0).map((v) => [v.id, v.qty]));
 }
 export const totalPairs = (vs: CreatedVariant[]) => vs.reduce((a, v) => a + (v.qty > 0 ? v.qty : 0), 0);
+
+/** Chave de equivalência de dicionário: sem acento, maiúscula, espaços; "34-35" = "34/35". */
+export const dictKey = (v: string) =>
+  (v || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/\s+/g, "").replace(/[-\\]/g, "/");
+
+/** Procura no dicionário um item equivalente ao texto digitado. */
+export function findEquivalent(list: string[], typed: string): string | null {
+  const k = dictKey(typed);
+  if (!k) return null;
+  return list.find((x) => dictKey(x) === k) ?? null;
+}
+
+/** Remove repetições de escrita (mantém a primeira). */
+export function uniqueByKey(list: string[]): string[] {
+  const seen = new Set<string>(); const out: string[] = [];
+  for (const raw of list) { const x = (raw || "").trim(); const k = dictKey(x); if (!k || seen.has(k)) continue; seen.add(k); out.push(x); }
+  return out;
+}
+
+const LETTER_ORDER = ["pp", "p", "m", "g", "gg", "xg", "xgg", "eg", "egg", "g1", "g2", "g3", "unico"];
+/** Ordem natural: 33, 33/34, 34, 35, 35/36 … depois PP, P, M, G, GG, Único e demais. */
+export function sortSizes(list: string[]): string[] {
+  const rank = (s: string): [number, number, number, string] => {
+    const k = dictKey(s);
+    const m = /^(\d+(?:[.,]\d+)?)(?:\/(\d+(?:[.,]\d+)?))?$/.exec(k);
+    if (m) return [0, parseFloat(m[1].replace(",", ".")), m[2] ? parseFloat(m[2].replace(",", ".")) : -1, k];
+    const li = LETTER_ORDER.indexOf(k);
+    return li >= 0 ? [1, li, 0, k] : [2, 0, 0, k];
+  };
+  return [...list].sort((a, b) => {
+    const x = rank(a), y = rank(b);
+    for (let i = 0; i < 3; i++) if (x[i] !== y[i]) return (x[i] as number) - (y[i] as number);
+    return x[3].localeCompare(y[3]);
+  });
+}
+
+/** Atalho de grade: marca só os tamanhos que existem no dicionário (com a escrita do dicionário). */
+export function gridPreselect(dict: string[], grid: string[]): string[] {
+  return grid.map((g) => findEquivalent(dict, g)).filter((x): x is string => !!x);
+}

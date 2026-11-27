@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ChevronDown, Loader2, Minus, Plus, Share2, X } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -8,11 +8,12 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { supabase } from "@/integrations/supabase/client";
 import { GENDER_VALUES } from "@/lib/productGender";
-import { sanitizeSizeInput } from "@/lib/variantValidation";
+import { isValidColor, isValidSize, sanitizeColorInput, sanitizeSizeInput } from "@/lib/variantValidation";
+import { PickerField, PickerSheet } from "./PickerSheet";
 import { STOCK_LABEL_STORES, applyStockLabelBatch } from "@/lib/labels/stockLabelApi";
 import { buildLabelPdf, expandLabels } from "@/lib/labels/labelPdf";
 import {
-  DESKTOP_DEFAULTS, MasterDraft, SIZE_CHOICES, SIZE_GRIDS, VariantDraft, CreatedVariant, buildCombos, comboKey, duplicateIdFrom,
+  DESKTOP_DEFAULTS, MasterDraft, SIZE_GRIDS, dictKey, findEquivalent, gridPreselect, sortSizes, uniqueByKey, VariantDraft, CreatedVariant, buildCombos, comboKey, duplicateIdFrom,
   emptyMaster, fiscalWarnings, labelQuantities, masterPayload, parseQty, stepQty, totalPairs, validateCreate, variantsPayload,
 } from "./productCreate";
 
@@ -24,15 +25,18 @@ function useCatalogs() {
   return useQuery({
     queryKey: ["m-product-catalogs"], staleTime: 10 * 60_000,
     queryFn: async () => {
-      const [c, b, col] = await Promise.all([
+      const [c, b, col, sz] = await Promise.all([
         supabase.from("product_categories").select("id,name").order("name"),
         supabase.from("product_brands" as any).select("id,name").order("name"),
-        supabase.from("product_colors" as any).select("name").order("name").limit(300),
+        supabase.from("product_colors" as any).select("name").order("name").limit(1000),
+        supabase.from("product_sizes" as any).select("label").limit(1000),
       ]);
       return {
         categories: (c.data || []) as { id: string; name: string }[],
         brands: ((b.data || []) as any[]) as { id: string; name: string }[],
-        colors: [...new Set(((col.data || []) as any[]).map((x) => String(x.name || "").trim()).filter(Boolean))],
+        colors: uniqueByKey(((col.data || []) as any[]).map((x) => String(x.name || ""))),
+        // Cadastro de tamanhos (product_sizes), o mesmo que o gatilho da variação usa para vincular.
+        sizes: sortSizes(uniqueByKey(((sz.data || []) as any[]).map((x) => String(x.label || "")).filter(isValidSize))),
       };
     },
   });
@@ -56,24 +60,21 @@ function Section({ title, summary, warn, open: initial = false, children }: { ti
 export function MasterFields({ m, set, nameHints }: { m: MasterDraft; set: (p: Partial<MasterDraft>) => void; nameHints?: React.ReactNode }) {
   const { data: cat } = useCatalogs();
   const warns = fiscalWarnings(m);
+  const [sheet, setSheet] = useState<null | "cat" | "brand" | "gender">(null);
   return (
     <div className="space-y-3">
       <Section title="Dados principais" open summary={m.name || "Nome, categoria, marca, gênero"}>
         <div><label className={lbl}>Nome *</label><Input className={big} value={m.name} onChange={(e) => set({ name: e.target.value })} />{nameHints}</div>
-        <div><label className={lbl}>Categoria</label>
-          <Input className={big} list="m-cats" value={m.category} placeholder="Escolha ou digite"
-            onChange={(e) => { const c = cat?.categories.find((x) => x.name.toLowerCase() === e.target.value.trim().toLowerCase()); set({ category: e.target.value, categoryId: c?.id || "" }); }} />
-          <datalist id="m-cats">{cat?.categories.map((c) => <option key={c.id} value={c.name} />)}</datalist>
-          {m.category && !m.categoryId && <p className="mt-1 text-xs text-muted-foreground">Categoria nova (texto livre, como no computador).</p>}
-        </div>
-        <div><label className={lbl}>Marca</label>
-          <Input className={big} list="m-brands" value={m.brand} placeholder="Escolha ou digite" onChange={(e) => set({ brand: e.target.value })} />
-          <datalist id="m-brands">{cat?.brands.map((b) => <option key={b.id} value={b.name} />)}</datalist>
-        </div>
-        <div><label className={lbl}>Gênero</label>
-          <select className="h-12 w-full rounded-md border bg-background px-3 text-base" value={m.gender} onChange={(e) => set({ gender: e.target.value })}>
-            <option value="">—</option>{GENDER_VALUES.map((g) => <option key={g} value={g}>{g}</option>)}
-          </select></div>
+        <PickerField label="Categoria" value={m.category} onOpen={() => setSheet("cat")} />
+        {m.category && !m.categoryId && <p className="text-xs text-muted-foreground">Categoria nova (texto livre, como no computador).</p>}
+        <PickerField label="Marca" value={m.brand} onOpen={() => setSheet("brand")} />
+        <PickerField label="Gênero" value={m.gender} placeholder="—" onOpen={() => setSheet("gender")} />
+        {sheet === "cat" && <PickerSheet title="Categoria" options={(cat?.categories || []).map((c) => c.name)} selected={m.category ? [m.category] : []} createLabel="Criar nova"
+          onClose={(v) => { setSheet(null); if (!v) return; const c = cat?.categories.find((x) => dictKey(x.name) === dictKey(v[0])); set({ category: c?.name || v[0].trim(), categoryId: c?.id || "" }); }} />}
+        {sheet === "brand" && <PickerSheet title="Marca" options={(cat?.brands || []).map((b) => b.name)} selected={m.brand ? [m.brand] : []} createLabel="Criar nova"
+          onClose={(v) => { setSheet(null); if (v) set({ brand: v[0].trim() }); }} />}
+        {sheet === "gender" && <PickerSheet title="Gênero" options={["—", ...GENDER_VALUES]} selected={[m.gender || "—"]}
+          onClose={(v) => { setSheet(null); if (v) set({ gender: v[0] === "—" ? "" : v[0] }); }} />}
       </Section>
       <Section title="Preço e custo" summary={`Venda ${m.salePrice || "—"} · Custo ${m.costPrice || "—"}`}>
         <div><label className={lbl}>Preço de venda (R$)</label><Input className={big} inputMode="decimal" value={m.salePrice} onChange={(e) => set({ salePrice: e.target.value.replace(",", ".") })} /></div>
@@ -102,38 +103,69 @@ export function MasterFields({ m, set, nameHints }: { m: MasterDraft; set: (p: P
 
 function ColorSizePicker({ colors, setColors, sizes, setSizes }: { colors: string[]; setColors: (c: string[]) => void; sizes: string[]; setSizes: (s: string[]) => void }) {
   const { data: cat } = useCatalogs();
-  const [c, setC] = useState(""); const [s, setS] = useState("");
-  const addColor = (v: string) => { const t = v.trim(); if (t && !colors.some((x) => comboKey(x, "") === comboKey(t, ""))) setColors([...colors, t]); setC(""); };
-  const toggle = (z: string) => setSizes(sizes.includes(z) ? sizes.filter((x) => x !== z) : [...sizes, z]);
-  const extra = sizes.filter((z) => !SIZE_CHOICES.includes(z));
+  const qc = useQueryClient();
+  const [open, setOpen] = useState<null | "colors" | "sizes">(null);
+  const [s, setS] = useState(""); const [ask, setAsk] = useState<string | null>(null); const [msg, setMsg] = useState<string | null>(null);
+  const dictSizes = cat?.sizes || [];
+  const dictColors = cat?.colors || [];
+  const has = (list: string[], x: string) => list.some((y) => dictKey(y) === dictKey(x));
+  const toggle = (z: string) => setSizes(has(sizes, z) ? sizes.filter((x) => dictKey(x) !== dictKey(z)) : [...sizes, z]);
+  const extra = sizes.filter((z) => !has(dictSizes, z));
+  // Mesmo insert do computador (ColorSizeMultiCombobox); o gatilho da variação também garante e vincula.
+  const saveDict = async (kind: "color" | "size", v: string) => {
+    const slug = v.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim().replace(/\s+/g, " ");
+    const { error } = kind === "color"
+      ? await supabase.from("product_colors").insert({ name: v, slug })
+      : await supabase.from("product_sizes").insert({ label: v, slug, numeric_value: /^[0-9]+$/.test(v) ? Number(v) : null, size_group: /^[0-9]+$/.test(v) ? "adulto" : "outro" } as any);
+    if (error && !/duplicate/i.test(error.message)) toast.error("Não consegui salvar no cadastro agora; ele entra ao criar a variação.");
+    qc.invalidateQueries({ queryKey: ["m-product-catalogs"] });
+  };
+  const typeSize = () => {
+    const t = s.trim(); if (!t) return;
+    const eq = findEquivalent(dictSizes, t);
+    if (eq) { if (!has(sizes, eq)) setSizes([...sizes, eq]); setMsg(`"${eq}" já existe no sistema e foi marcado.`); setS(""); setAsk(null); return; }
+    if (!isValidSize(t)) { setMsg(`Tamanho inválido: "${t}". Use números (39, 34/35) ou PP/P/M/G/GG.`); return; }
+    if (ask !== t) { setAsk(t); setMsg(null); return; }
+    setAsk(null); setS(""); if (!has(sizes, t)) setSizes([...sizes, t]); void saveDict("size", t);
+  };
   return (
     <div className="space-y-4">
       <section className="space-y-2">
         <h3 className="font-semibold">Cores</h3>
-        <form className="flex gap-2" onSubmit={(e) => { e.preventDefault(); addColor(c); }}>
-          <Input className={big} list="m-colors" value={c} onChange={(e) => setC(e.target.value)} placeholder="Digite ou escolha" />
-          <datalist id="m-colors">{cat?.colors.map((x) => <option key={x} value={x} />)}</datalist>
-          <Button type="submit" className="h-12 w-12 shrink-0" aria-label="Adicionar cor"><Plus className="h-5 w-5" /></Button>
-        </form>
+        <Button type="button" variant="outline" className="h-12 w-full justify-start text-base" onClick={() => setOpen("colors")}><Plus className="mr-2 h-5 w-5" />Escolher cores{colors.length ? ` (${colors.length})` : ""}</Button>
         <div className="flex flex-wrap gap-2">{colors.map((x) => (
           <button key={x} type="button" className="flex min-h-[44px] items-center gap-1 rounded-full border bg-primary px-4 text-sm text-primary-foreground" onClick={() => setColors(colors.filter((y) => y !== x))}>{x}<X className="h-4 w-4" /></button>
         ))}</div>
       </section>
       <section className="space-y-2">
-        <h3 className="font-semibold">Tamanhos</h3>
+        <h3 className="font-semibold">Tamanhos <span className="text-xs font-normal text-muted-foreground">({dictSizes.length} no cadastro)</span></h3>
         <div className="flex flex-wrap gap-2">{SIZE_GRIDS.map((g) => (
-          <button key={g.label} type="button" className="min-h-[44px] rounded-full border bg-card px-4 text-sm" onClick={() => setSizes([...new Set([...sizes, ...g.sizes])])}>{g.label}</button>
+          <button key={g.label} type="button" className="min-h-[44px] rounded-full border bg-card px-4 text-sm"
+            onClick={() => { const add = gridPreselect(dictSizes, g.sizes); setSizes([...sizes, ...add.filter((z) => !has(sizes, z))]); if (add.length < g.sizes.length) setMsg(`Atalho ${g.label}: marquei só os tamanhos que existem no cadastro.`); }}>{g.label}</button>
         ))}</div>
-        <div className="grid grid-cols-6 gap-2">{[...SIZE_CHOICES, ...extra].map((z) => (
-          <button key={z} type="button" aria-pressed={sizes.includes(z)} onClick={() => toggle(z)}
-            className={`min-h-[44px] rounded-md border text-sm font-medium ${sizes.includes(z) ? "bg-primary text-primary-foreground" : "bg-card"}`}>{z}</button>
+        <div className="grid grid-cols-5 gap-2">{[...dictSizes, ...extra].map((z) => (
+          <button key={z} type="button" aria-pressed={has(sizes, z)} onClick={() => toggle(z)}
+            className={`min-h-[48px] rounded-md border px-1 text-sm font-medium ${has(sizes, z) ? "bg-primary text-primary-foreground" : "bg-card"}`}>{z}</button>
         ))}</div>
-        <form className="flex gap-2" onSubmit={(e) => { e.preventDefault(); const t = s.trim(); if (t && !sizes.includes(t)) setSizes([...sizes, t]); setS(""); }}>
-          <Input className={big} value={s} onChange={(e) => setS(sanitizeSizeInput(e.target.value))} placeholder="Outro tamanho (ex.: 34/35)" />
+        <form className="flex gap-2" onSubmit={(e) => { e.preventDefault(); typeSize(); }}>
+          <Input className={big} value={s} onChange={(e) => { setS(sanitizeSizeInput(e.target.value)); setAsk(null); setMsg(null); }} placeholder="Digitar tamanho (ex.: 34/35)" />
           <Button type="submit" variant="outline" className="h-12 shrink-0">Incluir</Button>
         </form>
+        {msg && <p className="text-sm text-muted-foreground" role="status">{msg}</p>}
+        {ask && (
+          <div className="space-y-2 rounded-lg border border-destructive p-3" role="alertdialog">
+            <p className="text-sm font-medium">Este tamanho ainda não existe no sistema. Criar "{ask}"?</p>
+            <div className="grid grid-cols-2 gap-2">
+              <Button type="button" variant="outline" className="h-12" onClick={() => setAsk(null)}>Cancelar</Button>
+              <Button type="button" className="h-12" onClick={typeSize}>Criar "{ask}"</Button>
+            </div>
+          </div>
+        )}
         {sizes.length > 0 && <button type="button" className="min-h-[44px] text-sm text-muted-foreground underline" onClick={() => setSizes([])}>Desmarcar todos</button>}
       </section>
+      {open === "colors" && <PickerSheet title="Cores" multi options={dictColors} selected={colors} createLabel="Criar nova cor"
+        confirmCreate={{ question: (v) => `Esta cor ainda não existe no sistema. Criar "${v}"?`, validate: (v) => isValidColor(sanitizeColorInput(v)) && sanitizeColorInput(v) === v ? null : `Cor inválida: "${v}". Cor não pode ter números.` }}
+        onClose={(v) => { setOpen(null); if (!v) return; v.filter((x) => !has(dictColors, x)).forEach((x) => void saveDict("color", x)); setColors(uniqueByKey(v)); }} />}
     </div>
   );
 }
