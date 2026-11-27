@@ -2087,6 +2087,20 @@
       "when": 1795772369195,
       "tag": "0297_mobile_masters_list",
       "breakpoints": true
+    },
+    {
+      "idx": 298,
+      "version": "7",
+      "when": 1795781047007,
+      "tag": "0298_mobile_product_create",
+      "breakpoints": true
+    },
+    {
+      "idx": 299,
+      "version": "7",
+      "when": 1795781151412,
+      "tag": "0299_mobile_product_create_fix",
+      "breakpoints": true
     }
   ]
 }

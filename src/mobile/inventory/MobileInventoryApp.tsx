@@ -1,7 +1,7 @@
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { Link, Route, Routes, useNavigate, useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { ArrowLeft, Camera, Loader2, Monitor, Package, Search, Tag, ClipboardCheck } from "lucide-react";
+import { ArrowLeft, Camera, Plus, Pencil, Loader2, Monitor, Package, Search, Tag, ClipboardCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useProductColorPhotosMode } from "@/hooks/useProductColorPhotosMode";
@@ -10,6 +10,7 @@ import { setDesktopPreference } from "./redirect";
 import { MobileColorPhotos } from "./MobileColorPhotos";
 import { MobileLabelCount } from "./MobileLabelCount";
 import { MobileStockBalance } from "./MobileStockBalance";
+import { MobileAddVariants, MobileEditProduct, MobileNewProduct } from "./MobileProductCreate";
 import { supabase } from "@/integrations/supabase/client";
 import { firstLegacyThumbnails } from "@/components/inventory/legacyProductSummary";
 import { CategorySheet, FilterChips, ProductList } from "./MobileProductList";
@@ -86,6 +87,9 @@ function SearchHome() {
         </Button>
       </form>
       <FilterChips filters={filters} onChange={setFilters} catNames={catNames} onOpenCats={() => setCatsOpen(true)} />
+      <Button asChild variant="outline" className="h-14 w-full text-base">
+        <Link to="/m/estoque/novo"><Plus className="mr-2 h-5 w-5" /> Novo produto</Link>
+      </Button>
       <Button asChild className="h-14 w-full text-base">
         <Link to="/m/estoque/balanco"><ClipboardCheck className="mr-2 h-5 w-5" /> Balanço por bipagem</Link>
       </Button>
@@ -134,6 +138,10 @@ function ProductSheet() {
       <Button asChild variant="outline" className="h-14 w-full text-base">
         <Link to={`/m/estoque/produto/${masterId}/etiquetas`}><Tag className="mr-2 h-5 w-5" /> Etiquetas / contagem</Link>
       </Button>
+      <div className="grid grid-cols-2 gap-2">
+        <Button asChild variant="outline" className="h-14"><Link to={`/m/estoque/produto/${masterId}/variacoes`}><Plus className="mr-1 h-5 w-5" /> Cor / tamanho</Link></Button>
+        <Button asChild variant="outline" className="h-14"><Link to={`/m/estoque/produto/${masterId}/editar`}><Pencil className="mr-1 h-5 w-5" /> Editar dados</Link></Button>
+      </div>
       {photosOn && <MobileColorPhotos masterId={masterId} variantColors={[...new Set(data.variants.map((v) => v.color || "").filter(Boolean))]} />}
       <ul className="space-y-2">
         {rows.map(({ variant: v, total: t, perStore }) => (
@@ -156,6 +164,9 @@ export default function MobileInventoryApp() {
     <Routes>
       <Route index element={<SearchHome />} />
       <Route path="produto/:masterId" element={<ProductSheet />} />
+      <Route path="novo" element={<MobileNewProduct shell={Shell} />} />
+      <Route path="produto/:masterId/variacoes" element={<MobileAddVariants shell={Shell} />} />
+      <Route path="produto/:masterId/editar" element={<MobileEditProduct shell={Shell} />} />
       <Route path="balanco" element={<MobileStockBalance shell={Shell} />} />
       <Route path="produto/:masterId/etiquetas" element={<MobileLabelCount shell={Shell} />} />
     </Routes>

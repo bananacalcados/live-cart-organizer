@@ -16404,6 +16404,33 @@ export type Database = {
         }
         Relationships: []
       }
+      mobile_product_requests: {
+        Row: {
+          created_at: string
+          kind: string
+          master_id: string | null
+          request_id: string
+          result: Json | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          kind: string
+          master_id?: string | null
+          request_id: string
+          result?: Json | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          kind?: string
+          master_id?: string | null
+          request_id?: string
+          result?: Json | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       model_number_tokens: {
         Row: {
           token: string
@@ -31683,6 +31710,15 @@ export type Database = {
       _group_draft_owner: { Args: { p_id: string }; Returns: string }
       _group_draft_signature: { Args: { p_id: string }; Returns: string }
       _is_group_staff: { Args: never; Returns: boolean }
+      _mobile_can_create: { Args: never; Returns: boolean }
+      _mobile_check_created: {
+        Args: { p_master_id: string; p_variant_ids: string[] }
+        Returns: Json
+      }
+      _mobile_check_payload: {
+        Args: { p_store_id: string; p_variants: Json }
+        Returns: undefined
+      }
       _mobile_cycle_zero_rows: {
         Args: { p_cycle_id: string; p_scope: string }
         Returns: {
@@ -31695,6 +31731,16 @@ export type Database = {
           stock: number
           variant_id: string
         }[]
+      }
+      _mobile_name_key: { Args: { p: string }; Returns: string }
+      _mobile_pos_sync: {
+        Args: {
+          p_master_id: string
+          p_store_id: string
+          p_variant_ids: string[]
+          p_write_pmd: boolean
+        }
+        Returns: undefined
       }
       _norm_concrete_gateway: { Args: { p: string }; Returns: string }
       _pm_pmd_sync_in_progress: { Args: never; Returns: boolean }
@@ -34366,6 +34412,25 @@ export type Database = {
         Args: { p_definition_id: string }
         Returns: Json
       }
+      mobile_add_variants: {
+        Args: {
+          p_master_id: string
+          p_request_id: string
+          p_store_id: string
+          p_variants: Json
+        }
+        Returns: Json
+      }
+      mobile_create_product: {
+        Args: {
+          p_gender?: string
+          p_master: Json
+          p_request_id: string
+          p_store_id: string
+          p_variants: Json
+        }
+        Returns: Json
+      }
       mobile_cycle_conference: {
         Args: {
           p_cycle_id: string
@@ -34421,6 +34486,15 @@ export type Database = {
           total_count: number
           total_stock: number
           variant_count: number
+        }[]
+      }
+      mobile_product_name_hints: {
+        Args: { p_limit?: number; p_term: string }
+        Returns: {
+          exact: boolean
+          id: string
+          name: string
+          sku_root: string
         }[]
       }
       next_event_wa_initial_variant: {

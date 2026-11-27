@@ -99,3 +99,8 @@
 - [x] Conferir regra de vendas durante contagem (ajuste B) e prazo de 12h (ajuste C)
 - [x] Contagem somada por aparelho (ajuste A), conferência, zerar (b)/(a), desfazer 2 dias
 - [x] Testes em rollback + celular 390x844; desktop sem mudança
+
+# Estoque no celular — criar produto e variações
+- [x] Novo produto (todos os campos do computador, saldo inicial por loja, PDF de etiquetas)
+- [x] Adicionar cor/tamanho e editar dados na ficha
+- [x] Testes em rollback + comparação com o computador + celular 390x844
