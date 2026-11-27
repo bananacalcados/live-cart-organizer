@@ -1,117 +1,99 @@
-# Balanço geral por bipagem no celular (Fase 3) — plano
+# Criar produtos e variações pelo celular (/m/estoque)
 
-## 1. Como funciona hoje no computador
+## 1. Como o computador faz hoje
 
-Hoje existem dois "balanços" diferentes.
+**Produto novo** (Estoque > Legacy > Novo produto):
+1. A tela confere: nome obrigatório, **loja do estoque inicial obrigatória**, ao menos 1 variação e toda variação com cor e tamanho. Tamanho só número (39, 34/35) ou PP/P/M/G/GG. Cor não pode ser só número.
+2. Se a marca digitada for nova, ela entra no catálogo de marcas (num passo separado).
+3. Uma única função do banco cria o pai e todas as variações de uma vez (tudo-ou-nada). Ela também:
+   - confere a permissão (acesso ao Estoque ou admin);
+   - gera o código do pai automaticamente;
+   - gera o SKU de cada variação (código do pai + cor + tamanho, com -2, -3 se já existir);
+   - gera um código de barras EAN-13 único (789…), conferido contra o cadastro e o PDV;
+   - usa fiscal padrão (NCM 64039900, origem 0, UN).
+4. Ao gravar cada variação, gatilhos que já existem:
+   - criam o **código interno da etiqueta** (cor e tamanho);
+   - ligam a cor e o tamanho ao dicionário;
+   - limpam o preço da variação igual ao do pai;
+   - levam mudanças de preço e nome ao PDV.
+5. Depois, num **segundo passo separado**, uma função cria a linha no PDV para cada loja ativa. A loja escolhida recebe o estoque inicial (com registro de ajuste) e as outras ficam com zero. Também é feito o espelho no catálogo unificado.
+   - Se esse passo falhar, o produto fica criado sem PDV, com aviso e o botão "Enviar ao PDV" para reenviar.
+6. O gênero, se informado, é gravado num terceiro passo.
 
-**A) Estoque > Balanço > Iniciar Balanço (antigo)**
-- Escopos: Total (zera tudo da loja que não foi bipado), Parcial (só confere o que foi bipado) e Total Inteligente (zera só os tamanhos não bipados dos modelos que tiveram ao menos um tamanho bipado).
-- Cada bipe grava na hora uma linha da contagem. Código não achado vai para "Pendentes". Já lê a etiqueta nova (código interno da variação) e o código de fábrica.
-- Ao finalizar, o saldo do PDV daquela loja é sobrescrito pelo contado. Cada mudança vira um ajuste com o saldo anterior e o novo.
-- Fraquezas:
-  - No Total, o próprio navegador baixa a loja inteira e insere os não bipados.
-  - Não tem trava real contra duas contagens na mesma loja: a tela só abre a mais recente.
-  - Não desconta vendas feitas durante a contagem.
-  - Não tem botão Desfazer: o saldo anterior fica só no ajuste.
-- Foi usado 3 vezes.
+**Adicionar variação** (Editar produto):
+- Cada variação nova é gravada uma a uma pela própria tela, que antes gera o SKU e o código de barras. Também dá para digitar SKU e código manualmente.
+- Depois, outra função manda só as variações novas ao PDV, com estoque na loja escolhida.
+- **Não é tudo-ou-nada:** se a internet cair no meio, parte das variações fica criada.
 
-**B) Estoque > Inventário (novo, feito nas Fases 3/4)**
-- Abrir um inventário na loja trava: só um aberto por loja.
-- A contagem é feita por lotes de etiquetas no modo Balanço, cada lote com histórico em "Etiquetas e Balanços" e **Desfazer por lote**.
-- O balanço desconta do contado os pedidos ainda na Expedição.
-- O lote recusa contagem aberta há mais de 12 horas ("contagem expirada").
-- O lote recusa loja de simulação.
-- O "Zerar não contados":
-  - roda no servidor, 100 por vez, com parada a qualquer momento;
-  - exige digitar ZERAR e exige ao menos 1 item contado;
-  - só fica liberado depois de um balanço real e um Desfazer de teste;
-  - pode ser limitado a uma lista de variações.
-- Relatório paginado e CSV ao encerrar.
+**Contra duplicidade:**
+- O banco já impede repetir o mesmo código do pai, SKU ou código de barras, e repetir a mesma cor+tamanho no mesmo produto (escrita idêntica).
+- **Nome repetido não é bloqueado:** dá para criar dois produtos com o mesmo nome.
+- "Preto" e "preto " contam como diferentes (não há regra de maiúsculas e espaços).
 
-**Loja hoje:**
-- Pérola: 2.016 linhas, 1.605 com saldo e 3.718 pares.
-- Centro: 1.093 linhas, 746 com saldo e 1.037 pares.
-- Site/Live: toda em zero (regra da Pérola).
+**Shopify:** criar ou editar pelo computador **não publica nada** na Shopify. Só os botões manuais fazem isso.
 
 ## 2. Proposta para o celular
 
-Usar o **motor do Inventário (B)**, que já é seguro, trava a loja e desfaz. Nenhuma regra nova de saldo.
+**"Novo produto"** (botão na tela inicial), em uma coluna:
+1. Nome (com aviso de possível duplicado), categoria, marca, preço de venda e custo.
+2. Cores: digitar ou escolher entre as já usadas.
+3. Tamanhos: atalhos 33–39, 34–40, 35–40, PP–GG e Único, mais a marcação de cada tamanho.
+4. Revisão: "Serão criadas N variações", com a lista.
+5. Criar e abrir direto a ficha do produto (fotos e etiquetas já existem lá).
 
-**Início (tela inicial do /m/estoque)**
-- Botão grande "Balanço por bipagem", e depois escolha da loja (só Centro e Pérola).
-- Se a loja já tem inventário aberto, aparece "Retomar inventário #N", com quem abriu e quando. Se não tem, "Abrir inventário".
-- Escolha do escopo, explicado na seção abaixo.
+**"Adicionar cor / tamanho"** (na ficha):
+- Mesma escolha de cores e tamanhos.
+- Na revisão, as combinações que já existem aparecem marcadas e travadas; só as novas são criadas.
 
-**Contagem**
-- Campo sempre focado, para o leitor físico, e botão de câmera.
-- O código é reconhecido pela mesma busca do computador (etiqueta nova, código de fábrica e SKU).
-- O último item aparece em destaque, com foto, cor, tamanho e quantas unidades já foram contadas, além do total de pares.
-- Também tem:
-  - botões "Desfazer último bipe" e "Editar quantidade";
-  - bipe curto e vibração no acerto, som diferente no erro.
-- Código não reconhecido vai para a lista "Não reconhecidos" e a contagem continua. Essa lista nunca zera nada, só aparece na conferência.
-- **Internet instável:** os bipes ficam guardados no aparelho e vão para o servidor em lotes a cada ~20 bipes ou 30 s, mandando sempre o **total acumulado** de cada variação.
-  - Como o modo Balanço define o saldo final e não soma, reenviar o mesmo lote não duplica nada.
-  - Sem internet, o celular continua contando e mostra "N bipes aguardando envio".
-  - Concluir fica bloqueado enquanto houver bipe sem enviar.
-- Não tem atualização automática: a tela só fala com o servidor ao enviar lotes e ao abrir a conferência.
+**Estoque inicial — recomendação: nascer com saldo ZERO.**
+- O saldo entra pela contagem por etiquetas, que já existe, já confirma o saldo e já fica no histórico.
+- Isso evita lançar estoque às cegas e evita a regra da "loja obrigatória" no celular.
+- O produto ainda é criado no PDV em todas as lojas ativas (com zero), para poder vender e etiquetar.
 
-**Conferência obrigatória antes de zerar** (lida no servidor, que é a mesma fonte do relatório do Inventário)
-- Quantas variações e pares foram contados.
-- **Quantas variações e pares serão ZERADOS**, com lista pesquisável e valor em custo e em venda.
-- Diferenças entre o contado e o sistema.
-- Quantos ficaram em "Não reconhecidos" e quantos bipes estão pendentes (este número precisa ser 0).
-- Confirmação dupla:
-  1. um botão "Revisei a lista";
-  2. digitar o número exato de pares que serão zerados, e o servidor ainda exige ZERAR.
-- Escopos:
-  - **(b) Só os produtos com algum tamanho bipado: PADRÃO RECOMENDADO.** Zera só os tamanhos esquecidos de modelos que você contou. Concluir cedo demais não zera a loja.
-  - (a) Loja inteira: só com o aviso extra "Isto zera X pares da loja toda".
-  - (c) Por marca ou categoria escolhida no início: precisa de um pequeno ajuste no servidor, que já recebe a lista de variações. Sugiro deixar para depois.
-- O zeramento roda 100 por vez, com barra de progresso e botão Parar, exatamente como no computador.
+**Aviso de duplicado:** ao digitar o nome, espera 400 ms e faz uma busca no servidor (até 5 nomes parecidos, com link para abrir). É só aviso, não bloqueia. Sem atualização automática.
 
-**Depois de concluir**
-- Relatório do inventário (o mesmo do computador), com CSV.
-- **Desfazer já existe por lote.** Proposta: um botão "Desfazer este balanço" que desfaz, em ordem, todos os lotes do inventário, inclusive o zeramento. Vale por X dias (o Matthews define) e só quando nenhum lote mais novo mexeu nas mesmas variações. Se algo vendeu no meio, aquele item é pulado e listado.
+**Quem pode:** a mesma regra do computador (acesso ao Estoque ou admin). O custo só aparece para quem já vê custo no computador.
 
-## 3. Riscos
+**Tudo-ou-nada:**
+- Criar uma função de servidor nova (aditiva) que, num só passo: chama a mesma função de criação do computador (ou, para variações, as mesmas geradoras de SKU e código), cria as linhas do PDV com saldo zero em todas as lojas ativas e registra a marca nova.
+- Se algo falhar, nada fica gravado.
+- Ela recebe um **código de pedido único**: se a internet cair e o celular reenviar, devolve o mesmo produto em vez de criar outro.
+- O computador continua usando o caminho atual, sem mudança.
 
-- **Zerar a loja por engano:** o padrão (b) só toca nos modelos tocados. A opção (a) tem aviso extra e confirmação pelo número de pares. Com zero contados, o servidor já recusa.
-- **Bipe perdido na queda de internet:** a fila fica no aparelho, o reenvio é sem duplicar e concluir fica bloqueado com pendências. Risco restante: limpar os dados do navegador antes de enviar.
-- **Duas pessoas:** a loja só tem um inventário aberto. Duas pessoas no mesmo inventário podem contar juntas, mas a mesma variação em dois celulares fica com o último total enviado. Proposta: aviso "esta variação foi contada por outra pessoa".
-- **Vendas no PDV durante a contagem:** o lote desconta a Expedição pendente. O que vende entre o bipe e o envio do lote é coberto pelo envio frequente (~30 s). Vou conferir no servidor se as vendas feitas depois da abertura também são descontadas, antes de construir.
-- **Site/Live baixa da Pérola:** a conferência nunca oferece a loja Site/Live. A contagem da Pérola é feita com as vendas online já baixadas dela, e o gatilho de redirecionamento não é tocado.
-- **Produto sem etiqueta:** o código de fábrica e o SKU funcionam. Sem código nenhum, vai para "Não reconhecidos". Se não for bipado, entra na lista de zerados e aparece na conferência.
-- **Desempenho:** no pior caso da Pérola, até ~1.600 linhas zeradas em ~16 chamadas de 100, com pausa de 1,5 s (menos de 1 minuto). Os lotes de contagem chegam a no máximo 200 variações por chamada. Sem polling e sem cron.
+**Regras compartilhadas:** a validação de tamanho e cor e a montagem das grades saem do formulário do computador para um arquivo comum. Um teste prova que o computador aceita e recusa exatamente os mesmos valores, antes e depois.
 
-## 4. Técnica
+## 3. Riscos e como ficam
 
-**Migração**
-- Para (a) e (b): nenhuma. Os servidores atuais já recebem a lista de variações.
-- Opcional, depois do OK: uma função para desfazer o inventário inteiro em ordem, verificando acesso de Estoque, com limite de dias. Opcional também o filtro de marca/categoria.
+- **Produto duplicado:** aviso por nome e código de reenvio. Nome igual continua permitido, como hoje.
+- **Variação duplicada:** a trava do banco já existe. A revisão compara cor e tamanho sem diferenciar maiúsculas e espaços, e trava o que já existe.
+- **Preço não chegar ao PDV:** as linhas do PDV são criadas no mesmo passo, com o preço do pai. A variação nasce sem preço próprio. Os gatilhos de preço continuam valendo.
+- **Variação sem código de etiqueta:** o gatilho atual cria o código, mas engole erro. A função nova confere no fim e cancela tudo se faltar código.
+- **Shopify:** nada é chamado.
+- **Internet caindo:** tudo-ou-nada mais o código de reenvio.
+- **Desempenho:** uma chamada ao criar e uma busca por nome com espera de digitação. Sem gatilho novo e sem atualização automática.
 
-**Arquivos**
-- Novos em `src/mobile/inventory/`:
-  - tela do balanço;
-  - fila local;
-  - lógica pura (somar bipes, montar lotes, montar a lista de zerados do escopo b).
-- O que hoje está preso na tela do Inventário (abrir, retomar, resumo, zerar) passa para uma lib, com o computador usando a mesma lib.
-- Testes antes e depois provando que o computador manda exatamente as mesmas chamadas.
+## 4. Detalhes técnicos
 
-**Testes**
-- Lógica pura:
-  - somar e desfazer bipe;
-  - reenvio sem duplicar;
-  - bloqueio com pendências;
-  - escopo (b) não incluindo modelos não tocados.
-- Em transação desfeita no banco: abrir inventário, enviar 2 lotes, reenviar o mesmo lote, zerar escopo (b), desfazer, e conferir que a segunda abertura na mesma loja é recusada. A loja de simulação é recusada pelo servidor, então o teste usa uma loja real dentro de rollback.
-- No celular, 390x844, com gravação simulada: abrir, bipar, ficar sem internet (simulado), reenviar, conferência e confirmação.
-
-**Não conseguirei testar:** leitor físico de verdade, câmera, vibração e som no aparelho, queda real de Wi-Fi na loja, balanço real com zeramento.
+- **Migração aditiva:**
+  - função `mobile_create_product(p_request_id uuid, p_master jsonb, p_variants jsonb)`;
+  - função `mobile_add_variants(p_request_id, p_master_id, p_variants)`;
+  - função `mobile_product_name_hints(p_term, p_limit ≤ 5)`;
+  - tabela `mobile_product_requests` (request_id, user, master_id, criado em) para o reenvio, com RLS só Estoque e grants explícitos;
+  - sem acesso para visitante sem login (anon), checagem de permissão em cada função;
+  - as linhas do PDV são criadas na mesma transação, com a mesma montagem de nome/SKU/barcode/parent_sku das funções atuais (trazida para SQL e coberta por teste que compara o resultado com a função atual).
+- **Arquivos novos:**
+  - `src/lib/products/variantRules.ts` (validação e grades, com o formulário do computador passando a importar daqui);
+  - `src/mobile/inventory/MobileNewProduct.tsx`, `MobileAddVariants.tsx` e `productCreate.ts`, mais testes.
+- **Arquivos alterados:** `MobileInventoryApp.tsx` (botão e rotas) e `ProductMasterForm.tsx` (só o import das regras).
+- **Testes:**
+  - unitários das regras (antes e depois iguais);
+  - SQL com desfazer no fim: criação completa, reenvio igual sem duplicar, variação já existente recusada, falha no meio desfaz tudo, código de etiqueta presente, linha do PDV em cada loja com saldo 0 e preço do pai, usuário sem Estoque recusado, nada na Shopify;
+  - tela 390×844 simulada.
+- **Não dá para testar:** criação real no banco de produção (só com desfazer), celular de verdade e queda real de internet (só simulada).
 
 ## 5. Perguntas para o Matthews
 
-1. Padrão de escopo: concorda com (b) "só os produtos que tiveram algum tamanho bipado"? Libero também (a) "loja inteira"?
-2. Desfazer o balanço inteiro: por quantos dias deve ficar disponível (ex.: 2 dias)?
-3. Quem pode concluir e zerar pelo celular: todo mundo do Estoque ou só admin?
-4. Duas pessoas contam a mesma loja ao mesmo tempo (ex.: cada uma num corredor), ou é sempre uma só?
+1. Saldo inicial sempre zero (entrada pela contagem de etiquetas) ou quer poder digitar saldo por loja na criação?
+2. Nome igual deve só avisar (como hoje) ou bloquear?
+3. Quais atalhos de grade quer (33–39, 34–40, 35–40, PP–GG, Único)? Falta algum?
+4. No celular, mostrar campo de custo ou deixar só preço de venda?
