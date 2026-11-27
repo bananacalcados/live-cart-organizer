@@ -6766,6 +6766,7 @@ export type Database = {
         Row: {
           allow_cashback: boolean
           created_at: string
+          erp_master_id: string | null
           event_id: string
           free_shipping: boolean
           id: string
@@ -6785,6 +6786,7 @@ export type Database = {
         Insert: {
           allow_cashback?: boolean
           created_at?: string
+          erp_master_id?: string | null
           event_id: string
           free_shipping?: boolean
           id?: string
@@ -6804,6 +6806,7 @@ export type Database = {
         Update: {
           allow_cashback?: boolean
           created_at?: string
+          erp_master_id?: string | null
           event_id?: string
           free_shipping?: boolean
           id?: string
@@ -6885,6 +6888,7 @@ export type Database = {
         Row: {
           created_at: string
           discount_price: number
+          erp_master_id: string | null
           event_id: string
           free_shipping: boolean
           has_sizes: boolean
@@ -6902,6 +6906,7 @@ export type Database = {
         Insert: {
           created_at?: string
           discount_price?: number
+          erp_master_id?: string | null
           event_id: string
           free_shipping?: boolean
           has_sizes?: boolean
@@ -6919,6 +6924,7 @@ export type Database = {
         Update: {
           created_at?: string
           discount_price?: number
+          erp_master_id?: string | null
           event_id?: string
           free_shipping?: boolean
           has_sizes?: boolean
@@ -16787,6 +16793,7 @@ export type Database = {
           added_at: string
           color: string | null
           discount_price: number
+          erp_variant_id: string | null
           event_id: string | null
           id: string
           image: string | null
@@ -16797,12 +16804,14 @@ export type Database = {
           shopify_product_id: string | null
           shopify_variant_id: string | null
           size: string | null
+          sku: string | null
           title: string | null
         }
         Insert: {
           added_at?: string
           color?: string | null
           discount_price?: number
+          erp_variant_id?: string | null
           event_id?: string | null
           id?: string
           image?: string | null
@@ -16813,12 +16822,14 @@ export type Database = {
           shopify_product_id?: string | null
           shopify_variant_id?: string | null
           size?: string | null
+          sku?: string | null
           title?: string | null
         }
         Update: {
           added_at?: string
           color?: string | null
           discount_price?: number
+          erp_variant_id?: string | null
           event_id?: string | null
           id?: string
           image?: string | null
@@ -16829,6 +16840,7 @@ export type Database = {
           shopify_product_id?: string | null
           shopify_variant_id?: string | null
           size?: string | null
+          sku?: string | null
           title?: string | null
         }
         Relationships: [
@@ -32752,6 +32764,10 @@ export type Database = {
         Returns: string
       }
       ensure_variant_code: { Args: { p_variant_id: string }; Returns: string }
+      erp_catalog_public_items: {
+        Args: { p_master_ids: string[] }
+        Returns: Json
+      }
       erp_catalog_search: {
         Args: {
           p_ids?: string[]

@@ -216,7 +216,7 @@ Deno.serve(withAccessLog("live-catalog", async (req) => {
 
     if (action === "add") {
       const qty = Math.max(1, Math.min(10, Math.floor(Number(body.quantity || 1))));
-      const { data: cp } = await sb.from("event_catalog_products").select("id, shopify_product_id, title, image_url, original_price, offer_price, allow_cashback, variants, is_active")
+      const { data: cp } = await sb.from("event_catalog_products").select("id, shopify_product_id, erp_master_id, title, image_url, original_price, offer_price, allow_cashback, variants, is_active")
         .eq("id", String(body.catalog_product_id || "")).eq("event_id", (ev as any).id).maybeSingle();
       const P = cp as any;
       const V = P?.is_active ? enabledCatalogVariants<any>(P.variants).find((v: any) => v.variant_id === String(body.variant_id || "")) : null;
@@ -246,7 +246,7 @@ Deno.serve(withAccessLog("live-catalog", async (req) => {
       const idx = products.findIndex((p: any) => p.id === itemId && p.catalog_product_id);
       const promo = P.offer_price != null || !P.allow_cashback;
       if (idx >= 0) products[idx] = { ...products[idx], quantity: Number(products[idx].quantity || 1) + qty };
-      else products.push({ id: products.some((p: any) => p.id === itemId) ? `${itemId}-cat` : itemId, shopifyId: V.variant_id, sku: V.sku || null, title: P.title, variant: V.title, price: Number(P.offer_price ?? P.original_price), quantity: qty, image: V.image || P.image_url || null, catalog_product_id: P.id, promo });
+      else products.push({ id: products.some((p: any) => p.id === itemId) ? `${itemId}-cat` : itemId, shopifyId: /^gid:\/\/shopify\/ProductVariant\//.test(String(V.variant_id)) ? V.variant_id : "", sku: V.sku || null, ...(V.erp_variant_id ? { erp_variant_id: V.erp_variant_id, erp_master_id: V.erp_master_id || P.erp_master_id || null } : {}), title: P.title, variant: V.title, price: Number(P.offer_price ?? P.original_price), quantity: qty, image: V.image || P.image_url || null, catalog_product_id: P.id, promo });
       const up = await sb.from("orders").update({ products }).eq("id", o.id).eq("is_paid", false).select(ORDER_COLS).single();
       if (up.error) throw up.error;
       const coupon = await loadCoupon(o.id, phone);

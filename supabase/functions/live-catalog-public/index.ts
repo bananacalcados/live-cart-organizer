@@ -80,7 +80,7 @@ Deno.serve(withAccessLog("live-catalog-public", async (req) => {
       sb.from("public_catalog_visits").insert({ event_id: ev.id, kind, ...attr, ...extra }).then(({ error }) => { if (error) console.error("[vitrine] visita", error); });
 
     async function catalogRows(ids?: string[]) {
-      let q = sb.from("event_catalog_products").select("id, shopify_product_id, title, image_url, images, original_price, offer_price, allow_cashback, variants, position")
+      let q = sb.from("event_catalog_products").select("id, shopify_product_id, erp_master_id, title, image_url, images, original_price, offer_price, allow_cashback, variants, position")
         .eq("event_id", ev.id).eq("is_active", true);
       if (ids) q = q.in("id", ids);
       const { data } = await q.order("position").limit(200);
@@ -91,9 +91,9 @@ Deno.serve(withAccessLog("live-catalog-public", async (req) => {
       const rows = await catalogRows();
       const catalog = rows.map((p) => {
         const variants = enabledCatalogVariants<any>(p.variants)
-          .map((v: any) => ({ variant_id: v.variant_id, title: v.title, image: v.image || null, available: true }));
+          .map((v: any) => ({ variant_id: v.variant_id, title: v.title, image: v.image || null, available: true, ...(v.erp_variant_id ? { erp_variant_id: v.erp_variant_id } : {}) }));
         return {
-          id: p.id, shopify_product_id: p.shopify_product_id, title: p.title, image_url: p.image_url, images: Array.isArray(p.images) ? p.images : [],
+          id: p.id, shopify_product_id: p.shopify_product_id, erp_master_id: p.erp_master_id || null, title: p.title, image_url: p.image_url, images: Array.isArray(p.images) ? p.images : [],
           original_price: Number(p.original_price), offer_price: p.offer_price != null ? Number(p.offer_price) : null, allow_cashback: !!p.allow_cashback,
           variants, sold_out: !variants.some((v: any) => v.available),
         };
@@ -224,7 +224,7 @@ Deno.serve(withAccessLog("live-catalog-public", async (req) => {
       const idx = products.findIndex((p: any) => p.id === itemId && p.catalog_product_id);
       const promo = P.offer_price != null || !P.allow_cashback;
       if (idx >= 0) products[idx] = { ...products[idx], quantity: Number(products[idx].quantity || 1) + qty };
-      else products.push({ id: products.some((p: any) => p.id === itemId) ? `${itemId}-cat` : itemId, shopifyId: V.variant_id, sku: V.sku || null, title: P.title, variant: V.title, price: Number(P.offer_price ?? P.original_price), quantity: qty, image: V.image || P.image_url || null, catalog_product_id: P.id, promo });
+      else products.push({ id: products.some((p: any) => p.id === itemId) ? `${itemId}-cat` : itemId, shopifyId: /^gid:\/\/shopify\/ProductVariant\//.test(String(V.variant_id)) ? V.variant_id : "", sku: V.sku || null, ...(V.erp_variant_id ? { erp_variant_id: V.erp_variant_id, erp_master_id: V.erp_master_id || P.erp_master_id || null } : {}), title: P.title, variant: V.title, price: Number(P.offer_price ?? P.original_price), quantity: qty, image: V.image || P.image_url || null, catalog_product_id: P.id, promo });
     }
     const up = await sb.from("orders").update({ products }).eq("id", o.id).eq("is_paid", false).select(ORDER_COLS).single();
     if (up.error) throw up.error;

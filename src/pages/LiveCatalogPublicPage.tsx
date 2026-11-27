@@ -19,7 +19,14 @@ const maskCpf = (s: string) => onlyDigits(s).slice(0, 11).replace(/(\d{3})(\d)/,
 const maskCep = (s: string) => onlyDigits(s).slice(0, 8).replace(/(\d{5})(\d)/, "$1-$2");
 
 interface Variant { variant_id: string; title: string; image: string | null; available: boolean }
-interface Product { id: string; shopify_product_id: string; title: string; image_url: string | null; images: string[]; original_price: number; offer_price: number | null; allow_cashback: boolean; variants: Variant[]; sold_out: boolean }
+interface Product { id: string; shopify_product_id: string; erp_master_id?: string | null; title: string; image_url: string | null; images: string[]; original_price: number; offer_price: number | null; allow_cashback: boolean; variants: Variant[]; sold_out: boolean }
+/** Link antigo (id/Shopify) ou novo (produto/variação do ERP, com ou sem "erp-product:"). */
+function matchesFocus(p: Product, focusId: string): boolean {
+  const f = focusId.replace(/^erp-(product|variant):/, "");
+  return p.id === focusId || p.shopify_product_id === focusId || !!p.shopify_product_id?.endsWith(`/${focusId}`)
+    || (!!p.erp_master_id && p.erp_master_id === f) || p.shopify_product_id === `erp-product:${f}`
+    || (p.variants || []).some((v: any) => v.erp_variant_id === f);
+}
 interface Ev { name: string; product_notice: string | null; official_last4: string | null; google_rating: string | null; google_url: string | null }
 interface Line { pid: string; vid: string; qty: number }
 
@@ -34,10 +41,19 @@ async function call(body: Record<string, unknown>) {
 
 function ProductImage({ src, alt }: { src: string | null; alt: string }) {
   const [loaded, setLoaded] = useState(false);
+  const [failed, setFailed] = useState(false);
+  // Sem foto (ou foto que não abre): bloco neutro com o nome, nunca imagem quebrada.
+  if (!src || failed) {
+    return (
+      <div className="flex aspect-[4/5] w-full items-center justify-center overflow-hidden bg-gradient-to-br from-muted to-muted/40 p-4">
+        <span className="line-clamp-4 text-center text-sm font-semibold uppercase tracking-wide text-muted-foreground">{alt}</span>
+      </div>
+    );
+  }
   return (
     <div className="relative aspect-[4/5] w-full overflow-hidden bg-muted">
       {!loaded && <Skeleton className="absolute inset-0" />}
-      {src && <img src={src} alt={alt} loading="lazy" onLoad={() => setLoaded(true)} className={`h-full w-full object-cover transition-opacity duration-500 ${loaded ? "opacity-100" : "opacity-0"}`} />}
+      {src && <img src={src} alt={alt} loading="lazy" onLoad={() => setLoaded(true)} onError={() => setFailed(true)} className={`h-full w-full object-cover transition-opacity duration-500 ${loaded ? "opacity-100" : "opacity-0"}`} />}
     </div>
   );
 }
@@ -97,10 +113,10 @@ export default function LiveCatalogPublicPage() {
 
   const ordered = useMemo(() => {
     if (!focusId) return catalog;
-    const f = catalog.find((p) => p.id === focusId || p.shopify_product_id === focusId || p.shopify_product_id?.endsWith(`/${focusId}`));
+    const f = catalog.find((p) => matchesFocus(p, focusId));
     return f ? [f, ...catalog.filter((p) => p !== f)] : catalog;
   }, [catalog, focusId]);
-  const focused = focusId && ordered[0] && (ordered[0].id === focusId || ordered[0].shopify_product_id === focusId || ordered[0].shopify_product_id?.endsWith(`/${focusId}`)) ? ordered[0] : null;
+  const focused = focusId && ordered[0] && matchesFocus(ordered[0], focusId) ? ordered[0] : null;
 
   const openProduct = useCallback((p: Product, requestedColor?: string | null) => {
     const selectedColor = requestedColor ? parseVariants(p.variants).find((v) => v.color && normalizeCatalogColor(v.color) === normalizeCatalogColor(requestedColor))?.color ?? null : null;

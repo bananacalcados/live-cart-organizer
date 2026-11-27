@@ -41,6 +41,8 @@ export async function computeLiveConditions(
   const items = products.map((p, i) => ({
     ref: i, shopify_product_id: productIdOf(p), shopify_variant_id: String(p.shopifyId || ""),
     quantity: p.quantity || 1, price: Number(p.basePrice ?? p.price),
+    // Item só do ERP: a promoção casa pelo produto do ERP (sem mudar o caso Shopify).
+    ...(p.erp_master_id ? { erp_master_id: p.erp_master_id, erp_variant_id: p.erp_variant_id } : {}),
   }));
   const { data, error } = await db.rpc("compute_live_order_conditions", {
     p_event_id: eventId, p_username: username.replace(/^@/, ""), p_phone: phone || null, p_items: items,

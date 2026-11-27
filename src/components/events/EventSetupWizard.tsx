@@ -241,6 +241,7 @@ export function EventSetupWizard({ event, open, onOpenChange, onCompleted }: Pro
           (data || []).map((o: any) => ({
             id: o.id,
             shopify_product_id: o.shopify_product_id,
+            erp_master_id: o.erp_master_id ?? null,
             product_title: o.product_title || "",
             image: o.image,
             has_sizes: o.has_sizes,
@@ -305,6 +306,7 @@ export function EventSetupWizard({ event, open, onOpenChange, onCompleted }: Pro
         discount_price: toNum(o.discount_price),
         free_shipping: !!o.free_shipping,
         promotion_id: o.promotion_id ?? null,
+        erp_master_id: o.erp_master_id ?? null,
         position: i,
         is_active: true,
       }));

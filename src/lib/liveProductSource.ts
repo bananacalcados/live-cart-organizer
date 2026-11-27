@@ -31,6 +31,42 @@ export function __resetLiveProductSource(value?: LiveProductSource) {
   sourcePromise = value ? Promise.resolve(value) : null;
 }
 
+// Interruptores das fases B/C/D: mesma regra, chave própria; padrão Shopify.
+export type ProductSourceKey = "product_source_crossell" | "product_source_whatsapp" | "product_source_marketing";
+const keyedSources = new Map<ProductSourceKey, Promise<LiveProductSource>>();
+export function getProductSource(key: ProductSourceKey): Promise<LiveProductSource> {
+  let p = keyedSources.get(key);
+  if (!p) {
+    p = (async () => {
+      try {
+        const { data } = await (supabase as any).from("app_settings").select("value").eq("key", key).maybeSingle();
+        const v = typeof data?.value === "string" ? data.value : data?.value?.toString?.();
+        return v === "erp" ? "erp" : "shopify";
+      } catch { return "shopify"; }
+    })();
+    keyedSources.set(key, p);
+  }
+  return p;
+}
+export function __resetProductSource(key: ProductSourceKey, value?: LiveProductSource) {
+  if (value) keyedSources.set(key, Promise.resolve(value)); else keyedSources.delete(key);
+}
+export function useProductSource(key: ProductSourceKey): LiveProductSource | null {
+  const [src, setSrc] = useState<LiveProductSource | null>(null);
+  useEffect(() => { let on = true; getProductSource(key).then((s) => on && setSrc(s)); return () => { on = false; }; }, [key]);
+  return src;
+}
+
+/** Chave de produto usada por promoções: número da Shopify ou "erp:<produto do ERP>". */
+export function promoKeyOf(productId: string | null | undefined, erpMasterId?: string | null): string {
+  const id = String(productId || "");
+  const m = id.match(/^erp-product:(.+)$/);
+  if (m) return `erp:${m[1]}`;
+  if (id.startsWith("erp:")) return id;
+  const digits = id.split("/").pop()?.replace(/\D/g, "") || "";
+  return digits || (erpMasterId ? `erp:${erpMasterId}` : "");
+}
+
 export function useLiveProductSource(): LiveProductSource | null {
   const [src, setSrc] = useState<LiveProductSource | null>(null);
   useEffect(() => { let on = true; getLiveProductSource().then((s) => on && setSrc(s)); return () => { on = false; }; }, []);
@@ -54,7 +90,7 @@ export const isShopifyVariantGid = (id: string | null | undefined) => /^gid:\/\/
 export function parseShopifyQuery(query?: string | null): { ids: string[] | null; term: string | null } {
   const q = String(query || "").trim();
   if (!q) return { ids: null, term: null };
-  const ids = [...q.matchAll(/\bid:([^\s()]+)/g)].map((m) => m[1].split("/").pop() || m[1]).map((x) => x.replace(/^erp-product:/, ""));
+  const ids = [...q.matchAll(/\bid:([^\s()]+)/g)].map((m) => m[1].split("/").pop() || m[1]).map((x) => x.replace(/^erp(-product)?:/, ""));
   if (ids.length) return { ids, term: null };
   const first = q.split(/\s+OR\s+/i)[0];
   const term = first.replace(/\b(title|sku|barcode):/gi, "").replace(/\*/g, "").replace(/\s+AND\s+/gi, " ").replace(/["']/g, "").trim();
@@ -146,6 +182,23 @@ export async function fetchLiveProducts(limit = 250, searchQuery?: string, opts?
     return [];
   }
 }
+
+/** Substituto de fetchProducts para catálogo/cross-sell/promoções da live (interruptor product_source_crossell). */
+export async function fetchCrossellProducts(limit = 250, searchQuery?: string, opts?: { newestFirst?: boolean }): Promise<ShopifyProduct[]> {
+  const src = await getProductSource("product_source_crossell");
+  if (src !== "erp") return fetchProducts(limit, searchQuery, opts);
+  try {
+    const { ids, term } = parseShopifyQuery(searchQuery);
+    const { products } = await searchErpCatalog({ ids, term, limit: Math.min(limit, 50) });
+    return products;
+  } catch (e) {
+    console.error("erp_catalog_search", e);
+    return [];
+  }
+}
+
+/** Produto do ERP de um item (master), quando vier da fonte ERP. */
+export const erpMasterOf = (p: ShopifyProduct): string | null => p.node.variants.edges.find((e) => e.node.erp)?.node.erp?.masterId || null;
 
 /** Campos do item do pedido. Produto da Shopify: idêntico ao antigo. Do ERP: grava variação/produto do ERP. */
 export function orderItemIdentity(

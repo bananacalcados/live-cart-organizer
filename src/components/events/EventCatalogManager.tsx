@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { PublicCatalogLinkPanel } from "./PublicCatalogLinkPanel";
 import { supabase } from "@/integrations/supabase/client";
-import { fetchProducts, type ShopifyProduct } from "@/lib/shopify";
+import type { ShopifyProduct } from "@/lib/shopify";
+import { fetchCrossellProducts as fetchProducts, erpMasterOf, searchErpCatalog } from "@/lib/liveProductSource";
 import { mergeVariants, pricingFromShopify, variantsFromShopify, type CatalogVariant } from "@/lib/liveCatalog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -28,9 +29,10 @@ interface CatalogRow {
   is_active: boolean;
   free_shipping: boolean;
   promotion_id: string | null;
+  erp_master_id: string | null;
 }
 
-const COLS = "id,shopify_product_id,product_handle,title,image_url,original_price,offer_price,allow_cashback,variants,position,is_active,free_shipping,promotion_id";
+const COLS = "id,shopify_product_id,product_handle,title,image_url,original_price,offer_price,allow_cashback,variants,position,is_active,free_shipping,promotion_id,erp_master_id";
 const brl = (n: number) => n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 const db = supabase as any;
 
@@ -88,7 +90,8 @@ export function EventCatalogManager({ eventId }: { eventId: string }) {
     const { data, error } = await db.from("event_catalog_products").insert({
       event_id: eventId,
       shopify_product_id: p.node.id,
-      product_handle: p.node.handle,
+      erp_master_id: erpMasterOf(p),
+      product_handle: p.node.handle || null,
       title: p.node.title,
       image_url: images[0] ?? null,
       images,
@@ -104,6 +107,19 @@ export function EventCatalogManager({ eventId }: { eventId: string }) {
 
   const refreshFromShopify = async (row: CatalogRow) => {
     setBusy(row.id);
+    if (row.erp_master_id) {
+      // Produto escolhido pelo ERP: atualiza pelo ERP (preço do pai, fotos por cor).
+      const { products } = await searchErpCatalog({ ids: [row.erp_master_id], limit: 1 }).catch(() => ({ products: [] as ShopifyProduct[] }));
+      const p = products[0];
+      if (!p) { setBusy(null); toast.error("Produto não encontrado no ERP"); return; }
+      const images = p.node.images.edges.map((e) => e.node.url);
+      await patchRow(row.id, {
+        title: p.node.title, image_url: images[0] ?? null, images,
+        original_price: pricingFromShopify(p).original_price,
+        variants: mergeVariants(row.variants, variantsFromShopify(p)),
+      } as any, "Atualizado do ERP");
+      setBusy(null); return;
+    }
     let found = (await fetchProducts(20, row.product_handle ? `handle:${row.product_handle}` : row.title)).find((p) => p.node.id === row.shopify_product_id);
     if (!found) found = (await fetchProducts(50, row.title)).find((p) => p.node.id === row.shopify_product_id);
     if (!found) { setBusy(null); toast.error("Produto não encontrado na Shopify"); return; }

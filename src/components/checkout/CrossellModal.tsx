@@ -214,8 +214,8 @@ export default function CrossellModal({
                         loading="lazy"
                       />
                     ) : (
-                      <div className="w-full h-full flex items-center justify-center text-muted-foreground text-xs">
-                        Sem imagem
+                      <div className="w-full h-full flex items-center justify-center p-3 text-center text-muted-foreground text-xs font-semibold uppercase">
+                        {block.title}
                       </div>
                     )}
                     {discountPct > 0 && (

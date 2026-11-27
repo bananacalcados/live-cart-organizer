@@ -9,6 +9,9 @@ export interface CatalogVariant {
   price: number;
   image: string | null;
   enabled: boolean;
+  /** Só quando o produto veio do ERP (product_source_crossell="erp"). */
+  erp_variant_id?: string;
+  erp_master_id?: string;
 }
 
 const SIZE_RX = /tamanho|numera|size|n[uú]mero/i;
@@ -24,6 +27,7 @@ export function variantsFromShopify(p: ShopifyProduct): CatalogVariant[] {
     price: parseFloat(v.price.amount),
     image: v.image?.url ?? p.node.images.edges[0]?.node.url ?? null,
     enabled: true,
+    ...(v.erp ? { erp_variant_id: v.erp.variantId, erp_master_id: v.erp.masterId } : {}),
   }));
 }
 

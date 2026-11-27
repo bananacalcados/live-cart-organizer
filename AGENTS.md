@@ -71,6 +71,7 @@
 - Refund, Correios, Live Crossell/paid-chat and live catalog invite rules live in supabase/functions/AGENTS.md.
 - Dispatch tracking: worker tags our live links with ?d= via _shared/dispatch-tracking.ts; clicks only via RPC dispatch_link_click, linking only via dispatch_link_access, keeping ad_touch and dispatch_touch side by side so neither overwrites the other.
 - Editing a dispatch with stored recipients updates only dispatch_history; only 'Recalcular público' re-enqueues (keeps tracking codes).
+- ERP product source: switches default shopify; ERP-only ids erp-product:/erp-variant:, promo key erp:<master>; public pages use service-only erp_catalog_public_items.
 - Live catalog: own tables; catalog orders skip cart-notify; public via live-catalog; one open cart/customer. Editors reuse EventCatalogManager (wizard Crossell).
 - PDV revenue/commission reads sales via lib/pos/commissionSales (live by expedition finish) + saleNet so screens agree.
 - Chat side panels: EmbeddedDialog inside a Dialog root (DialogTitle throws otherwise).

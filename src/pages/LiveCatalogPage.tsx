@@ -38,10 +38,19 @@ async function call(body: Record<string, unknown>) {
 
 function ProductImage({ src, alt }: { src: string | null; alt: string }) {
   const [loaded, setLoaded] = useState(false);
+  const [failed, setFailed] = useState(false);
+  // Sem foto (ou foto que não abre): bloco neutro com o nome, nunca imagem quebrada.
+  if (!src || failed) {
+    return (
+      <div className="flex aspect-[4/5] w-full items-center justify-center overflow-hidden bg-gradient-to-br from-muted to-muted/40 p-4">
+        <span className="line-clamp-4 text-center text-sm font-semibold uppercase tracking-wide text-muted-foreground">{alt}</span>
+      </div>
+    );
+  }
   return (
     <div className="relative aspect-[4/5] w-full overflow-hidden bg-muted">
       {!loaded && <Skeleton className="absolute inset-0" />}
-      {src && <img src={src} alt={alt} loading="lazy" onLoad={() => setLoaded(true)} className={`h-full w-full object-cover transition-opacity duration-500 ${loaded ? "opacity-100" : "opacity-0"}`} />}
+      {src && <img src={src} alt={alt} loading="lazy" onLoad={() => setLoaded(true)} onError={() => setFailed(true)} className={`h-full w-full object-cover transition-opacity duration-500 ${loaded ? "opacity-100" : "opacity-0"}`} />}
     </div>
   );
 }

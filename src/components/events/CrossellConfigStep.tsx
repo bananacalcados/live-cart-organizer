@@ -6,7 +6,8 @@ import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { fetchProducts, ShopifyProduct } from "@/lib/shopify";
+import type { ShopifyProduct } from "@/lib/shopify";
+import { fetchCrossellProducts as fetchProducts, erpMasterOf } from "@/lib/liveProductSource";
 import { useEventPromotions } from "./LivePromotionsManager";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
@@ -20,6 +21,7 @@ export interface CrossellOfferDraft {
   discount_price: string;
   free_shipping?: boolean;
   promotion_id?: string | null;
+  erp_master_id?: string | null;
 }
 
 interface Props {
@@ -86,6 +88,7 @@ export function CrossellConfigStep({ eventId, noCrossell, offers, onChange }: Pr
     if (offers.some((o) => o.shopify_product_id === p.node.id)) return;
     const draft: CrossellOfferDraft = {
       shopify_product_id: p.node.id,
+      erp_master_id: erpMasterOf(p),
       product_title: p.node.title,
       image: p.node.images?.edges?.[0]?.node?.url || null,
       has_sizes: detectHasSizes(p),

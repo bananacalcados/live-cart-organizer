@@ -1,6 +1,12 @@
 import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { fetchLiveProducts as fetchProducts, isErpOnlyId } from "@/lib/liveProductSource";
+import { fetchLiveProducts, fetchCrossellProducts, getProductSource, isErpOnlyId, promoKeyOf } from "@/lib/liveProductSource";
+
+/** Com product_source_crossell="erp" a promoção aceita produto só do ERP (chave erp:<id>). */
+async function promoFetch(limit: number, q: string) {
+  const erp = (await getProductSource("product_source_crossell")) === "erp";
+  return { erp, ps: await (erp ? fetchCrossellProducts : fetchLiveProducts)(limit, q) };
+}
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -112,8 +118,8 @@ function PromotionDialog({ eventId, promo, onClose, onSaved }: { eventId: string
   useEffect(() => {
     const ids = (promo?.shopify_product_ids || []).filter(Boolean);
     if (!ids.length) return;
-    fetchProducts(Math.min(ids.length, 50), ids.map((i) => `id:${i}`).join(" OR "))
-      .then((ps) => setPicked((cur) => cur.map((c) => ({ ...c, title: ps.find((p) => numId(p.node.id) === c.id)?.node.title || c.title }))))
+    promoFetch(Math.min(ids.length, 50), ids.map((i) => `id:${i}`).join(" OR "))
+      .then(({ ps }) => setPicked((cur) => cur.map((c) => ({ ...c, title: ps.find((p) => promoKeyOf(p.node.id) === c.id)?.node.title || c.title }))))
       .catch(() => {});
   }, [promo?.id]);
 
@@ -131,12 +137,14 @@ function PromotionDialog({ eventId, promo, onClose, onSaved }: { eventId: string
           const { data: master } = await db.from("products_master").select("shopify_product_id").eq("id", mid).maybeSingle();
           const pid = numId(master?.shopify_product_id);
           if (pid) { setResults([{ id: pid, title: `${code} · ${rows[0].product_name}` }]); return; }
+          if ((await getProductSource("product_source_crossell")) === "erp") { setResults([{ id: `erp:${mid}`, title: `${code} · ${rows[0].product_name}` }]); return; }
           toast.warning(`${code}: produto sem vínculo com a Shopify`);
         }
         setResults([]); return;
       }
-      const ps = await fetchProducts(20, `title:*${term}*`);
-      // Promoção casa pelo produto da Shopify: produto só do ERP ainda não entra.
+      const { erp, ps } = await promoFetch(20, `title:*${term}*`);
+      if (erp) { setResults(ps.map((p) => ({ id: promoKeyOf(p.node.id), title: p.node.title }))); return; }
+      // Fonte do cross-sell na Shopify: produto só do ERP não entra em promoção.
       const erpOnly = ps.filter((p) => isErpOnlyId(p.node.id)).length;
       if (erpOnly) toast.info(`${erpOnly} produto(s) só do ERP não podem entrar em promoção por enquanto.`);
       setResults(ps.filter((p) => !isErpOnlyId(p.node.id)).map((p) => ({ id: numId(p.node.id), title: p.node.title })));
@@ -157,11 +165,13 @@ function PromotionDialog({ eventId, promo, onClose, onSaved }: { eventId: string
     const pid = res.data.id as string;
     // Vincula a promoção aos produtos do catálogo/cross-sell da live que estão na lista.
     const [cat, xs] = await Promise.all([
-      db.from("event_catalog_products").select("id,shopify_product_id,promotion_id").eq("event_id", eventId).limit(200),
-      db.from("event_crossell_offers").select("id,shopify_product_id,promotion_id").eq("event_id", eventId).limit(200),
+      db.from("event_catalog_products").select("id,shopify_product_id,erp_master_id,promotion_id").eq("event_id", eventId).limit(200),
+      db.from("event_crossell_offers").select("id,shopify_product_id,erp_master_id,promotion_id").eq("event_id", eventId).limit(200),
     ]);
-    const pick = (rows: any[]) => (rows || []).filter((r) => ids.includes(numId(r.shopify_product_id)) && r.promotion_id !== pid).map((r) => r.id);
-    const unpick = (rows: any[]) => (rows || []).filter((r) => r.promotion_id === pid && !ids.includes(numId(r.shopify_product_id))).map((r) => r.id);
+    const keyOf = (r: any) => (numId(r.shopify_product_id) && !String(r.shopify_product_id).startsWith("erp") ? numId(r.shopify_product_id) : promoKeyOf(r.shopify_product_id, r.erp_master_id));
+    const has = (r: any) => ids.includes(keyOf(r)) || (!!r.erp_master_id && ids.includes(`erp:${r.erp_master_id}`));
+    const pick = (rows: any[]) => (rows || []).filter((r) => has(r) && r.promotion_id !== pid).map((r) => r.id);
+    const unpick = (rows: any[]) => (rows || []).filter((r) => r.promotion_id === pid && !has(r)).map((r) => r.id);
     const ops: Promise<any>[] = [];
     const catIds = pick(cat.data), xsIds = pick(xs.data), catOff = unpick(cat.data), xsOff = unpick(xs.data);
     if (catIds.length) ops.push(db.from("event_catalog_products").update({ promotion_id: pid }).in("id", catIds));

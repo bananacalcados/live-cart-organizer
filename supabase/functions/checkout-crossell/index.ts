@@ -56,6 +56,11 @@ const productGidFromOrderItem = (id: string): string => {
   return idx >= 0 ? id.slice(0, idx) : id;
 };
 
+/** Oferta escolhida pelo ERP e sem produto na Shopify. */
+const isErpOnlyOffer = (o: any) => !!o?.erp_master_id && !String(o?.shopify_product_id || "").startsWith("gid://shopify/");
+/** Item de cross-sell da Shopify (shopifyId) ou do ERP (crossell_variant_id). */
+const sameCrossellVariant = (p: any, variantId: string) => (!!p.shopifyId && p.shopifyId === variantId) || p.crossell_variant_id === variantId;
+
 async function fetchShopifyProduct(numericId: string) {
   const res = await fetch(
     `https://${SHOPIFY_STORE_DOMAIN}/admin/api/2024-01/products/${numericId}.json`,
@@ -124,8 +129,10 @@ serve(withAccessLog("checkout-crossell", async (req) => {
       // Customer sizes + products already owned
       const customerSizes = new Set<string>();
       const ownedProductGids = new Set<string>();
+      const ownedErpMasters = new Set<string>();
       for (const it of originalItems) {
         ownedProductGids.add(productGidFromOrderItem(String(it.id || "")));
+        if (it.erp_master_id) ownedErpMasters.add(String(it.erp_master_id));
         // A variant string can carry one or more size tokens (e.g. "34" or "33/34").
         for (const t of sizeTokens(String(it.variant || ""))) customerSizes.add(t);
       }
@@ -145,9 +152,41 @@ serve(withAccessLog("checkout-crossell", async (req) => {
 
       const blocks: any[] = [];
 
+      // Ofertas só do ERP (sem produto na Shopify): uma consulta só, sem custo nem estoque exato.
+      const erpOffers = (offers || []).filter(isErpOnlyOffer);
+      const erpItems = new Map<string, any>();
+      if (erpOffers.length) {
+        const { data } = await supabase.rpc("erp_catalog_public_items", { p_master_ids: erpOffers.map((o: any) => o.erp_master_id) });
+        for (const m of (data || []) as any[]) erpItems.set(String(m.master_id), m);
+      }
+
       for (const offer of offers || []) {
         // Never offer a product the customer already has
         if (ownedProductGids.has(offer.shopify_product_id)) continue;
+        if (offer.erp_master_id && ownedErpMasters.has(String(offer.erp_master_id))) continue;
+
+        if (isErpOnlyOffer(offer)) {
+          const m = erpItems.get(String(offer.erp_master_id));
+          if (!m) continue;
+          const byColor: Record<string, any> = {};
+          for (const v of m.variants || []) {
+            if (!v.in_stock) continue; // mesma regra da Shopify: só oferece o que tem estoque
+            const color = v.color || "Único";
+            const vTokens = sizeTokens(String(v.size || ""));
+            if (offer.has_sizes && !vTokens.some((t) => customerSizes.has(t))) continue;
+            const key = norm(color) || "unico";
+            if (byColor[key]) continue;
+            byColor[key] = { color, size: offer.has_sizes ? (v.size || null) : null, variantId: `erp-variant:${v.variant_id}`, image: v.image || offer.image || null };
+          }
+          for (const b of Object.values(byColor)) {
+            blocks.push({
+              offer_id: offer.id, shopify_product_id: offer.shopify_product_id, variant_id: b.variantId,
+              title: offer.product_title || m.name, color: b.color, size: b.size, image: b.image,
+              original_price: Number(offer.original_price), discount_price: Number(offer.discount_price),
+            });
+          }
+          continue;
+        }
 
         const prod = await fetchShopifyProduct(
           productGidToNumeric(offer.shopify_product_id),
@@ -231,6 +270,16 @@ serve(withAccessLog("checkout-crossell", async (req) => {
       const discount = Number(offer.discount_price);
       const original = Number(offer.original_price);
 
+      // Oferta só do ERP: a variação precisa ser desse produto (validado no servidor).
+      let erp: { variantId: string; masterId: string; sku: string | null } | null = null;
+      if (isErpOnlyOffer(offer)) {
+        const vid = String(variant_id).replace(/^erp-variant:/, "");
+        const { data } = await supabase.rpc("erp_catalog_public_items", { p_master_ids: [offer.erp_master_id] });
+        const v = ((data?.[0]?.variants || []) as any[]).find((x) => String(x.variant_id) === vid);
+        if (!v) return json({ error: "offer not available" }, 400);
+        erp = { variantId: vid, masterId: String(offer.erp_master_id), sku: v.sku || null };
+      }
+
       // Insert tracking row (ignore duplicate)
       const { error: insErr } = await supabase.from("order_crossell_items").insert({
         order_id: orderId,
@@ -245,6 +294,7 @@ serve(withAccessLog("checkout-crossell", async (req) => {
         original_price: original,
         discount_price: discount,
         qty: 1,
+        ...(erp ? { erp_variant_id: erp.variantId, sku: erp.sku } : {}),
       });
       if (insErr && !String(insErr.message).includes("duplicate")) {
         return json({ error: insErr.message }, 400);
@@ -252,11 +302,12 @@ serve(withAccessLog("checkout-crossell", async (req) => {
 
       // Append to order products (discount isolated on the crossell item)
       const itemId = `${offer.shopify_product_id}-${variant_id}`;
-      const exists = products.some((p) => p.is_crossell && p.shopifyId === variant_id);
+      const exists = products.some((p) => p.is_crossell && sameCrossellVariant(p, variant_id));
       if (!exists) {
         products.push({
           id: itemId,
-          shopifyId: variant_id,
+          shopifyId: erp ? "" : variant_id,
+          ...(erp ? { erp_variant_id: erp.variantId, erp_master_id: erp.masterId, sku: erp.sku, crossell_variant_id: variant_id } : {}),
           title: title || offer.product_title,
           variant: [color, size].filter(Boolean).join(" / "),
           price: discount,
@@ -288,7 +339,7 @@ serve(withAccessLog("checkout-crossell", async (req) => {
         .eq("shopify_variant_id", variant_id);
 
       // Only remove crossell items (never the original order item)
-      const next = products.filter((p) => !(p.is_crossell && p.shopifyId === variant_id));
+      const next = products.filter((p) => !(p.is_crossell && sameCrossellVariant(p, variant_id)));
       const { error: updErr } = await supabase
         .from("orders")
         .update({ products: next })

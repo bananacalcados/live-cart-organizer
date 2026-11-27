@@ -10,7 +10,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
 import { uploadMediaToStorage } from "@/components/MediaAttachmentPicker";
-import { fetchProducts, type ShopifyProduct } from "@/lib/shopify";
+import type { ShopifyProduct } from "@/lib/shopify";
+import { fetchCrossellProducts as fetchProducts } from "@/lib/liveProductSource";
 import { FunctionsHttpError } from "@supabase/supabase-js";
 import { validateCrossellBlocks, type CrossellBlock, type CrossellKind } from "../../../supabase/functions/_shared/crossell-blocks";
 import { toast } from "sonner";
