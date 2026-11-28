@@ -1,4 +1,15 @@
 # Remoção do Tiny — Fase 2, primeiro lote
+## WhatsApp mobile — Android (28/11 17:05 UTC), antes dos follow-ups
+- [x] 1: prévia de áudio gravado antes de envio; teste sem mensagem real
+- [ ] 2/10: cores e fonte oficiais, tokens exclusivos mobile
+- [ ] 3: câmera com vídeo e prévia, limites existentes
+- [ ] 4: galeria com vídeos pelo mesmo envio desktop
+- [ ] 5: citação abre original com histórico sob demanda
+- [ ] 6: arrastar e toque longo com menu, resposta verdadeira preservada
+- [ ] 7: escolha de vendedor como desktop, etiqueta e filtro Minhas
+- [ ] 8: nova conversa reutilizando abertura desktop
+- [ ] 9: proposta somente leitura com métricas reais, sem implementação
+- [ ] Testes 360–412px, sem mensagens reais; um commit por item, sem publicar
 ## PDV mobile — ajustes após teste publicado (28/11 16:39 UTC)
 - [x] 1: endereço completo e diagnóstico de dados por etapa, sem alterar desktop; 10 testes passaram
 - [x] 2: destaque TROCA com o mesmo critério desktop e trava de conclusão preservada

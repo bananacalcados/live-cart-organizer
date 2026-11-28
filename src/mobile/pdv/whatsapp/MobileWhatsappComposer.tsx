@@ -5,12 +5,13 @@ import { toast } from 'sonner';
 import type { AttemptPayload } from '@/lib/chat/mobileSendAttempt';
 import type { MobileMessage } from '@/lib/chat/mobileWhatsappReads';
 import { getMaxSizeForType,getMaxSizeLabel } from '@/constants/mediaLimits';
+import { MobileMediaPreview } from './MobileMediaPreview';
 interface Props { disabled:boolean; quoted:MobileMessage|null; cancelQuote:()=>void; send:(p:AttemptPayload)=>Promise<boolean>; openCatalog:()=>void; openReplies:()=>void; openTemplates?:()=>void }
 const EMOJIS='😀 😂 😍 🥰 😘 😊 😉 🙏 👍 👏 🙌 💪 ❤️ 💛 💚 💜 🔥 ✨ 🎉 🎁 👠 👡 👟 🛍️ 📦 🚚 💳 💰 ✅ ❌ ⏰ 📍 📸 😢 😅 🤩 😎 🤗 👋 💬'.split(' ');
 const fmt=(s:number)=>`${Math.floor(s/60)}:${String(s%60).padStart(2,'0')}`;
 export function MobileWhatsappComposer({disabled,quoted,cancelQuote,send,openCatalog,openReplies,openTemplates}:Props){
  const [text,setText]=useState('');const [file,setFile]=useState<File|null>(null);const [busy,setBusy]=useState(false);const lock=useRef(false);
- const [recording,setRecording]=useState(false);const [seconds,setSeconds]=useState(0);const recorder=useRef<MediaRecorder|null>(null);const stream=useRef<MediaStream|null>(null);const discard=useRef(false);const sendAfterStop=useRef(false);
+ const [recording,setRecording]=useState(false);const [seconds,setSeconds]=useState(0);const recorder=useRef<MediaRecorder|null>(null);const stream=useRef<MediaStream|null>(null);const discard=useRef(false);
  const [sheet,setSheet]=useState<'attach'|'emoji'|null>(null);
  const image=useRef<HTMLInputElement>(null),camera=useRef<HTMLInputElement>(null),document=useRef<HTMLInputElement>(null),audio=useRef<HTMLInputElement>(null),field=useRef<HTMLTextAreaElement>(null);
  useEffect(()=>()=>{discard.current=true;if(recorder.current?.state==='recording')recorder.current.stop();stream.current?.getTracks().forEach(t=>t.stop());},[]);
@@ -36,16 +37,15 @@ export function MobileWhatsappComposer({disabled,quoted,cancelQuote,send,openCat
      stream.current=await navigator.mediaDevices.getUserMedia({audio:true});
      const mime=['audio/webm;codecs=opus','audio/mp4'].find(m=>MediaRecorder.isTypeSupported(m));
      const r=new MediaRecorder(stream.current,mime?{mimeType:mime}:undefined);const chunks:Blob[]=[];
-     discard.current=false;sendAfterStop.current=false;
+     discard.current=false;
      r.ondataavailable=e=>{if(e.data.size)chunks.push(e.data);};
      r.onstop=()=>{setRecording(false);stream.current?.getTracks().forEach(t=>t.stop());if(discard.current)return;
        const f=new File(chunks,`audio.${r.mimeType.includes('mp4')?'m4a':'webm'}`,{type:r.mimeType});
-       // Sending only follows the explicit tap on the green button; cancel discards the recording.
-       if(sendAfterStop.current)void submit(f);else setFile(f);};
+       setFile(f);};
      recorder.current=r;r.start();setRecording(true);
    }catch(e){toast.error(e instanceof Error?e.message:'Não consegui acessar o microfone.');}
  };
- const stopRecording=(andSend:boolean)=>{sendAfterStop.current=andSend;discard.current=false;recorder.current?.stop();};
+ const stopRecording=()=>{discard.current=false;if(recorder.current?.state==='recording')recorder.current.stop();};
  const cancelRecording=()=>{discard.current=true;recorder.current?.stop();};
  const hasContent=!!text.trim()||!!file;
  const attach:[typeof Camera,string,string,()=>void][]=[
@@ -56,7 +56,7 @@ export function MobileWhatsappComposer({disabled,quoted,cancelQuote,send,openCat
  return <footer className="m-wa-composer shrink-0 px-2 pt-2 pb-[max(8px,env(safe-area-inset-bottom))]">
   {(quoted||file)&&<div className="mb-1 space-y-1 rounded-2xl bg-white p-2 shadow-sm">
    {quoted&&<div className="flex items-center gap-2 rounded-lg border-l-4 border-[#1DAA61] bg-[#F0F2F5] p-2 text-sm"><p className="min-w-0 flex-1 truncate">{quoted.message}</p><button type="button" className="m-wa-icon" aria-label="Cancelar resposta" onClick={cancelQuote}><X className="h-6 w-6"/></button></div>}
-   {file&&<div className="flex items-center gap-2 text-sm"><Paperclip className="h-5 w-5 shrink-0 text-[#54656F]"/><span className="min-w-0 flex-1 truncate">{file.type.startsWith('audio/')?'Áudio gravado':file.name}</span><button type="button" className="m-wa-icon" aria-label="Remover arquivo" onClick={()=>setFile(null)}><X className="h-6 w-6"/></button></div>}
+   {file&&<MobileMediaPreview file={file} discard={()=>setFile(null)}/>}
   </div>}
   <div className="flex items-end gap-2">
    {recording?<div className="flex min-h-12 min-w-0 flex-1 items-center gap-2 rounded-full bg-white px-2 shadow-sm"><button type="button" className="m-wa-icon text-destructive" aria-label="Cancelar gravação" onClick={cancelRecording}><Trash2 className="h-6 w-6"/></button><span className="h-3 w-3 animate-pulse rounded-full bg-red-500"/><span role="status" className="flex-1 text-base tabular-nums">{fmt(seconds)} · Gravando…</span></div>
@@ -66,7 +66,7 @@ export function MobileWhatsappComposer({disabled,quoted,cancelQuote,send,openCat
      <button type="button" className="m-wa-icon" aria-label="Anexar" disabled={disabled||busy} onClick={()=>setSheet(sheet==='attach'?null:'attach')}><Paperclip className="h-6 w-6 -rotate-45"/></button>
      {!text.trim()&&<button type="button" className="m-wa-icon" aria-label="Tirar foto" disabled={disabled||busy} onClick={()=>camera.current?.click()}><Camera className="h-6 w-6"/></button>}
    </div>}
-   {recording?<button type="button" className="m-wa-fab" aria-label="Enviar áudio" disabled={disabled} onClick={()=>stopRecording(true)}><Send className="h-6 w-6"/></button>
+   {recording?<button type="button" className="m-wa-fab" aria-label="Parar e ouvir áudio" disabled={disabled} onClick={stopRecording}><Mic className="h-6 w-6"/></button>
    :hasContent?<button type="button" className="m-wa-fab" aria-label="Enviar mensagem" disabled={disabled||busy} onClick={()=>void submit()}>{busy?<Loader2 className="h-6 w-6 animate-spin"/>:<Send className="h-6 w-6"/>}</button>
    :<button type="button" className="m-wa-fab" aria-label="Gravar áudio" disabled={disabled||busy} onClick={()=>void startRecording()}><Mic className="h-6 w-6"/></button>}
   </div>
