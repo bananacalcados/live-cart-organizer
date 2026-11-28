@@ -22,6 +22,7 @@ import { MobileWhatsappCustomer } from './MobileWhatsappCustomer';
 import { MobileWhatsappReplies } from './MobileWhatsappReplies';
 import { toast } from 'sonner';
 import './whatsapp.css';
+import { readQuotedHistory } from './quotedHistory';
 
 const LANES:[string,string][]=[['all','Todas as linhas'],...Object.entries(CHAT_LANE_META).map(([k,v])=>[k,v.title]),['awaiting_payment','Aguardando pagamento'],['archived','Arquivadas'],['dispatch','Disparos']] as [string,string][];
 const listTime=(iso:string)=>{const d=new Date(iso),now=new Date(),y=new Date();y.setDate(now.getDate()-1);if(d.toDateString()===now.toDateString())return d.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});if(d.toDateString()===y.toDateString())return 'Ontem';return d.toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit',year:'2-digit'});};
@@ -110,7 +111,7 @@ export function MobileWhatsapp({storeId,sellerId}:{storeId:string;sellerId:strin
   </main>:<>
    {api.error&&<p role="alert" className="p-2 text-sm text-destructive">{api.error}</p>}
    {!sendNumber&&<Select value={routingNumber||undefined} onValueChange={setRoutingNumber}><SelectTrigger className="h-12" aria-label="Instância de envio"><SelectValue placeholder="Escolha a instância"/></SelectTrigger><SelectContent>{api.numbers.map(n=><SelectItem key={n.id} value={n.id}>{n.label}</SelectItem>)}</SelectContent></Select>}
-   <MobileWhatsappMessages messages={api.messages} attempts={attempts.filter(a=>mobileConversationKey(a.phone,a.numberId)===activeKey)} older={api.hasOlder} loading={api.olderLoading} loadOlder={api.loadOlder} quote={setQuoted} retry={retry}/>
+   <MobileWhatsappMessages key={targetKey} messages={api.messages} attempts={attempts.filter(a=>mobileConversationKey(a.phone,a.numberId)===activeKey)} older={api.hasOlder} loading={api.olderLoading} loadOlder={api.loadOlder} quote={setQuoted} retry={retry} readOriginal={id=>readQuotedHistory(target,id)}/>
    <MobileWhatsappComposer key={targetKey} disabled={!online||busy||!sendNumber} quoted={quoted} cancelQuote={()=>setQuoted(null)} send={p=>send(p)} openCatalog={()=>navigate(`${baseUrl}/catalogo`)} openReplies={()=>navigate(`${baseUrl}/respostas`)} openTemplates={provider==='meta'?()=>navigate(`${baseUrl}/modelos`):undefined}/>
   </>}
  </div>;

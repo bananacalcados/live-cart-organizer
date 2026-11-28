@@ -44,6 +44,7 @@ body[data-mobile-pdv-whatsapp] [role="dialog"] { overflow-wrap:anywhere; }
 .m-wa-composer { background:var(--wa-wallpaper); }
 .m-wa-bubble { position:relative; max-width:82%; padding:6px 8px 4px; border-radius:8px; box-shadow:var(--wa-shadow); font-size:16px; line-height:21px; color:var(--wa-text); }
 .m-wa-bubble.in { background:var(--wa-surface); margin-right:auto; border-top-left-radius:0; }
+.m-wa-bubble[data-highlight="true"] { outline:2px solid var(--wa-brand); outline-offset:2px; }
 .m-wa-bubble.out { background:var(--wa-out); margin-left:auto; border-top-right-radius:0; }
 .m-wa-bubble.tail.in::before { content:""; position:absolute; top:0; left:-8px; border-right:8px solid var(--wa-surface); border-bottom:10px solid transparent; }
 .m-wa-bubble.tail.out::before { content:""; position:absolute; top:0; right:-8px; border-left:8px solid var(--wa-out); border-bottom:10px solid transparent; }

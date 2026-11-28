@@ -4,7 +4,7 @@
 - [x] 2/10: cores e fonte oficiais, tokens exclusivos mobile
 - [x] 3: câmera com vídeo e prévia, limite desktop 64MB, sem limite de duração inventado
 - [x] 4: galeria com fotos/vídeos, prévia e mesmo envio desktop
-- [ ] 5: citação abre original com histórico sob demanda
+- [x] 5: citação abre original e trecho sob demanda, sem baixar histórico inteiro; recentes preservadas
 - [ ] 6: arrastar e toque longo com menu, resposta verdadeira preservada
 - [ ] 7: escolha de vendedor como desktop, etiqueta e filtro Minhas
 - [ ] 8: nova conversa reutilizando abertura desktop
