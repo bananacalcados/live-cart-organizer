@@ -3,7 +3,8 @@
 - [x] 1: endereço completo e diagnóstico de dados por etapa, sem alterar desktop; 10 testes passaram
 - [x] 2: destaque TROCA com o mesmo critério desktop e trava de conclusão preservada
 - [x] 3: apenas lojas ativas não simuladas, inclusive contagens e lista no servidor
-- [ ] 4: conferência completa segura, reaproveitar gravações; PDFs no celular; relatar bloqueios de proteção
+- [x] 4: envio/conferência/emissão confirmada/documentos existentes; mesma gravação e testes sem operação real
+- [ ] 4: compra de nova etiqueta bloqueada — timeout externo pode liberar recompra no caminho desktop; corrigir exige autorização fora do escopo
 - [ ] 5: Instagram Direct apenas, filtros e contadores no servidor mobile
 - [ ] Verificar 360–412px, testes isolados sem nota/etiqueta/mensagem real; um commit por item
 ## PDV mobile — melhorias Expedição/WhatsApp (Matthews 28/11)

@@ -18,6 +18,11 @@ import { brl, EXP_STAGES, fetchExpeditionOrders, nextStage, type ExpOrder, type 
 import { advanceMode, canBulkAdvance, originLabel, shippingMethodOf, shippingTag, sortMobileExpedition, type ShippingTone } from "@/lib/pos/expeditionReadiness";
 import { mobileOrderAddress, mobileAddressLine, mobileMissingOrderData } from "./expeditionData";
 import { buildExchangeLocks, type ExchangeLock } from "@/lib/pos/exchangeReplacementLock";
+import { ExpShippingFields, type ShippingFieldsValue } from "@/components/pos/expedition/ExpShippingFields";
+import { ExpFreightQuotePanel } from "@/components/pos/expedition/ExpFreightQuotePanel";
+import { MobileExpeditionDocuments } from "./MobileExpeditionDocuments";
+import { isCarrierWithTracking, isMototaxi, isPickup } from "@/lib/pos/expedition";
+import "./expedition.css";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { ExpOrderEditDialog } from "@/components/pos/expedition/ExpOrderEditDialog";
 import { expeditionShippingError, finishExpedition, moveExpeditionOrders, type ExpeditionShipping } from "@/lib/pos/expeditionActions";
@@ -53,14 +58,19 @@ function MobileConference({ order, userId, onClose, onRefresh }: { order: Mobile
   const [checks, setChecks] = useState<Record<string, { feet_ok: boolean; has_defect: boolean }>>({});
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
+  const finishLock = useRef(false);
+  const [editing, setEditing] = useState(false);
+  const [shippingFields, setShippingFields] = useState<ShippingFieldsValue>({ carrier: order.shipping_carrier || order.delivery_method || "", courier: order.courier_name || "", courierProviderId: "", cost: order.shipping_cost == null ? "" : String(order.shipping_cost) });
+  const [tracking, setTracking] = useState(order.tracking_code || "");
+  const [trackingUrl, setTrackingUrl] = useState(order.tracking_url || "");
+  const [deliveryDays, setDeliveryDays] = useState(order.delivery_days || "");
   const input = useRef<HTMLInputElement>(null);
   const photos = useItemPhotos(order.items.map(itemPhotoKey));
   const quantity = order.items.reduce((sum, item) => sum + item.quantity, 0);
   const scanned = Object.values(outbox.totals).reduce((sum, total) => sum + total, 0);
   const featured = order.items.find(item => item.id === lastItemId) || order.items[0];
-  const shipping: ExpeditionShipping = { carrier: order.shipping_carrier || order.delivery_method || "", tracking: order.tracking_code || "",
-    trackingUrl: order.tracking_url || "", deliveryDays: order.delivery_days || "", courier: order.courier_name || "",
-    cost: order.shipping_cost == null ? NaN : Number(order.shipping_cost), storeId: order.store_id };
+  const shipping: ExpeditionShipping = { carrier: shippingFields.carrier, tracking, trackingUrl, deliveryDays, courier: shippingFields.courier,
+    courierProviderId: shippingFields.courierProviderId, cost: shippingFields.cost === "" ? NaN : Number(shippingFields.cost), storeId: order.store_id };
   const missingShipping = expeditionShippingError(shipping);
   const complete = order.items.every(item => (outbox.totals[item.id] || 0) === item.quantity && checks[item.id]?.feet_ok);
   useEffect(() => { if (!camera) input.current?.focus(); }, [camera]);
@@ -73,13 +83,14 @@ function MobileConference({ order, userId, onClose, onRefresh }: { order: Mobile
     finally { setCode(""); if (!camera) input.current?.focus(); }
   };
   const conclude = async () => {
-    if (!complete || outbox.pending || outbox.stale || outbox.invalid || !outbox.online || order.exchangeLock?.canConclude === false) return;
+    if (finishLock.current || !complete || outbox.pending || outbox.stale || outbox.invalid || !outbox.online || order.exchangeLock?.canConclude === false) return;
+    finishLock.current = true;
     setBusy(true);
     try {
       const result = await finishExpedition(order, Object.fromEntries(order.items.map(item => [item.id, { scanned: true, feet_ok: !!checks[item.id]?.feet_ok, has_defect: !!checks[item.id]?.has_defect }])), shipping);
       outbox.reset(); toast.success(result.allCompleted ? "Expedição concluída" : "Produtos conferidos; há itens pendentes"); onRefresh(); onClose();
     } catch (failure) { toast.error(failure instanceof Error ? failure.message : (failure as { message?: string })?.message || "Erro ao concluir"); onRefresh(); onClose(); }
-    finally { setBusy(false); }
+    finally { finishLock.current = false; setBusy(false); }
   };
   return <section className="space-y-4" aria-label="Conferência do pedido">
     <div className="flex items-center justify-between gap-2"><div className="min-w-0"><h2 className="break-words text-lg font-bold">{order.customer_name || "Cliente"}</h2><p className="text-xs text-muted-foreground">Pedido {order.id.slice(0, 8).toUpperCase()}</p></div><Button variant="ghost" size="icon" className="h-11 w-11 shrink-0" aria-label="Voltar à fila" onClick={onClose}><X className="h-5 w-5" /></Button></div>
@@ -90,11 +101,18 @@ function MobileConference({ order, userId, onClose, onRefresh }: { order: Mobile
     {outbox.stale && <p role="alert" className="text-sm text-destructive">O pedido mudou. Volte à fila para conferir a etapa atual; os bipes anteriores continuam guardados.</p>}
     {featured && <div className="flex items-center gap-3"><ItemPhotoThumb photo={photos.get(itemPhotoKey(featured))} size={112} medium alt={featured.product_name || "Item"} /><div className="min-w-0"><p className="break-words font-semibold">{featured.product_name}</p><p className="break-words text-sm text-muted-foreground">{featured.variant_name} · {featured.size}</p></div></div>}
     {camera && <MobilePdvCamera onScan={raw => void scan(raw)} onClose={() => setCamera(false)} />}
-    <form className="flex gap-2" onSubmit={event => { event.preventDefault(); void scan(code); }}><Input ref={input} aria-label="Código do produto" value={code} onChange={event => setCode(event.target.value)} onBlur={() => { if (!camera) input.current?.focus(); }} placeholder="Código de barras, etiqueta ou SKU" className="h-12 min-w-0" autoComplete="off" /><Button type="submit" size="icon" className="h-12 w-12 shrink-0" aria-label="Bipar"><ScanBarcode className="h-5 w-5" /></Button></form>
+    <form className="flex gap-2" onSubmit={event => { event.preventDefault(); void scan(code); }}><Input ref={input} aria-label="Código do produto" value={code} onChange={event => setCode(event.target.value)} placeholder="Código de barras, etiqueta ou SKU" className="h-12 min-w-0" autoComplete="off" /><Button type="submit" size="icon" className="h-12 w-12 shrink-0" aria-label="Bipar"><ScanBarcode className="h-5 w-5" /></Button></form>
     <div className="flex gap-2"><Button variant="outline" className="h-12 flex-1" onClick={() => setCamera(value => !value)}><Camera className="mr-2 h-5 w-5" />Câmera</Button><Button variant="outline" className="h-12 flex-1" disabled={scanned === 0 && !outbox.pending} onClick={() => { outbox.undo(); setMessage("Último bipe desfeito"); input.current?.focus(); }}><Undo2 className="mr-2 h-5 w-5" />Desfazer</Button></div>
     {message && <p role="status" className="break-words border-l-4 border-primary pl-3 text-sm font-semibold">{message}</p>}
     <ul className="divide-y">{order.items.map(item => <li key={item.id} className="space-y-2 py-3"><div className="flex items-start justify-between gap-2"><p className="min-w-0 break-words font-medium">{item.product_name} · {item.size}</p><span className="shrink-0 text-sm font-bold">{outbox.totals[item.id] || 0}/{item.quantity}</span></div><label className="flex min-h-11 items-center gap-3 text-sm"><Checkbox checked={!!checks[item.id]?.feet_ok} onCheckedChange={checked => setChecks(current => ({ ...current, [item.id]: { has_defect: current[item.id]?.has_defect || false, feet_ok: checked === true } }))} />Pés e numeração conferidos</label><label className="flex min-h-11 items-center gap-3 text-sm"><Checkbox checked={!!checks[item.id]?.has_defect} onCheckedChange={checked => setChecks(current => ({ ...current, [item.id]: { feet_ok: current[item.id]?.feet_ok || false, has_defect: checked === true } }))} />Tem defeito</label></li>)}</ul>
-    {missingShipping && <><p role="alert" className="text-sm text-destructive">{missingShipping}. Complete na versão completa.</p><FullExpedition label="Conferir dados de envio" /></>}
+    <section className="space-y-3 border-t pt-4" aria-label="Dados e forma de envio"><h3 className="font-bold">Dados e forma de envio</h3><p className="break-words text-sm">{mobileAddressLine(order) || "Endereço não informado"}</p><Button variant="outline" className="h-12 w-full" onClick={() => setEditing(true)}><Pencil className="mr-2 h-5 w-5" />Conferir/corrigir dados do pedido</Button>
+      <ExpShippingFields value={shippingFields} onChange={setShippingFields} />
+      {!order.is_store_pickup && !isMototaxi(shippingFields.carrier) && !isPickup(shippingFields.carrier) && <ExpFreightQuotePanel saleId={order.id} open onSelected={option => { setShippingFields(current => ({ ...current, carrier: option.shipping_carrier, cost: String(option.price), courier: "", courierProviderId: "" })); setDeliveryDays(option.delivery_days == null ? "" : String(option.delivery_days)); }} />}
+      {isCarrierWithTracking(shippingFields.carrier) && <><label className="block space-y-1 text-sm font-medium">Código de rastreio<Input aria-label="Código de rastreio" value={tracking} onChange={e => setTracking(e.target.value)} className="h-12" /></label><label className="block space-y-1 text-sm font-medium">Prazo de entrega (dias úteis)<Input value={deliveryDays} onChange={e => setDeliveryDays(e.target.value)} className="h-12" /></label><label className="block space-y-1 text-sm font-medium">Link de rastreio<Input value={trackingUrl} onChange={e => setTrackingUrl(e.target.value)} className="h-12" /></label></>}
+    </section>
+    <MobileExpeditionDocuments order={{ ...order, shipping_address: { ...order.shipping_address, ...mobileOrderAddress(order) } }} allowEmission />
+    {missingShipping && <p role="alert" className="text-sm text-destructive">{missingShipping}</p>}
+    {editing && <ExpOrderEditDialog order={{ ...order, shipping_address: { ...order.shipping_address, ...mobileOrderAddress(order) } }} storeId={order.store_id} open onOpenChange={setEditing} onSaved={() => { setEditing(false); onRefresh(); }} />}
     <Button className="h-12 w-full text-base" disabled={!complete || outbox.pending > 0 || outbox.stale || outbox.invalid || !!missingShipping || busy || !outbox.online || order.exchangeLock?.canConclude === false} onClick={() => void conclude()}>{busy ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <CheckCircle2 className="mr-2 h-5 w-5" />}Concluir conferência e despacho</Button>
     {outbox.stale && outbox.pending === 0 && <Button variant="outline" className="h-12 w-full" onClick={() => { outbox.reset(); onClose(); }}>Recomeçar com o pedido atualizado</Button>}
   </section>;
@@ -142,7 +160,8 @@ function MobileOrderDetail({ order, onClose, onSaved, onConference }: { order: M
     <ul className="space-y-2">{order.items.map(item => <li key={item.id} className="flex items-center gap-3"><ItemPhotoThumb photo={photos.get(itemPhotoKey(item))} size={56} alt={item.product_name || "Item"} /><div className="min-w-0 flex-1"><p className="break-words text-sm font-semibold">{item.product_name}</p><p className="text-xs text-muted-foreground">{item.variant_name} · {item.size} · {item.quantity} par(es)</p></div></li>)}</ul>
     <Button className="h-12 w-full" onClick={() => setEditing(true)}><Pencil className="mr-2 h-5 w-5" />Editar dados do pedido</Button>
     {onConference && <Button variant="outline" className="h-12 w-full" onClick={onConference}><ScanBarcode className="mr-2 h-5 w-5" />Conferir pedido</Button>}
-    {editing && <ExpOrderEditDialog order={order} storeId={order.store_id} open={editing} onOpenChange={value => !value && setEditing(false)} onSaved={() => { setEditing(false); onSaved(); }} />}
+    <MobileExpeditionDocuments order={order} />
+    {editing && <ExpOrderEditDialog order={{ ...order, shipping_address: { ...order.shipping_address, ...a } }} storeId={order.store_id} open={editing} onOpenChange={value => !value && setEditing(false)} onSaved={() => { setEditing(false); onSaved(); }} />}
   </section>;
 }
 
@@ -211,9 +230,10 @@ export function MobileExpedition({ storeId: _userStore }: { storeId: string }) {
   };
   const detail = list.find(order => order.id === detailId);
   const storeEvents = (store === "all" ? (stores.data || []).map(item => item.id) : [store]).map(id => <StoreEvents key={id} storeId={id} refresh={refresh} />);
-  if (conference && userId) return <>{storeEvents}<MobileConference key={`${conference.id}:${conference.updated_at || conference.expedition_stage}`} order={conference} userId={userId} onClose={() => setConference(null)} onRefresh={refresh} /></>;
-  if (detail) return <>{storeEvents}<MobileOrderDetail order={detail} onClose={() => setDetailId("")} onSaved={refresh} onConference={stage === "conferencia" && userId ? () => { setDetailId(""); setConference(detail); } : undefined} /></>;
-  return <div className={`space-y-3 ${selecting ? "pb-24" : ""}`}>
+  const currentConference = conference ? list.find(o => o.id === conference.id) || conference : null;
+  if (currentConference && userId) return <div className="mobile-expedition-workspace">{storeEvents}<MobileConference key={`${currentConference.id}:${currentConference.updated_at || currentConference.expedition_stage}`} order={currentConference} userId={userId} onClose={() => setConference(null)} onRefresh={refresh} /></div>;
+  if (detail) return <div className="mobile-expedition-workspace">{storeEvents}<MobileOrderDetail order={detail} onClose={() => setDetailId("")} onSaved={refresh} onConference={stage === "conferencia" && userId ? () => { setDetailId(""); setConference(detail); } : undefined} /></div>;
+  return <div className={`mobile-expedition-workspace space-y-3 ${selecting ? "pb-24" : ""}`}>
     {storeEvents}
     <div className="flex gap-2"><Input aria-label="Buscar pedido" placeholder="Nome ou número do pedido" className="h-12 min-w-0" value={search} onChange={event => setSearch(event.target.value)} /><Button variant="outline" size="icon" className="h-12 w-12 shrink-0" aria-label="Atualizar fila" onClick={refresh}><RefreshCw className="h-5 w-5" /></Button></div>
     <div className="flex gap-2">

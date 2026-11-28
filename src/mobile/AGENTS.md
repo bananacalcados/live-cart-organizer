@@ -10,3 +10,4 @@
 - Mobile Expedition lists via mobile_pdv_expedition_ids_v2 (all stores default, SEDEX/moto first) and readiness/bulk rules in lib/pos/expeditionReadiness.ts; bulk advance runs one pos_expedition_transition per order so failures are reported per order. Edits reuse the desktop ExpOrderEditDialog (single save path).
 - Mobile WhatsApp look lives only in whatsapp.css (scoped classes); visual changes never touch the send path.
 - Mobile expeditionData reads the desktop address aliases without writing them; readiness adds shipping guards only at conference, so imported street fields and earlier stages never produce false blocks.
+- Mobile expedition documents reuse existing fiscal/label endpoints with explicit fiscal confirmation; labels are existing-prepostage-only until shared creation handles uncertain provider outcomes safely.

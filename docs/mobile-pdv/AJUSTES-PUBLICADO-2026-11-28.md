@@ -8,6 +8,16 @@
 - 10 testes passaram (6 novos, 4 regressões). Leituras dos dois pedidos reais, sem qualquer gravação. Teste visual final abaixo.
 
 ## Escopo e desempenho
+## 4 — Conferência e documentos (entrega segura parcial)
+- Escolha de envio pelo mesmo ExpShippingFields: opções cadastradas, mototaxista, retirada, valor. Cotação e seleção pelo mesmo ExpFreightQuotePanel / sale-freight-quote, sem cotação automática ao abrir.
+- Correção dos dados pelo mesmo ExpOrderEditDialog, agora em tela cheia apenas quando a expedição mobile está montada. Leitor normaliza aliases no objeto de exibição antes de abrir, sem persistência automática.
+- Bipagem/outbox, pés/numeração/defeito preservados. Campos de rastreio/link/prazo disponíveis; conclusão pelo mesmo finishExpedition/pos_expedition_transition, trava síncrona adicional de toque e trava de troca. Removido foco que impedia tocar nos campos de frete.
+- Emissão pelo mesmo nfe-emitir e hidratação desktop; confirmação explícita, trava síncrona, snapshot/documento preservado na retomada, nenhuma retentativa automática. Não altera emissor/payload/numeração/pagamento.
+- Documentos disponíveis no detalhe e na conferência: última NF-e de saída modelo 55, DANFE sem impressão automática; etiquetas já existentes via action=label (ERP 10×15, oficial, A4). Impressão PC continua intacta. Se o provedor entregar DANFE HTML em vez de PDF, abre a mesma visualização existente; conversão real para PDF não foi criada.
+- **Comprar/gerar nova pré-postagem ficou fora:** correios-shipment protege duas criações normais com índice único, mas após timeout no POST externo marca a linha erro; próxima tentativa exclui erro e pode comprar novamente sem consultar o resultado anterior. Não há proteção suficiente contra compra incerta. Conforme instrução, nenhum botão novo de compra, nenhuma alteração no servidor e nenhuma compra de teste. Exige autorização separada para corrigir esse caminho compartilhado.
+- Transportadoras externas sem etiqueta própria no ERP continuam com rastreio manual, como o desktop. Vincular barcode desconhecido e impressão física não foram ampliados nesta entrega; câmera/checklist existentes preservados.
+- Abrir documentos acrescenta 2 consultas leves por pedido (NF-e e pré-postagem); frete carrega cotação anterior e opções/prestadores quando aberto. Sem polling, sem emissões automáticas.
+
 ## 3 — Lojas reais
 - Tabela tem seis lojas ativas: Loja Centro, Loja Perola, Site/Live (is_simulation=false); Lojas + Live, Site + Centro, Tênis Replica (is_simulation=true).
 - Critério já usado nos seletores de produtos do desktop: `is_active=true AND is_simulation=false`. Sem nomes/IDs fixos.
