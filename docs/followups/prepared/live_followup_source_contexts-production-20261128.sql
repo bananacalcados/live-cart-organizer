@@ -1,0 +1,14 @@
+CREATE OR REPLACE FUNCTION public.live_followup_source_contexts(p_limit integer DEFAULT 50)
+ RETURNS TABLE(source_key text, changed_at timestamp with time zone, context jsonb)
+ LANGUAGE sql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+ SELECT s.source_key,s.changed_at,jsonb_build_object('event',jsonb_build_object('id',e.id,'live_followup_enabled',e.live_followup_enabled,'whatsapp_number_id',(public.live_event_sender(e.id)->>'id')::uuid,'wa_initial_number_id',e.wa_initial_number_id,'self_service_slug',e.self_service_slug),'order',CASE WHEN o.id IS NULL THEN NULL ELSE jsonb_build_object('id',o.id,'created_at',o.created_at,'registered_at',o.registered_at,'origin',o.origin,'attribution',o.attribution,'is_paid',o.is_paid,'paid_externally',o.paid_externally,'stage',o.stage,'merged_into_order_id',o.merged_into_order_id,'products',o.products,'selfservice_cart_sent_at',coalesce(o.selfservice_cart_sent_at,o.live_followup_cart_sent_at)) END,'access',CASE WHEN a.id IS NULL THEN NULL ELSE jsonb_build_object('id',a.id,'created_at',coalesce(a.live_followup_phone_at,a.created_at),'registered_at',a.registered_at,'whatsapp_confirmed_at',a.whatsapp_confirmed_at,'entered_phone',a.entered_phone,'confirmed_phone',a.confirmed_phone,'instagram',a.instagram) END,'registration',CASE WHEN r.id IS NULL THEN NULL ELSE jsonb_build_object('full_name',r.full_name,'whatsapp',r.whatsapp) END,'customer',jsonb_build_object('whatsapp',c.whatsapp,'full_name',c.full_name,'instagram_handle',c.instagram_handle),'first_item_at',o.live_followup_first_item_at,'cart_sent_at',coalesce(q.sent_at,o.live_followup_cart_sent_at),'paid_same_day',EXISTS(SELECT 1 FROM orders p WHERE p.event_id=o.event_id AND p.customer_id=o.customer_id AND (p.is_paid OR p.paid_externally) AND (p.paid_at AT TIME ZONE 'America/Sao_Paulo')::date=(o.created_at AT TIME ZONE 'America/Sao_Paulo')::date),'ig_instance_id',ig.whatsapp_number_id)
+ FROM (SELECT * FROM live_followup_sources ORDER BY changed_at,source_key LIMIT least(greatest(p_limit,1),100)) s JOIN events e ON e.id=s.event_id
+ LEFT JOIN orders o ON o.id=s.order_id
+ LEFT JOIN LATERAL (SELECT * FROM live_selfservice_accesses aa WHERE aa.event_id=s.event_id AND (aa.id=s.access_id OR (s.access_id IS NULL AND s.order_id=ANY(aa.order_ids))) ORDER BY aa.created_at DESC LIMIT 1) a ON true
+ LEFT JOIN customers c ON c.id=o.customer_id LEFT JOIN customer_registrations r ON r.order_id=o.id
+ LEFT JOIN LATERAL (SELECT sent_at FROM selfservice_message_queue WHERE order_id=o.id AND kind='cart_link' AND status='sent' ORDER BY sent_at LIMIT 1) q ON true
+ LEFT JOIN LATERAL (SELECT m.whatsapp_number_id FROM instagram_user_links l JOIN whatsapp_messages m ON m.phone=l.ig_user_id AND m.channel='instagram' AND m.direction='incoming' WHERE lower(l.username)=lower(trim(both '@ ' from c.instagram_handle)) ORDER BY m.created_at DESC LIMIT 1) ig ON true
+$function$;

@@ -1,4 +1,9 @@
 # Remoção do Tiny — Fase 2, primeiro lote
+## Investigação prioritária — carrinhos manuais sem follow-up (28/11 17:26 UTC)
+- [x] Causa comprovada no gatilho implantado: NEW.order_ids inexistente em orders desfaz a fonte; desde 08/11 18:09:32 UTC; 85 sem jobs/51 oportunidades D em 30 dias, por live no relatório.
+- [x] Correção preparada fora das funções/migrações automáticas, com corte explícito contra antigos; 13 regressões novas, 70 Vitest + 8 Deno runtime passaram; nenhum envio/deploy.
+- [x] Requisito da futura Fila de disparos registrado: alerta de carrinho enviado sem agendamento, mesmo sem linha em fila; implementação permanece na entrega 3.
+- [ ] Implantar correção manual somente após autorização específica de Matthews, guarda de corte primeiro; NÃO aplicar agora. Bundle remoto não disponível na investigação (versão 1741 confirmada nos logs).
 ## WhatsApp mobile — Android (28/11 17:05 UTC), antes dos follow-ups
 - [x] 1: prévia de áudio gravado antes de envio; teste sem mensagem real
 - [x] 2/10: cores e fonte oficiais, tokens exclusivos mobile
@@ -25,7 +30,7 @@
 ## Follow-ups — próximas entregas (na ordem)
 - [ ] Validade dos follow-ups (implantar só sem live)
 - [ ] Lembretes de pagamento do PDV: investigar causa (pode com live); implantar só sem live
-- [ ] Tela Fila de disparos só leitura
+- [ ] Tela Fila de disparos só leitura — incluir pedidos com carrinho enviado sem nenhum follow-up agendado (alerta fora das filas).
 ## Prioridade D aplicada com live (autorizado 28/11 15:37 UTC)
 - [x] Aplicada a ordem nova, interruptor v2, rollback salvo em docs/followups/PRIORIDADE-V2-ROLLBACK.sql; observado 10 min sem anomalias
 - [ ] Entregas seguintes (validade, lembretes PDV, Fila de disparos): só implantar sem live, salvo nova liberação
