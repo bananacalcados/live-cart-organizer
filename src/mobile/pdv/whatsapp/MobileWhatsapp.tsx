@@ -131,7 +131,7 @@ function MobileWhatsappScreen({storeId,sellerId,onChangeSeller}:{storeId:string;
   </main>:<>
    {api.error&&<p role="alert" className="p-2 text-sm text-destructive">{api.error}</p>}
    {!sendNumber&&<Select value={routingNumber||undefined} onValueChange={setRoutingNumber}><SelectTrigger className="h-12" aria-label="Instância de envio"><SelectValue placeholder="Escolha a instância"/></SelectTrigger><SelectContent>{api.numbers.map(n=><SelectItem key={n.id} value={n.id}>{n.label}</SelectItem>)}</SelectContent></Select>}
-   <MobileWhatsappMessages key={targetKey} messages={api.messages} attempts={attempts.filter(a=>mobileConversationKey(a.phone,a.numberId)===activeKey)} older={api.hasOlder} loading={api.olderLoading} loadOlder={api.loadOlder} quote={setQuoted} retry={retry} readOriginal={id=>readQuotedHistory(target,id)}/>
+   <MobileWhatsappMessages key={`history:${targetKey}`} messages={api.messages} attempts={attempts.filter(a=>mobileConversationKey(a.phone,a.numberId)===activeKey)} older={api.hasOlder} loading={api.olderLoading} loadOlder={api.loadOlder} quote={setQuoted} retry={retry} readOriginal={id=>readQuotedHistory(target,id)}/>
    <MobileWhatsappComposer key={targetKey} disabled={!online||busy||!sendNumber} quoted={quoted} cancelQuote={()=>setQuoted(null)} send={p=>send(p)} openCatalog={()=>navigate(`${baseUrl}/catalogo`)} openReplies={()=>navigate(`${baseUrl}/respostas`)} openTemplates={provider==='meta'?()=>navigate(`${baseUrl}/modelos`):undefined}/>
   </>}
  </div>;
