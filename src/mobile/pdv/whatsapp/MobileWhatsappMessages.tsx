@@ -26,16 +26,16 @@ export function MobileWhatsappMessages({messages,attempts,older,loading,loadOlde
  {newDay&&<p className="m-wa-day">{dayLabel(m.created_at)}</p>}
  <SwipeReply enabled={!!m.message_id} onReply={()=>quote(m)} out={out}>
  <article className={`m-wa-bubble break-words ${out?'out':'in'} ${tail?'tail':''}`}>
- {original?<div className={`mb-1 rounded-md border-l-4 p-2 text-[13px] ${original.direction==='outgoing'?'border-[#1DAA61] bg-black/5':'border-[#7F66FF] bg-black/5'}`}><strong className={original.direction==='outgoing'?'text-[#1DAA61]':'text-[#7F66FF]'}>{original.direction==='outgoing'?'Você':original.sender_name||'Cliente'}</strong><p className="line-clamp-2 text-[#54656F]">{original.message}</p></div>:m.quoted_message_id?<p className="mb-1 rounded-md border-l-4 border-[#8696A0] bg-black/5 p-2 text-xs text-[#54656F]">Resposta a uma mensagem anterior</p>:null}
- {m.is_group&&!out&&m.sender_name&&<p className="text-[13px] font-semibold text-[#7F66FF]">{m.sender_name}</p>}
+ {original?<div className={`mb-1 rounded-md border-l-4 p-2 text-[13px] ${original.direction==='outgoing'?'border-[var(--wa-brand)] m-wa-quote':'border-[var(--wa-violet)] m-wa-quote'}`}><strong className={original.direction==='outgoing'?'text-[var(--wa-brand)]':'text-[var(--wa-violet)]'}>{original.direction==='outgoing'?'Você':original.sender_name||'Cliente'}</strong><p className="line-clamp-2 text-[var(--wa-icon)]">{original.message}</p></div>:m.quoted_message_id?<p className="mb-1 rounded-md border-l-4 border-[var(--wa-tick)] m-wa-quote p-2 text-xs text-[var(--wa-icon)]">Resposta a uma mensagem anterior</p>:null}
+ {m.is_group&&!out&&m.sender_name&&<p className="text-[13px] font-semibold text-[var(--wa-violet)]">{m.sender_name}</p>}
  {m.template_payload&&<CarouselMessageBubble payload={m.template_payload}/>}
- {m.media_url&&(m.media_type==='image'?<button type="button" className="block w-full" aria-label="Ampliar foto" onClick={()=>setLightbox(m.media_url||null)}><img src={m.media_url} loading="lazy" alt="Foto da conversa" className="max-h-64 w-full rounded-md object-cover"/></button>:m.media_type==='audio'?<WaAudio src={m.media_url} out={out}/>:m.media_type==='video'?<video controls preload="none" src={m.media_url} className="max-h-64 w-full rounded-md"/>:<a href={m.media_url} target="_blank" rel="noopener noreferrer" className="flex min-h-12 items-center gap-2 rounded-md bg-black/5 px-3"><FileText className="h-6 w-6 text-[#54656F]"/>Abrir documento</a>)}
+ {m.media_url&&(m.media_type==='image'?<button type="button" className="block w-full" aria-label="Ampliar foto" onClick={()=>setLightbox(m.media_url||null)}><img src={m.media_url} loading="lazy" alt="Foto da conversa" className="max-h-64 w-full rounded-md object-cover"/></button>:m.media_type==='audio'?<WaAudio src={m.media_url} out={out}/>:m.media_type==='video'?<video controls preload="none" src={m.media_url} className="max-h-64 w-full rounded-md"/>:<a href={m.media_url} target="_blank" rel="noopener noreferrer" className="flex min-h-12 items-center gap-2 rounded-md m-wa-quote px-3"><FileText className="h-6 w-6 text-[var(--wa-icon)]"/>Abrir documento</a>)}
  {m.message&&!/^\[(image|audio|áudio|document|video)\]$/.test(m.message)&&<span className="whitespace-pre-wrap [overflow-wrap:anywhere]">{m.message}</span>}
- <span className="m-wa-meta"><time>{new Date(m.created_at).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})}</time>{out&&<MessageStatusIcon status={m.status} className="h-4 w-4"/>}</span>
+ <span className="m-wa-meta"><time>{new Date(m.created_at).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})}</time>{out&&<span data-read={['read','read_by_me','played'].includes(m.status||'')}><MessageStatusIcon status={m.status} className="h-4 w-4"/></span>}</span>
  </article></SwipeReply></div>;
  })}</div>
  {unseen.map(a=><div key={a.id} className="pt-2"><article className="m-wa-bubble out tail space-y-1"><p className="whitespace-pre-wrap break-words">{a.text}</p>{a.state==='uncertain'?<><p role="status" className="text-[13px] font-semibold text-destructive">Não confirmada — confira na conversa antes de reenviar</p><button type="button" className="min-h-11 rounded-full border border-destructive px-4 text-sm font-semibold text-destructive" disabled={!navigator.onLine} onClick={()=>retry(a)}>Reenviar</button></>:<span className="m-wa-meta">{a.state==='sending'?<><Clock className="h-3.5 w-3.5"/>Enviando…</>:'Enviada'}</span>}</article></div>)}
- {!nearBottom&&<button type="button" className="sticky bottom-2 left-full flex h-11 w-11 items-center justify-center rounded-full bg-white text-[#54656F] shadow" aria-label="Mensagens recentes" onClick={()=>{if(parent.current)parent.current.scrollTop=parent.current.scrollHeight;}}><ChevronDown/></button>}
+ {!nearBottom&&<button type="button" className="sticky bottom-2 left-full flex h-11 w-11 items-center justify-center rounded-full m-wa-surface text-[var(--wa-icon)] shadow" aria-label="Mensagens recentes" onClick={()=>{if(parent.current)parent.current.scrollTop=parent.current.scrollHeight;}}><ChevronDown/></button>}
  <Dialog open={!!lightbox} onOpenChange={o=>{if(!o)setLightbox(null);}}><DialogContent><DialogTitle>Foto</DialogTitle>{lightbox&&<img src={lightbox} alt="Foto ampliada" className="max-h-[80dvh] w-full object-contain"/>}</DialogContent></Dialog>
  </div>;
 }
@@ -52,7 +52,7 @@ function SwipeReply({enabled,onReply,out,children}:{enabled:boolean;onReply:()=>
   onTouchStart={e=>{if(!enabled)return;const t=e.touches[0];start.current={x:t.clientX,y:t.clientY};fired.current=false;timer.current=setTimeout(()=>{fired.current=true;navigator.vibrate?.(30);onReply();},500);}}
   onTouchMove={e=>{if(!start.current)return;const t=e.touches[0];const x=t.clientX-start.current.x,y=Math.abs(t.clientY-start.current.y);if(Math.abs(x)>8||y>8)clearTimeout(timer.current);if(y<30&&x>0)setDx(Math.min(x,80));}}
   onTouchEnd={end} onTouchCancel={end} onContextMenu={e=>{if(enabled){e.preventDefault();}}}>
-  {dx>20&&<Reply className="absolute left-0 top-1/2 h-5 w-5 -translate-x-7 -translate-y-1/2 text-[#54656F]"/>}
+  {dx>20&&<Reply className="absolute left-0 top-1/2 h-5 w-5 -translate-x-7 -translate-y-1/2 text-[var(--wa-icon)]"/>}
   {children}
  </div>;
 }
@@ -63,10 +63,10 @@ function WaAudio({src,out}:{src:string;out:boolean}){
  const bars=[4,9,6,12,8,14,10,6,12,16,9,5,11,14,7,10,13,6,9,4,8,12,6,10];
  const progress=duration?time/duration:0;
  return <div className="flex min-w-[220px] items-center gap-2 py-1">
-  <button type="button" aria-label={playing?'Pausar áudio':'Tocar áudio'} className="flex h-11 w-11 shrink-0 items-center justify-center text-[#54656F]" onClick={()=>{const a=ref.current;if(!a)return;if(a.paused)void a.play();else a.pause();}}>{playing?<Pause className="h-7 w-7 fill-current"/>:<Play className="h-7 w-7 fill-current"/>}</button>
+  <button type="button" aria-label={playing?'Pausar áudio':'Tocar áudio'} className="flex h-11 w-11 shrink-0 items-center justify-center text-[var(--wa-icon)]" onClick={()=>{const a=ref.current;if(!a)return;if(a.paused)void a.play();else a.pause();}}>{playing?<Pause className="h-7 w-7 fill-current"/>:<Play className="h-7 w-7 fill-current"/>}</button>
   <div className="flex-1"><div className="relative flex h-6 items-center gap-[2px]" onClick={e=>{const a=ref.current;if(!a||!duration)return;const r=e.currentTarget.getBoundingClientRect();a.currentTime=((e.clientX-r.left)/r.width)*duration;}}>
-   {bars.map((h,i)=><span key={i} className="w-[3px] rounded-full" style={{height:h,background:i/bars.length<progress?(out?'#1DAA61':'#00A5F4'):'#B4BCC1'}}/>)}
-  </div><span className="text-[11px] text-[#667781]">{fmt(playing||time?time:duration)}</span></div>
+   {bars.map((h,i)=><span key={i} className="w-[3px] rounded-full" style={{height:h,background:i/bars.length<progress?(out?'var(--wa-brand)':'var(--wa-read)'):'var(--wa-wave)'}}/>)}
+  </div><span className="text-[11px] text-[var(--wa-secondary)]">{fmt(playing||time?time:duration)}</span></div>
   <audio ref={ref} src={src} preload="metadata" onPlay={()=>setPlaying(true)} onPause={()=>setPlaying(false)} onEnded={()=>{setPlaying(false);setTime(0);}} onTimeUpdate={e=>setTime(e.currentTarget.currentTime)} onLoadedMetadata={e=>setDuration(e.currentTarget.duration)}/>
  </div>;
 }

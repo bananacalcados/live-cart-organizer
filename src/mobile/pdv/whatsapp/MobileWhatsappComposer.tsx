@@ -49,20 +49,20 @@ export function MobileWhatsappComposer({disabled,quoted,cancelQuote,send,openCat
  const cancelRecording=()=>{discard.current=true;recorder.current?.stop();};
  const hasContent=!!text.trim()||!!file;
  const attach:[typeof Camera,string,string,()=>void][]=[
-   [FileText,'Documento','#7F66FF',()=>document.current?.click()],[Camera,'Câmera','#FF2E74',()=>camera.current?.click()],[Image,'Galeria','#C861FA',()=>image.current?.click()],
-   [Headphones,'Áudio','#FF6D2E',()=>audio.current?.click()],[ShoppingBag,'Catálogo','#1DAA61',()=>{setSheet(null);openCatalog();}],[Zap,'Respostas rápidas','#F5B400',()=>{setSheet(null);openReplies();}],
-   ...(openTemplates?[[LayoutTemplate,'Modelos API','#0795DC',()=>{setSheet(null);openTemplates();}] as [typeof Camera,string,string,()=>void]]:[]),
+   [FileText,'Documento','var(--wa-violet)',()=>document.current?.click()],[Camera,'Câmera','var(--wa-camera)',()=>camera.current?.click()],[Image,'Galeria','var(--wa-gallery)',()=>image.current?.click()],
+   [Headphones,'Áudio','var(--wa-audio)',()=>audio.current?.click()],[ShoppingBag,'Catálogo','var(--wa-brand)',()=>{setSheet(null);openCatalog();}],[Zap,'Respostas rápidas','var(--wa-quick)',()=>{setSheet(null);openReplies();}],
+   ...(openTemplates?[[LayoutTemplate,'Modelos API','var(--wa-template)',()=>{setSheet(null);openTemplates();}] as [typeof Camera,string,string,()=>void]]:[]),
  ];
  return <footer className="m-wa-composer shrink-0 px-2 pt-2 pb-[max(8px,env(safe-area-inset-bottom))]">
-  {(quoted||file)&&<div className="mb-1 space-y-1 rounded-2xl bg-white p-2 shadow-sm">
-   {quoted&&<div className="flex items-center gap-2 rounded-lg border-l-4 border-[#1DAA61] bg-[#F0F2F5] p-2 text-sm"><p className="min-w-0 flex-1 truncate">{quoted.message}</p><button type="button" className="m-wa-icon" aria-label="Cancelar resposta" onClick={cancelQuote}><X className="h-6 w-6"/></button></div>}
+  {(quoted||file)&&<div className="mb-1 space-y-1 rounded-2xl m-wa-surface p-2 shadow-sm">
+   {quoted&&<div className="flex items-center gap-2 rounded-lg border-l-4 border-[var(--wa-brand)] m-wa-search p-2 text-sm"><p className="min-w-0 flex-1 truncate">{quoted.message}</p><button type="button" className="m-wa-icon" aria-label="Cancelar resposta" onClick={cancelQuote}><X className="h-6 w-6"/></button></div>}
    {file&&<MobileMediaPreview file={file} discard={()=>setFile(null)}/>}
   </div>}
   <div className="flex items-end gap-2">
-   {recording?<div className="flex min-h-12 min-w-0 flex-1 items-center gap-2 rounded-full bg-white px-2 shadow-sm"><button type="button" className="m-wa-icon text-destructive" aria-label="Cancelar gravação" onClick={cancelRecording}><Trash2 className="h-6 w-6"/></button><span className="h-3 w-3 animate-pulse rounded-full bg-red-500"/><span role="status" className="flex-1 text-base tabular-nums">{fmt(seconds)} · Gravando…</span></div>
-   :<div className="flex min-h-12 min-w-0 flex-1 items-end rounded-[24px] bg-white shadow-sm">
+   {recording?<div className="flex min-h-12 min-w-0 flex-1 items-center gap-2 rounded-full m-wa-surface px-2 shadow-sm"><button type="button" className="m-wa-icon text-destructive" aria-label="Cancelar gravação" onClick={cancelRecording}><Trash2 className="h-6 w-6"/></button><span className="h-3 w-3 animate-pulse rounded-full bg-red-500"/><span role="status" className="flex-1 text-base tabular-nums">{fmt(seconds)} · Gravando…</span></div>
+   :<div className="flex min-h-12 min-w-0 flex-1 items-end rounded-[24px] m-wa-surface shadow-sm">
      <button type="button" className="m-wa-icon" aria-label="Emojis" onClick={()=>setSheet(sheet==='emoji'?null:'emoji')}><Smile className="h-6 w-6"/></button>
-     <textarea ref={field} aria-label="Mensagem" placeholder="Mensagem" value={text} onChange={e=>setText(e.target.value)} rows={1} disabled={busy} className="max-h-32 min-h-12 min-w-0 flex-1 resize-none bg-transparent py-3 text-base outline-none placeholder:text-[#8696A0]"/>
+     <textarea ref={field} aria-label="Mensagem" placeholder="Mensagem" value={text} onChange={e=>setText(e.target.value)} rows={1} disabled={busy} className="max-h-32 min-h-12 min-w-0 flex-1 resize-none bg-transparent py-3 text-base outline-none placeholder:text-[var(--wa-tick)]"/>
      <button type="button" className="m-wa-icon" aria-label="Anexar" disabled={disabled||busy} onClick={()=>setSheet(sheet==='attach'?null:'attach')}><Paperclip className="h-6 w-6 -rotate-45"/></button>
      {!text.trim()&&<button type="button" className="m-wa-icon" aria-label="Tirar foto" disabled={disabled||busy} onClick={()=>camera.current?.click()}><Camera className="h-6 w-6"/></button>}
    </div>}
@@ -70,10 +70,10 @@ export function MobileWhatsappComposer({disabled,quoted,cancelQuote,send,openCat
    :hasContent?<button type="button" className="m-wa-fab" aria-label="Enviar mensagem" disabled={disabled||busy} onClick={()=>void submit()}>{busy?<Loader2 className="h-6 w-6 animate-spin"/>:<Send className="h-6 w-6"/>}</button>
    :<button type="button" className="m-wa-fab" aria-label="Gravar áudio" disabled={disabled||busy} onClick={()=>void startRecording()}><Mic className="h-6 w-6"/></button>}
   </div>
-  {sheet==='attach'&&<div role="menu" aria-label="Anexar" className="mt-2 grid grid-cols-4 gap-y-4 rounded-2xl bg-white p-4 shadow-lg">
-   {attach.map(([Icon,label,color,run])=><button key={label} role="menuitem" type="button" className="flex flex-col items-center gap-1 text-xs text-[#54656F]" onClick={run}><span className="flex h-14 w-14 items-center justify-center rounded-full text-white" style={{background:color}}><Icon className="h-6 w-6"/></span>{label}</button>)}
+  {sheet==='attach'&&<div role="menu" aria-label="Anexar" className="mt-2 grid grid-cols-4 gap-y-4 rounded-2xl m-wa-surface p-4 shadow-lg">
+   {attach.map(([Icon,label,color,run])=><button key={label} role="menuitem" type="button" className="flex flex-col items-center gap-1 text-xs text-[var(--wa-icon)]" onClick={run}><span className="flex h-14 w-14 items-center justify-center rounded-full m-wa-attachment" style={{background:color}}><Icon className="h-6 w-6"/></span>{label}</button>)}
   </div>}
-  {sheet==='emoji'&&<div aria-label="Emojis" className="mt-2 grid grid-cols-8 gap-1 rounded-2xl bg-white p-2 shadow-lg">{EMOJIS.map(e=><button key={e} type="button" className="h-11 text-2xl" onClick={()=>{setText(t=>t+e);field.current?.focus();}}>{e}</button>)}</div>}
+  {sheet==='emoji'&&<div aria-label="Emojis" className="mt-2 grid grid-cols-8 gap-1 rounded-2xl m-wa-surface p-2 shadow-lg">{EMOJIS.map(e=><button key={e} type="button" className="h-11 text-2xl" onClick={()=>{setText(t=>t+e);field.current?.focus();}}>{e}</button>)}</div>}
   <input ref={image} type="file" accept="image/*" hidden onChange={e=>{pick(e.target.files?.[0]);e.target.value='';}}/>
   <input ref={camera} type="file" accept="image/*" capture="environment" hidden onChange={e=>{pick(e.target.files?.[0]);e.target.value='';}}/>
   <input ref={audio} type="file" accept="audio/*" hidden onChange={e=>{pick(e.target.files?.[0]);e.target.value='';}}/>

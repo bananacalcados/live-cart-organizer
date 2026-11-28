@@ -1,7 +1,7 @@
 # Remoção do Tiny — Fase 2, primeiro lote
 ## WhatsApp mobile — Android (28/11 17:05 UTC), antes dos follow-ups
 - [x] 1: prévia de áudio gravado antes de envio; teste sem mensagem real
-- [ ] 2/10: cores e fonte oficiais, tokens exclusivos mobile
+- [x] 2/10: cores e fonte oficiais, tokens exclusivos mobile
 - [ ] 3: câmera com vídeo e prévia, limites existentes
 - [ ] 4: galeria com vídeos pelo mesmo envio desktop
 - [ ] 5: citação abre original com histórico sob demanda

@@ -1,48 +1,61 @@
-.m-wa-frame { top: var(--m-wa-top, 0px); height: var(--m-wa-height, 100dvh); }
-body[data-mobile-pdv-whatsapp] [role="dialog"] {
-  max-width: 448px;
-  width: 100%;
-  max-height: 100dvh;
-  overflow-y: auto;
-  overscroll-behavior: contain;
+/* Light Android WhatsApp theme, isolated from desktop and the rest of PDV. */
+body[data-mobile-pdv-whatsapp], .m-wa-list, .m-wa-frame {
+ --wa-surface:#FFFFFF; --wa-brand:#1DAA61; --wa-text:#111B21; --wa-secondary:#667781;
+ --wa-search:#F6F5F3; --wa-border:#D1D7DB; --wa-icon:#54656F; --wa-divider:#E9EDEF;
+ --wa-chip:#D8FDD2; --wa-chip-text:#15603E; --wa-wallpaper:#EFEAE2; --wa-pattern:#E4DDD3;
+ --wa-out:#D9FDD3; --wa-tick:#8696A0; --wa-read:#53BDEB; --wa-quote:rgba(0,0,0,.05);
+ --wa-avatar:#DFE5E7; --wa-wave:#B4BCC1; --wa-violet:#7F66FF; --wa-camera:#FF2E74;
+ --wa-gallery:#C861FA; --wa-audio:#FF6D2E; --wa-quick:#F5B400; --wa-template:#0795DC;
+ --wa-shadow:0 1px .5px rgba(11,20,26,.13); --wa-fab-shadow:0 1px 3px rgba(0,0,0,.25);
+ font-family:system-ui,Roboto,sans-serif; letter-spacing:0; color:var(--wa-text);
 }
+body[data-mobile-pdv-whatsapp] { background:var(--wa-surface); }
+body[data-mobile-pdv-whatsapp] nav[aria-label="Navegação do PDV"] { background:var(--wa-surface); border-color:var(--wa-divider); }
+.m-wa-frame { top:var(--m-wa-top,0px); height:var(--m-wa-height,100dvh); background:var(--wa-surface); }
+body[data-mobile-pdv-whatsapp] [role="dialog"] { max-width:448px; width:100%; max-height:100dvh; overflow-y:auto; overscroll-behavior:contain; background:var(--wa-surface); color:var(--wa-text); font-family:system-ui,Roboto,sans-serif; }
 body[data-mobile-pdv-whatsapp] [role="dialog"] button,
 body[data-mobile-pdv-whatsapp] [role="dialog"] input:not([type="checkbox"]),
 body[data-mobile-pdv-whatsapp] [role="dialog"] [role="combobox"],
 body[data-mobile-pdv-whatsapp] [role="dialog"] textarea,
 body[data-mobile-pdv-whatsapp] .m-wa-frame button,
-body[data-mobile-pdv-whatsapp] .m-wa-frame [role="combobox"] {
-  min-height: 44px;
-}
+body[data-mobile-pdv-whatsapp] .m-wa-frame [role="combobox"] { min-height:44px; }
 body[data-mobile-pdv-whatsapp] [role="dialog"] input,
-body[data-mobile-pdv-whatsapp] [role="dialog"] textarea { font-size: 16px; }
-body[data-mobile-pdv-whatsapp] [role="dialog"] { overflow-wrap: anywhere; }
-@media (max-width: 767px) {
- body[data-mobile-pdv-whatsapp] [role="dialog"] { left: 0; top: 0; transform: none; height: 100dvh; border-radius: 0; padding: 16px; }
- body[data-mobile-pdv-whatsapp] [role="dialog"] .grid { grid-template-columns: minmax(0,1fr); }
+body[data-mobile-pdv-whatsapp] [role="dialog"] textarea { font-size:16px; }
+body[data-mobile-pdv-whatsapp] [role="dialog"] { overflow-wrap:anywhere; }
+@media (max-width:767px) {
+ body[data-mobile-pdv-whatsapp] [role="dialog"] { left:0; top:0; transform:none; height:100dvh; border-radius:0; padding:16px; }
+ body[data-mobile-pdv-whatsapp] [role="dialog"] .grid { grid-template-columns:minmax(0,1fr); }
 }
-
-/* WhatsApp-like look (light), scoped to the mobile PDV WhatsApp screens only. */
-.m-wa-list { background: #fff; }
-.m-wa-title { color: #1DAA61; }
-.m-wa-chip { display:inline-flex; align-items:center; gap:4px; min-height:36px; padding:0 14px; border-radius:9999px; background:#F0F2F5; color:#54656F; font-size:14px; font-weight:500; white-space:nowrap; }
-.m-wa-chip[data-active="true"] { background:#D8FDD2; color:#15603E; }
-.m-wa-unread { background:#25D366; color:#fff; }
-.m-wa-icon { display:inline-flex; align-items:center; justify-content:center; min-width:42px; min-height:48px; color:#54656F; flex-shrink:0; }
+.m-wa-list, .m-wa-surface, .m-wa-chat-header { background:var(--wa-surface); color:var(--wa-text); }
+.m-wa-title { color:var(--wa-brand); }
+.m-wa-search { background:var(--wa-search); }
+.m-wa-chip { display:inline-flex; align-items:center; gap:4px; min-height:44px; padding:0 14px; border:1px solid var(--wa-border); border-radius:9999px; background:var(--wa-surface); color:var(--wa-icon); font-size:14px; font-weight:500; white-space:nowrap; }
+.m-wa-chip[data-active="true"] { border-color:var(--wa-chip); background:var(--wa-chip); color:var(--wa-chip-text); }
+.m-wa-unread { background:var(--wa-brand); color:var(--wa-surface); }
+.m-wa-icon { display:inline-flex; align-items:center; justify-content:center; min-width:44px; min-height:48px; color:var(--wa-icon); flex-shrink:0; }
+.m-wa-icon svg, .m-wa-fab svg { width:24px; height:24px; }
 .m-wa-icon:disabled { opacity:.4; }
-.m-wa-fab { display:inline-flex; align-items:center; justify-content:center; width:48px; height:48px; border-radius:9999px; background:#1DAA61; color:#fff; flex-shrink:0; box-shadow:0 1px 3px rgba(0,0,0,.25); }
+.m-wa-fab { display:inline-flex; align-items:center; justify-content:center; width:48px; height:48px; border-radius:9999px; background:var(--wa-brand); color:var(--wa-surface); flex-shrink:0; box-shadow:var(--wa-fab-shadow); }
 .m-wa-fab:disabled { opacity:.5; }
-.m-wa-chat-header { background:#fff; color:#111B21; }
 .m-wa-wallpaper {
-  background-color:#EFEAE2;
-  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120' viewBox='0 0 120 120' fill='none' stroke='%23E0D9CC' stroke-width='1.3' stroke-linecap='round'%3E%3Cpath d='M12 18c4-6 10-6 14 0s10 6 14 0'/%3E%3Ccircle cx='86' cy='20' r='6'/%3E%3Cpath d='M70 60l8-8 8 8-8 8z'/%3E%3Cpath d='M18 74c0-6 8-6 8 0s8 6 8 0'/%3E%3Cpath d='M96 86l6 10h-12z'/%3E%3Ccircle cx='48' cy='104' r='4'/%3E%3Cpath d='M44 40h10M49 35v10'/%3E%3C/svg%3E");
+ background-color:var(--wa-wallpaper);
+ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120' viewBox='0 0 120 120' fill='none' stroke='%23E4DDD3' stroke-width='1' stroke-linecap='round'%3E%3Cpath d='M12 18c4-6 10-6 14 0s10 6 14 0'/%3E%3Ccircle cx='86' cy='20' r='6'/%3E%3Cpath d='M70 60l8-8 8 8-8 8z'/%3E%3Cpath d='M18 74c0-6 8-6 8 0s8 6 8 0'/%3E%3Cpath d='M96 86l6 10h-12z'/%3E%3Ccircle cx='48' cy='104' r='4'/%3E%3Cpath d='M44 40h10M49 35v10'/%3E%3C/svg%3E");
 }
-.m-wa-composer { background:#EFEAE2; }
-.m-wa-bubble { position:relative; max-width:82%; padding:6px 8px 4px; border-radius:8px; box-shadow:0 1px .5px rgba(11,20,26,.13); font-size:15px; line-height:20px; color:#111B21; }
-.m-wa-bubble.in { background:#fff; margin-right:auto; border-top-left-radius:0; }
-.m-wa-bubble.out { background:#D9FDD3; margin-left:auto; border-top-right-radius:0; }
-.m-wa-bubble.tail.in::before { content:""; position:absolute; top:0; left:-8px; border-top:0 solid transparent; border-right:8px solid #fff; border-bottom:10px solid transparent; }
-.m-wa-bubble.tail.out::before { content:""; position:absolute; top:0; right:-8px; border-left:8px solid #D9FDD3; border-bottom:10px solid transparent; }
-.m-wa-meta { float:right; margin:6px 0 -4px 10px; display:inline-flex; align-items:center; gap:3px; font-size:11px; color:#667781; }
-.m-wa-day { margin:8px auto; width:max-content; padding:5px 12px; border-radius:8px; background:#fff; color:#54656F; font-size:12.5px; box-shadow:0 1px .5px rgba(11,20,26,.13); }
+.m-wa-composer { background:var(--wa-wallpaper); }
+.m-wa-bubble { position:relative; max-width:82%; padding:6px 8px 4px; border-radius:8px; box-shadow:var(--wa-shadow); font-size:16px; line-height:21px; color:var(--wa-text); }
+.m-wa-bubble.in { background:var(--wa-surface); margin-right:auto; border-top-left-radius:0; }
+.m-wa-bubble.out { background:var(--wa-out); margin-left:auto; border-top-right-radius:0; }
+.m-wa-bubble.tail.in::before { content:""; position:absolute; top:0; left:-8px; border-right:8px solid var(--wa-surface); border-bottom:10px solid transparent; }
+.m-wa-bubble.tail.out::before { content:""; position:absolute; top:0; right:-8px; border-left:8px solid var(--wa-out); border-bottom:10px solid transparent; }
+.m-wa-meta { float:right; margin:6px 0 -4px 10px; display:inline-flex; align-items:center; gap:3px; font-size:11px; color:var(--wa-secondary); }
+.m-wa-meta svg { color:var(--wa-tick); }
+.m-wa-meta [data-read="true"] svg { color:var(--wa-read); }
+.m-wa-day { margin:8px auto; width:max-content; padding:5px 12px; border-radius:9999px; background:var(--wa-surface); color:var(--wa-icon); font-size:12px; box-shadow:var(--wa-shadow); }
+.m-wa-quote { background:var(--wa-quote); }
+.m-wa-draft { background:var(--wa-surface); }
+.m-wa-attachment { background:var(--wa-attachment-color,var(--wa-brand)); color:var(--wa-surface); }
+.m-wa-row:active { background:var(--wa-search); }
 body[data-mobile-pdv-whatsapp] [data-floating-tasks] { display:none; }
+body[data-mobile-pdv-whatsapp] .text-muted-foreground { color:var(--wa-secondary); }
+body[data-mobile-pdv-whatsapp] input, body[data-mobile-pdv-whatsapp] textarea { color:var(--wa-text); }
+body[data-mobile-pdv-whatsapp] input::placeholder, body[data-mobile-pdv-whatsapp] textarea::placeholder { color:var(--wa-secondary); }
