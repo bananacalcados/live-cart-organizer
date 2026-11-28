@@ -1,4 +1,12 @@
 # Remoção do Tiny — Fase 2, primeiro lote
+## PDV mobile — melhorias Expedição/WhatsApp (Matthews 28/11)
+- [x] Parte A: todas as lojas, filtros, seleção múltipla, frete/origem/dados, detalhe e edição (commit separado)
+- [x] Parte B: aparência WhatsApp na lista, conversa e barra de escrever (commit separado)
+- [ ] Teste no aparelho Android: gravação, câmera, arrastar para responder e avanço em lote real
+## Follow-ups — próximas entregas (na ordem)
+- [ ] Validade dos follow-ups (implantar só sem live)
+- [ ] Lembretes de pagamento do PDV: investigar causa (pode com live); implantar só sem live
+- [ ] Tela Fila de disparos só leitura
 ## Prioridade D aplicada com live (autorizado 28/11 15:37 UTC)
 - [x] Aplicada a ordem nova, interruptor v2, rollback salvo em docs/followups/PRIORIDADE-V2-ROLLBACK.sql; observado 10 min sem anomalias
 - [ ] Entregas seguintes (validade, lembretes PDV, Fila de disparos): só implantar sem live, salvo nova liberação

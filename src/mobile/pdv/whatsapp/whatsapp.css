@@ -21,3 +21,28 @@ body[data-mobile-pdv-whatsapp] [role="dialog"] { overflow-wrap: anywhere; }
  body[data-mobile-pdv-whatsapp] [role="dialog"] { left: 0; top: 0; transform: none; height: 100dvh; border-radius: 0; padding: 16px; }
  body[data-mobile-pdv-whatsapp] [role="dialog"] .grid { grid-template-columns: minmax(0,1fr); }
 }
+
+/* WhatsApp-like look (light), scoped to the mobile PDV WhatsApp screens only. */
+.m-wa-list { background: #fff; }
+.m-wa-title { color: #1DAA61; }
+.m-wa-chip { display:inline-flex; align-items:center; gap:4px; min-height:36px; padding:0 14px; border-radius:9999px; background:#F0F2F5; color:#54656F; font-size:14px; font-weight:500; white-space:nowrap; }
+.m-wa-chip[data-active="true"] { background:#D8FDD2; color:#15603E; }
+.m-wa-unread { background:#25D366; color:#fff; }
+.m-wa-icon { display:inline-flex; align-items:center; justify-content:center; min-width:42px; min-height:48px; color:#54656F; flex-shrink:0; }
+.m-wa-icon:disabled { opacity:.4; }
+.m-wa-fab { display:inline-flex; align-items:center; justify-content:center; width:48px; height:48px; border-radius:9999px; background:#1DAA61; color:#fff; flex-shrink:0; box-shadow:0 1px 3px rgba(0,0,0,.25); }
+.m-wa-fab:disabled { opacity:.5; }
+.m-wa-chat-header { background:#fff; color:#111B21; }
+.m-wa-wallpaper {
+  background-color:#EFEAE2;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120' viewBox='0 0 120 120' fill='none' stroke='%23E0D9CC' stroke-width='1.3' stroke-linecap='round'%3E%3Cpath d='M12 18c4-6 10-6 14 0s10 6 14 0'/%3E%3Ccircle cx='86' cy='20' r='6'/%3E%3Cpath d='M70 60l8-8 8 8-8 8z'/%3E%3Cpath d='M18 74c0-6 8-6 8 0s8 6 8 0'/%3E%3Cpath d='M96 86l6 10h-12z'/%3E%3Ccircle cx='48' cy='104' r='4'/%3E%3Cpath d='M44 40h10M49 35v10'/%3E%3C/svg%3E");
+}
+.m-wa-composer { background:#EFEAE2; }
+.m-wa-bubble { position:relative; max-width:82%; padding:6px 8px 4px; border-radius:8px; box-shadow:0 1px .5px rgba(11,20,26,.13); font-size:15px; line-height:20px; color:#111B21; }
+.m-wa-bubble.in { background:#fff; margin-right:auto; border-top-left-radius:0; }
+.m-wa-bubble.out { background:#D9FDD3; margin-left:auto; border-top-right-radius:0; }
+.m-wa-bubble.tail.in::before { content:""; position:absolute; top:0; left:-8px; border-top:0 solid transparent; border-right:8px solid #fff; border-bottom:10px solid transparent; }
+.m-wa-bubble.tail.out::before { content:""; position:absolute; top:0; right:-8px; border-left:8px solid #D9FDD3; border-bottom:10px solid transparent; }
+.m-wa-meta { float:right; margin:6px 0 -4px 10px; display:inline-flex; align-items:center; gap:3px; font-size:11px; color:#667781; }
+.m-wa-day { margin:8px auto; width:max-content; padding:5px 12px; border-radius:8px; background:#fff; color:#54656F; font-size:12.5px; box-shadow:0 1px .5px rgba(11,20,26,.13); }
+body[data-mobile-pdv-whatsapp] [data-floating-tasks] { display:none; }

@@ -1,10 +1,8 @@
-import { useEffect,useRef,useState } from 'react';
+import { useEffect,useRef,useState,type ReactNode } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
-import { Button } from '@/components/ui/button';
 import { Dialog,DialogContent,DialogTitle } from '@/components/ui/dialog';
-import { Reply,FileText,Loader2,ArrowDown } from 'lucide-react';
+import { Reply,FileText,Loader2,ChevronDown,Clock,Play,Pause } from 'lucide-react';
 import type { MobileMessage } from '@/lib/chat/mobileWhatsappReads';
-import { AudioPlayer } from '@/components/chat/AudioPlayer';
 import { CarouselMessageBubble } from '@/components/chat/CarouselMessageBubble';
 import { MessageStatusIcon } from '@/components/chat/MessageStatusIcon';
 import type { MobileSendAttempt } from '@/lib/chat/mobileSendAttempt';
@@ -19,21 +17,56 @@ export function MobileWhatsappMessages({messages,attempts,older,loading,loadOlde
  else if(nearBottom&&last!==previous.current.last)el.scrollTop=el.scrollHeight;
  previous.current={first,last,height:el.scrollHeight};
  },[messages,virtual.getTotalSize(),nearBottom]);
- return <div ref={parent} aria-label="Histórico da conversa" className="relative min-h-0 flex-1 overflow-y-auto overscroll-contain p-3" onScroll={e=>{const el=e.currentTarget;setNearBottom(el.scrollHeight-el.scrollTop-el.clientHeight<120);if(el.scrollTop<24&&older&&!loading)void loadOlder();}}>
- {older&&<Button variant="outline" className="mb-3 h-11 w-full" disabled={loading} onClick={()=>void loadOlder()}>{loading?<Loader2 className="animate-spin"/>:'Mensagens anteriores'}</Button>}
- <div className="relative w-full" style={{height:virtual.getTotalSize()}}>{virtual.getVirtualItems().map(v=>{const m=messages[v.index];const original=m.quoted_message_id?messages.find(q=>q.message_id===m.quoted_message_id):null;
- return <div key={v.key} data-index={v.index} ref={virtual.measureElement} className="absolute left-0 top-0 w-full pb-3" style={{transform:`translateY(${v.start}px)`}}>
- <article className={`max-w-[92%] break-words rounded-lg border p-3 ${m.direction==='outgoing'?'ml-auto border-primary/20 bg-primary/10':'mr-auto bg-card'}`}>
- {original?<div className="mb-2 border-l-2 border-primary bg-muted p-2 text-xs"><strong>{original.direction==='outgoing'?'Você':original.sender_name||'Cliente'}</strong><p className="line-clamp-2">{original.message}</p></div>:m.quoted_message_id?<p className="mb-2 text-xs text-muted-foreground">↩ Resposta a uma mensagem anterior</p>:null}
- {m.sender_name&&<p className="mb-1 text-xs font-bold">{m.sender_name}</p>}
+ const dayOf=(iso:string)=>new Date(iso).toDateString();
+ return <div ref={parent} aria-label="Histórico da conversa" className="m-wa-wallpaper relative min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 py-2" onScroll={e=>{const el=e.currentTarget;setNearBottom(el.scrollHeight-el.scrollTop-el.clientHeight<120);if(el.scrollTop<24&&older&&!loading)void loadOlder();}}>
+ {older&&<button type="button" className="m-wa-day mb-2 block min-h-11" disabled={loading} onClick={()=>void loadOlder()}>{loading?<Loader2 className="h-4 w-4 animate-spin"/>:'Mensagens anteriores'}</button>}
+ <div className="relative w-full" style={{height:virtual.getTotalSize()}}>{virtual.getVirtualItems().map(v=>{const m=messages[v.index];const prev=messages[v.index-1];const original=m.quoted_message_id?messages.find(q=>q.message_id===m.quoted_message_id):null;
+ const out=m.direction==='outgoing';const newDay=!prev||dayOf(prev.created_at)!==dayOf(m.created_at);const tail=newDay||prev.direction!==m.direction;
+ return <div key={v.key} data-index={v.index} ref={virtual.measureElement} className={`absolute left-0 top-0 w-full ${tail?'pt-2':'pt-0.5'}`} style={{transform:`translateY(${v.start}px)`}}>
+ {newDay&&<p className="m-wa-day">{dayLabel(m.created_at)}</p>}
+ <SwipeReply enabled={!!m.message_id} onReply={()=>quote(m)} out={out}>
+ <article className={`m-wa-bubble break-words ${out?'out':'in'} ${tail?'tail':''}`}>
+ {original?<div className={`mb-1 rounded-md border-l-4 p-2 text-[13px] ${original.direction==='outgoing'?'border-[#1DAA61] bg-black/5':'border-[#7F66FF] bg-black/5'}`}><strong className={original.direction==='outgoing'?'text-[#1DAA61]':'text-[#7F66FF]'}>{original.direction==='outgoing'?'Você':original.sender_name||'Cliente'}</strong><p className="line-clamp-2 text-[#54656F]">{original.message}</p></div>:m.quoted_message_id?<p className="mb-1 rounded-md border-l-4 border-[#8696A0] bg-black/5 p-2 text-xs text-[#54656F]">Resposta a uma mensagem anterior</p>:null}
+ {m.is_group&&!out&&m.sender_name&&<p className="text-[13px] font-semibold text-[#7F66FF]">{m.sender_name}</p>}
  {m.template_payload&&<CarouselMessageBubble payload={m.template_payload}/>}
- {m.media_url&&(m.media_type==='image'?<Button variant="ghost" className="h-auto w-full p-0" aria-label="Ampliar foto" onClick={()=>setLightbox(m.media_url||null)}><img src={m.media_url} loading="lazy" alt="Foto da conversa" className="max-h-56 w-full rounded-md object-contain"/></Button>:m.media_type==='audio'?<AudioPlayer src={m.media_url}/>:m.media_type==='video'?<video controls preload="none" src={m.media_url} className="max-h-56 w-full"/>:<Button asChild variant="outline" className="h-12 w-full"><a href={m.media_url} target="_blank" rel="noopener noreferrer"><FileText className="mr-2 h-4 w-4"/>Abrir documento</a></Button>)}
- {m.message&&!/^\[(image|audio|áudio|document|video)\]$/.test(m.message)&&<p className="whitespace-pre-wrap text-sm [overflow-wrap:anywhere]">{m.message}</p>}
- <div className="flex items-center justify-end gap-2"><time className="text-[11px] text-muted-foreground">{new Date(m.created_at).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})}</time>{m.direction==='outgoing'&&<MessageStatusIcon status={m.status}/>}<Button variant="ghost" size="icon" className="h-11 w-11" aria-label="Responder mensagem" disabled={!m.message_id} onClick={()=>quote(m)}><Reply className="h-4 w-4"/></Button></div>
- </article></div>;
+ {m.media_url&&(m.media_type==='image'?<button type="button" className="block w-full" aria-label="Ampliar foto" onClick={()=>setLightbox(m.media_url||null)}><img src={m.media_url} loading="lazy" alt="Foto da conversa" className="max-h-64 w-full rounded-md object-cover"/></button>:m.media_type==='audio'?<WaAudio src={m.media_url} out={out}/>:m.media_type==='video'?<video controls preload="none" src={m.media_url} className="max-h-64 w-full rounded-md"/>:<a href={m.media_url} target="_blank" rel="noopener noreferrer" className="flex min-h-12 items-center gap-2 rounded-md bg-black/5 px-3"><FileText className="h-6 w-6 text-[#54656F]"/>Abrir documento</a>)}
+ {m.message&&!/^\[(image|audio|áudio|document|video)\]$/.test(m.message)&&<span className="whitespace-pre-wrap [overflow-wrap:anywhere]">{m.message}</span>}
+ <span className="m-wa-meta"><time>{new Date(m.created_at).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})}</time>{out&&<MessageStatusIcon status={m.status} className="h-4 w-4"/>}</span>
+ </article></SwipeReply></div>;
  })}</div>
- {unseen.map(a=><article key={a.id} className="mb-3 ml-auto max-w-[92%] space-y-2 rounded-lg border border-primary/30 bg-primary/10 p-3"><p className="whitespace-pre-wrap break-words text-sm">{a.text}</p>{a.state==='uncertain'?<><p role="status" className="text-sm font-semibold text-destructive">Não confirmada — confira na conversa antes de reenviar</p><Button variant="outline" className="h-11" disabled={!navigator.onLine} onClick={()=>retry(a)}>Reenviar</Button></>:<p className="text-xs text-muted-foreground">{a.state==='sending'?'Enviando…':'Enviada'}</p>}</article>)}
- {!nearBottom&&<Button variant="secondary" size="icon" className="sticky bottom-2 left-full h-11 w-11" aria-label="Mensagens recentes" onClick={()=>{if(parent.current)parent.current.scrollTop=parent.current.scrollHeight;}}><ArrowDown/></Button>}
+ {unseen.map(a=><div key={a.id} className="pt-2"><article className="m-wa-bubble out tail space-y-1"><p className="whitespace-pre-wrap break-words">{a.text}</p>{a.state==='uncertain'?<><p role="status" className="text-[13px] font-semibold text-destructive">Não confirmada — confira na conversa antes de reenviar</p><button type="button" className="min-h-11 rounded-full border border-destructive px-4 text-sm font-semibold text-destructive" disabled={!navigator.onLine} onClick={()=>retry(a)}>Reenviar</button></>:<span className="m-wa-meta">{a.state==='sending'?<><Clock className="h-3.5 w-3.5"/>Enviando…</>:'Enviada'}</span>}</article></div>)}
+ {!nearBottom&&<button type="button" className="sticky bottom-2 left-full flex h-11 w-11 items-center justify-center rounded-full bg-white text-[#54656F] shadow" aria-label="Mensagens recentes" onClick={()=>{if(parent.current)parent.current.scrollTop=parent.current.scrollHeight;}}><ChevronDown/></button>}
  <Dialog open={!!lightbox} onOpenChange={o=>{if(!o)setLightbox(null);}}><DialogContent><DialogTitle>Foto</DialogTitle>{lightbox&&<img src={lightbox} alt="Foto ampliada" className="max-h-[80dvh] w-full object-contain"/>}</DialogContent></Dialog>
+ </div>;
+}
+
+function dayLabel(iso:string){const d=new Date(iso);const today=new Date();const y=new Date();y.setDate(today.getDate()-1);
+ if(d.toDateString()===today.toDateString())return 'Hoje';if(d.toDateString()===y.toDateString())return 'Ontem';
+ return d.toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit',year:'numeric'});}
+
+/** Reply by swiping the bubble sideways or by long-press (500 ms); keyboard users get Enter/space via the menu-less focus target. */
+function SwipeReply({enabled,onReply,out,children}:{enabled:boolean;onReply:()=>void;out:boolean;children:ReactNode}){
+ const start=useRef<{x:number;y:number}|null>(null);const timer=useRef<ReturnType<typeof setTimeout>>();const [dx,setDx]=useState(0);const fired=useRef(false);
+ const end=()=>{clearTimeout(timer.current);if(dx>60&&!fired.current&&enabled)onReply();start.current=null;setDx(0);};
+ return <div className={`relative flex ${out?'justify-end':'justify-start'}`} style={{transform:dx?`translateX(${dx}px)`:undefined,transition:dx?undefined:'transform .15s'}}
+  onTouchStart={e=>{if(!enabled)return;const t=e.touches[0];start.current={x:t.clientX,y:t.clientY};fired.current=false;timer.current=setTimeout(()=>{fired.current=true;navigator.vibrate?.(30);onReply();},500);}}
+  onTouchMove={e=>{if(!start.current)return;const t=e.touches[0];const x=t.clientX-start.current.x,y=Math.abs(t.clientY-start.current.y);if(Math.abs(x)>8||y>8)clearTimeout(timer.current);if(y<30&&x>0)setDx(Math.min(x,80));}}
+  onTouchEnd={end} onTouchCancel={end} onContextMenu={e=>{if(enabled){e.preventDefault();}}}>
+  {dx>20&&<Reply className="absolute left-0 top-1/2 h-5 w-5 -translate-x-7 -translate-y-1/2 text-[#54656F]"/>}
+  {children}
+ </div>;
+}
+
+function WaAudio({src,out}:{src:string;out:boolean}){
+ const ref=useRef<HTMLAudioElement>(null);const [playing,setPlaying]=useState(false);const [time,setTime]=useState(0);const [duration,setDuration]=useState(0);
+ const fmt=(s:number)=>Number.isFinite(s)?`${Math.floor(s/60)}:${String(Math.floor(s%60)).padStart(2,'0')}`:'0:00';
+ const bars=[4,9,6,12,8,14,10,6,12,16,9,5,11,14,7,10,13,6,9,4,8,12,6,10];
+ const progress=duration?time/duration:0;
+ return <div className="flex min-w-[220px] items-center gap-2 py-1">
+  <button type="button" aria-label={playing?'Pausar áudio':'Tocar áudio'} className="flex h-11 w-11 shrink-0 items-center justify-center text-[#54656F]" onClick={()=>{const a=ref.current;if(!a)return;if(a.paused)void a.play();else a.pause();}}>{playing?<Pause className="h-7 w-7 fill-current"/>:<Play className="h-7 w-7 fill-current"/>}</button>
+  <div className="flex-1"><div className="relative flex h-6 items-center gap-[2px]" onClick={e=>{const a=ref.current;if(!a||!duration)return;const r=e.currentTarget.getBoundingClientRect();a.currentTime=((e.clientX-r.left)/r.width)*duration;}}>
+   {bars.map((h,i)=><span key={i} className="w-[3px] rounded-full" style={{height:h,background:i/bars.length<progress?(out?'#1DAA61':'#00A5F4'):'#B4BCC1'}}/>)}
+  </div><span className="text-[11px] text-[#667781]">{fmt(playing||time?time:duration)}</span></div>
+  <audio ref={ref} src={src} preload="metadata" onPlay={()=>setPlaying(true)} onPause={()=>setPlaying(false)} onEnded={()=>{setPlaying(false);setTime(0);}} onTimeUpdate={e=>setTime(e.currentTarget.currentTime)} onLoadedMetadata={e=>setDuration(e.currentTarget.duration)}/>
  </div>;
 }

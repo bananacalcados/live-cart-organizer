@@ -37,6 +37,7 @@ export function StickyNotesFloatingButton() {
     <Sheet open={open} onOpenChange={setOpen}>
       <SheetTrigger asChild>
         <button
+          data-floating-tasks
           className="fixed bottom-6 right-6 z-40 h-12 w-12 rounded-full shadow-lg flex items-center justify-center hover:scale-105 transition"
           style={{ background: "hsl(48 95% 50%)", color: "hsl(0 0% 5%)" }}
           title="Tarefas"
