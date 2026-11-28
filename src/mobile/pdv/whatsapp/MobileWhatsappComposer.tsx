@@ -57,7 +57,7 @@ export function MobileWhatsappComposer({disabled,quoted,cancelQuote,send,openCat
  ];
  return <footer className="m-wa-composer shrink-0 px-2 pt-2 pb-[max(8px,env(safe-area-inset-bottom))]">
   {(quoted||file)&&<div className="mb-1 space-y-1 rounded-2xl m-wa-surface p-2 shadow-sm">
-   {quoted&&<div className="flex items-center gap-2 rounded-lg border-l-4 border-[var(--wa-brand)] m-wa-search p-2 text-sm"><p className="min-w-0 flex-1 truncate">{quoted.message}</p><button type="button" className="m-wa-icon" aria-label="Cancelar resposta" onClick={cancelQuote}><X className="h-6 w-6"/></button></div>}
+   {quoted&&<div className="flex items-center gap-2 rounded-lg border-l-4 border-[var(--wa-brand)] m-wa-quote p-2 text-sm"><span className="min-w-0 flex-1"><strong className="block text-[var(--wa-brand)]">Respondendo a {quoted.direction==='outgoing'?'você':quoted.sender_name||'cliente'}</strong><span className="block truncate">{quoted.message}</span></span><Button type="button" variant="ghost" size="icon" className="m-wa-icon" aria-label="Cancelar resposta" onClick={cancelQuote}><X className="h-6 w-6"/></Button></div>}
    {file&&<MobileMediaPreview file={file} discard={()=>setFile(null)}/>}
   </div>}
   <div className="flex items-end gap-2">

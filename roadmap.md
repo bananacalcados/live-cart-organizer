@@ -5,7 +5,7 @@
 - [x] 3: câmera com vídeo e prévia, limite desktop 64MB, sem limite de duração inventado
 - [x] 4: galeria com fotos/vídeos, prévia e mesmo envio desktop
 - [x] 5: citação abre original e trecho sob demanda, sem baixar histórico inteiro; recentes preservadas
-- [ ] 6: arrastar e toque longo com menu, resposta verdadeira preservada
+- [x] 6: gestos com ponteiro capturado e pan-y, cancelamento sem resposta, menu Responder/Copiar; referência real preservada
 - [ ] 7: escolha de vendedor como desktop, etiqueta e filtro Minhas
 - [ ] 8: nova conversa reutilizando abertura desktop
 - [ ] 9: proposta somente leitura com métricas reais, sem implementação

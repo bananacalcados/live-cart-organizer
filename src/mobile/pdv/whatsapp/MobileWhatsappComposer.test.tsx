@@ -5,6 +5,13 @@ import type { AttemptPayload } from '@/lib/chat/mobileSendAttempt';
 vi.mock('@/components/MediaAttachmentPicker', () => ({ uploadMediaToStorage: vi.fn(async () => 'https://example.test/audio') }));
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 describe('prévia antes do envio', () => {
+  it('resposta preserva o ID real do provedor, não o ID interno', async () => {
+    const send = vi.fn(async (_payload: AttemptPayload) => true);
+    render(<MobileWhatsappComposer disabled={false} quoted={{ id: 'internal-id', message_id: 'REAL-WHATSAPP-ID', phone: '5533999990000', message: 'Original', direction: 'incoming', created_at: '2026-11-28T12:00:00Z' }} cancelQuote={() => {}} send={send} openCatalog={() => {}} openReplies={() => {}} />);
+    fireEvent.change(screen.getByLabelText('Mensagem'), { target: { value: 'Resposta' } }); fireEvent.click(screen.getByLabelText('Enviar mensagem'));
+    await waitFor(() => expect(send).toHaveBeenCalledTimes(1));
+    expect(send.mock.calls[0]?.[0]).toMatchObject({ quotedMessageId: 'REAL-WHATSAPP-ID', text: 'Resposta' });
+  });
   it('galeria aceita vídeo e usa o mesmo envio de mídia após confirmação', async () => {
     const send = vi.fn(async (_payload: AttemptPayload) => true);
     URL.createObjectURL = vi.fn(() => 'blob:gallery'); URL.revokeObjectURL = vi.fn();

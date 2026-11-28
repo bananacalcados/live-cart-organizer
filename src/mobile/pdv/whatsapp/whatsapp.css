@@ -54,6 +54,7 @@ body[data-mobile-pdv-whatsapp] [role="dialog"] { overflow-wrap:anywhere; }
 .m-wa-day { margin:8px auto; width:max-content; padding:5px 12px; border-radius:9999px; background:var(--wa-surface); color:var(--wa-icon); font-size:12px; box-shadow:var(--wa-shadow); }
 .m-wa-quote { background:var(--wa-quote); }
 .m-wa-draft { background:var(--wa-surface); }
+.m-wa-gesture { touch-action:pan-y; user-select:none; -webkit-user-select:none; -webkit-touch-callout:none; }
 .m-wa-attachment { background:var(--wa-attachment-color,var(--wa-brand)); color:var(--wa-surface); }
 .m-wa-row:active { background:var(--wa-search); }
 body[data-mobile-pdv-whatsapp] [data-floating-tasks] { display:none; }

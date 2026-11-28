@@ -1,7 +1,7 @@
-import { useEffect,useRef,useState,type ReactNode } from 'react';
+import { useEffect,useRef,useState } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { Dialog,DialogContent,DialogTitle } from '@/components/ui/dialog';
-import { Reply,FileText,Loader2,ChevronDown,Clock,Play,Pause } from 'lucide-react';
+import { FileText,Loader2,ChevronDown,Clock,Play,Pause } from 'lucide-react';
 import type { MobileMessage } from '@/lib/chat/mobileWhatsappReads';
 import { CarouselMessageBubble } from '@/components/chat/CarouselMessageBubble';
 import { MessageStatusIcon } from '@/components/chat/MessageStatusIcon';
@@ -9,6 +9,7 @@ import type { MobileSendAttempt } from '@/lib/chat/mobileSendAttempt';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import type { QuotedHistory } from './quotedHistory';
+import { MobileReplyGesture } from './MobileReplyGesture';
 export function MobileWhatsappMessages({messages:recent,attempts,older,loading,loadOlder,quote,retry,readOriginal}:{messages:MobileMessage[];attempts:MobileSendAttempt[];older:boolean;loading:boolean;loadOlder:()=>Promise<void>;quote:(m:MobileMessage)=>void;retry:(a:MobileSendAttempt)=>void;readOriginal:(providerId:string)=>Promise<QuotedHistory|null>}){
  const [focused,setFocused]=useState<MobileMessage[]|null>(null),[highlight,setHighlight]=useState<string|null>(null),[locating,setLocating]=useState(false);
  const messages=focused||recent;const jumpLock=useRef(false);const highlightTimer=useRef<ReturnType<typeof setTimeout>>();
@@ -41,7 +42,7 @@ export function MobileWhatsappMessages({messages:recent,attempts,older,loading,l
  const out=m.direction==='outgoing';const newDay=!prev||dayOf(prev.created_at)!==dayOf(m.created_at);const tail=newDay||prev.direction!==m.direction;
  return <div key={v.key} data-index={v.index} ref={virtual.measureElement} className={`absolute left-0 top-0 w-full ${tail?'pt-2':'pt-0.5'}`} style={{transform:`translateY(${v.start}px)`}}>
  {newDay&&<p className="m-wa-day">{dayLabel(m.created_at)}</p>}
- <SwipeReply enabled={!!m.message_id} onReply={()=>quote(m)} out={out}>
+ <MobileReplyGesture canReply={!!m.message_id} text={m.message} onReply={()=>quote(m)} out={out}>
  <article data-message-id={m.id} data-highlight={m.id===highlight} className={`m-wa-bubble break-words ${out?'out':'in'} ${tail?'tail':''}`}>
  {m.quoted_message_id&&<Button variant="ghost" disabled={locating} aria-label="Ir à mensagem original" onClick={()=>void jump(m.quoted_message_id||'')} className={`m-wa-quote mb-1 h-auto min-h-11 w-full justify-start whitespace-normal rounded-md border-l-4 p-2 text-left text-[13px] ${original?.direction==='outgoing'?'border-[var(--wa-brand)]':'border-[var(--wa-violet)]'}`}><span><strong className="text-[var(--wa-brand)]">{original?(original.direction==='outgoing'?'Você':original.sender_name||'Cliente'):'Mensagem anterior'}</strong><span className="block line-clamp-2 text-[var(--wa-icon)]">{original?.message||'Toque para ver a mensagem original'}</span></span></Button>}
  {m.is_group&&!out&&m.sender_name&&<p className="text-[13px] font-semibold text-[var(--wa-violet)]">{m.sender_name}</p>}
@@ -49,7 +50,7 @@ export function MobileWhatsappMessages({messages:recent,attempts,older,loading,l
  {m.media_url&&(m.media_type==='image'?<button type="button" className="block w-full" aria-label="Ampliar foto" onClick={()=>setLightbox(m.media_url||null)}><img src={m.media_url} loading="lazy" alt="Foto da conversa" className="max-h-64 w-full rounded-md object-cover"/></button>:m.media_type==='audio'?<WaAudio src={m.media_url} out={out}/>:m.media_type==='video'?<video controls preload="none" src={m.media_url} className="max-h-64 w-full rounded-md"/>:<a href={m.media_url} target="_blank" rel="noopener noreferrer" className="flex min-h-12 items-center gap-2 rounded-md m-wa-quote px-3"><FileText className="h-6 w-6 text-[var(--wa-icon)]"/>Abrir documento</a>)}
  {m.message&&!/^\[(image|audio|áudio|document|video)\]$/.test(m.message)&&<span className="whitespace-pre-wrap [overflow-wrap:anywhere]">{m.message}</span>}
  <span className="m-wa-meta"><time>{new Date(m.created_at).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})}</time>{out&&<span data-read={['read','read_by_me','played'].includes(m.status||'')}><MessageStatusIcon status={m.status} className="h-4 w-4"/></span>}</span>
- </article></SwipeReply></div>;
+ </article></MobileReplyGesture></div>;
  })}</div>
  {!focused&&unseen.map(a=><div key={a.id} className="pt-2"><article className="m-wa-bubble out tail space-y-1"><p className="whitespace-pre-wrap break-words">{a.text}</p>{a.state==='uncertain'?<><p role="status" className="text-[13px] font-semibold text-destructive">Não confirmada — confira na conversa antes de reenviar</p><button type="button" className="min-h-11 rounded-full border border-destructive px-4 text-sm font-semibold text-destructive" disabled={!navigator.onLine} onClick={()=>retry(a)}>Reenviar</button></>:<span className="m-wa-meta">{a.state==='sending'?<><Clock className="h-3.5 w-3.5"/>Enviando…</>:'Enviada'}</span>}</article></div>)}
  {(!nearBottom||focused)&&<button type="button" className="sticky bottom-2 left-full flex h-11 w-11 items-center justify-center rounded-full m-wa-surface text-[var(--wa-icon)] shadow" aria-label="Mensagens recentes" onClick={()=>{setFocused(null);setHighlight(null);setNearBottom(true);if(parent.current)parent.current.scrollTop=parent.current.scrollHeight;}}><ChevronDown/></button>}
@@ -60,19 +61,6 @@ export function MobileWhatsappMessages({messages:recent,attempts,older,loading,l
 function dayLabel(iso:string){const d=new Date(iso);const today=new Date();const y=new Date();y.setDate(today.getDate()-1);
  if(d.toDateString()===today.toDateString())return 'Hoje';if(d.toDateString()===y.toDateString())return 'Ontem';
  return d.toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit',year:'numeric'});}
-
-/** Reply by swiping the bubble sideways or by long-press (500 ms); keyboard users get Enter/space via the menu-less focus target. */
-function SwipeReply({enabled,onReply,out,children}:{enabled:boolean;onReply:()=>void;out:boolean;children:ReactNode}){
- const start=useRef<{x:number;y:number}|null>(null);const timer=useRef<ReturnType<typeof setTimeout>>();const [dx,setDx]=useState(0);const fired=useRef(false);
- const end=()=>{clearTimeout(timer.current);if(dx>60&&!fired.current&&enabled)onReply();start.current=null;setDx(0);};
- return <div className={`relative flex ${out?'justify-end':'justify-start'}`} style={{transform:dx?`translateX(${dx}px)`:undefined,transition:dx?undefined:'transform .15s'}}
-  onTouchStart={e=>{if(!enabled)return;const t=e.touches[0];start.current={x:t.clientX,y:t.clientY};fired.current=false;timer.current=setTimeout(()=>{fired.current=true;navigator.vibrate?.(30);onReply();},500);}}
-  onTouchMove={e=>{if(!start.current)return;const t=e.touches[0];const x=t.clientX-start.current.x,y=Math.abs(t.clientY-start.current.y);if(Math.abs(x)>8||y>8)clearTimeout(timer.current);if(y<30&&x>0)setDx(Math.min(x,80));}}
-  onTouchEnd={end} onTouchCancel={end} onContextMenu={e=>{if(enabled){e.preventDefault();}}}>
-  {dx>20&&<Reply className="absolute left-0 top-1/2 h-5 w-5 -translate-x-7 -translate-y-1/2 text-[var(--wa-icon)]"/>}
-  {children}
- </div>;
-}
 
 function WaAudio({src,out}:{src:string;out:boolean}){
  const ref=useRef<HTMLAudioElement>(null);const [playing,setPlaying]=useState(false);const [time,setTime]=useState(0);const [duration,setDuration]=useState(0);
