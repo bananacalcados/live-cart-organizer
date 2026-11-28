@@ -8,6 +8,12 @@
 - 10 testes passaram (6 novos, 4 regressões). Leituras dos dois pedidos reais, sem qualquer gravação. Teste visual final abaixo.
 
 ## Escopo e desempenho
+## 3 — Lojas reais
+- Tabela tem seis lojas ativas: Loja Centro, Loja Perola, Site/Live (is_simulation=false); Lojas + Live, Site + Centro, Tênis Replica (is_simulation=true).
+- Critério já usado nos seletores de produtos do desktop: `is_active=true AND is_simulation=false`. Sem nomes/IDs fixos.
+- Consulta mobile de IDs exclui lojas simuladas antes de paginar. Contagens mobile somam o mesmo agregado existente por loja real; consulta do desktop intocada. Eventos só das lojas reais.
+- Migração aditiva 0331 somente de leitura, aplicada no servidor. Testes em banco descartável verificam lista e contagens.
+
 ## 2 — TROCA
 - Mesmo critério e helper do desktop: `trocas_devolucoes.pedido_novo_id`, status diferente de cancelada/concluida, `buildExchangeLocks`. Uma consulta em lote dos 50 pedidos, índice existente, nunca por cartão.
 - Etiqueta no cartão, detalhe e conferência; bloqueio visual de conclusão quando a troca aguarda finalização no PDV, além da trava que já existe no servidor.

@@ -167,7 +167,7 @@ export function MobileExpedition({ storeId: _userStore }: { storeId: string }) {
   useEffect(() => { const timer = setTimeout(() => { setServerSearch(search.trim()); setOffset(0); }, 400); return () => clearTimeout(timer); }, [search]);
   useEffect(() => { setPicked(new Set()); }, [stage, store, shipping, origin, serverSearch, offset]);
   const stores = useQuery({ queryKey: ["mobile-pdv-stores"], staleTime: 600_000, queryFn: async () => {
-    const { data, error } = await supabase.from("pos_stores").select("id,name").eq("is_active", true).order("name"); if (error) throw error; return data || [];
+    const { data, error } = await supabase.from("pos_stores").select("id,name").eq("is_active", true).eq("is_simulation", false).order("name"); if (error) throw error; return data || [];
   } });
   const orders = useQuery({ queryKey: ["mobile-pdv-expedition", store, stage, serverSearch, shipping, origin, offset],
     queryFn: async () => {
@@ -179,11 +179,11 @@ export function MobileExpedition({ storeId: _userStore }: { storeId: string }) {
       const locks = buildExchangeLocks(data || []);
       return rows.map(o => ({ ...o, exchangeLock: locks[o.id] }));
     } });
-  const counts = useQuery({ queryKey: ["pos-expedition-counts", store], queryFn: async () => {
-    const { data, error } = await supabase.rpc("pos_expedition_stage_counts", { p_store_id: store === "all" ? null : store }); if (error) throw error;
+  const counts = useQuery({ queryKey: ["mobile-pdv-expedition-counts", store], queryFn: async () => {
+    const { data, error } = await supabase.rpc("mobile_pdv_expedition_counts", { p_store_id: store === "all" ? null : store }); if (error) throw error;
     return Object.fromEntries((data || []).map(row => [row.stage, Number(row.total)]));
   } });
-  const refresh = () => { void queryClient.invalidateQueries({ queryKey: ["mobile-pdv-expedition"] }); void queryClient.invalidateQueries({ queryKey: ["pos-expedition-counts"] }); };
+  const refresh = () => { void queryClient.invalidateQueries({ queryKey: ["mobile-pdv-expedition"] }); void queryClient.invalidateQueries({ queryKey: ["mobile-pdv-expedition-counts"] }); };
   const list = orders.data || [];
   const photos = useItemPhotos(list.flatMap(order => order.items.map(itemPhotoKey)));
   const eligible = list.filter(order => canBulkAdvance(order, stage));

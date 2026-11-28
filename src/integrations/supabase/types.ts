@@ -34836,6 +34836,13 @@ export type Database = {
           variant_count: number
         }[]
       }
+      mobile_pdv_expedition_counts: {
+        Args: { p_store_id?: string }
+        Returns: {
+          stage: string
+          total: number
+        }[]
+      }
       mobile_pdv_expedition_ids: {
         Args: {
           p_limit?: number
