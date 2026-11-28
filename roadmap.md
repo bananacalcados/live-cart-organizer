@@ -1,9 +1,13 @@
 # Remoção do Tiny — Fase 2, primeiro lote
+## Implantação autorizada — manual e catálogo/cross-sell (28/11 17:37 UTC)
+- [x] Provas antes/depois e rollback conferido; 1.376 testes Vitest e 8 Deno runtime passaram, E preservado antes do link.
+- [x] Aplicado no servidor em 28/11 17:42:26.124882 UTC; corte explícito, v2 e caminhos de envio intactos; nenhuma publicação do site necessária.
+- [x] Observado até 17:53:23 UTC: 3 carrinhos novos/9 D (6 cancelados por pagamento, 3 aguardando), 3 cart_link/4 cadastro/3 ofertas enviados; zero retroativos, duplicações, presos, falhas ou alarmes. Manual/catálogo novos não apareceram na janela: cobertos por testes, sem mensagem artificial.
 ## Investigação prioritária — carrinhos manuais sem follow-up (28/11 17:26 UTC)
 - [x] Causa comprovada no gatilho implantado: NEW.order_ids inexistente em orders desfaz a fonte; desde 08/11 18:09:32 UTC; 85 sem jobs/51 oportunidades D em 30 dias, por live no relatório.
 - [x] Correção preparada fora das funções/migrações automáticas, com corte explícito contra antigos; 13 regressões novas, 70 Vitest + 8 Deno runtime passaram; nenhum envio/deploy.
 - [x] Requisito da futura Fila de disparos registrado: alerta de carrinho enviado sem agendamento, mesmo sem linha em fila; implementação permanece na entrega 3.
-- [ ] Implantar correção manual somente após autorização específica de Matthews, guarda de corte primeiro; NÃO aplicar agora. Bundle remoto não disponível na investigação (versão 1741 confirmada nos logs).
+- [x] Autorização recebida em 28/11 17:37 UTC; correção manual/catálogo aplicada com guarda primeiro às 17:42:26 UTC; versão final 1745 confirmada pelos logs, detalhes no relatório de implantação.
 ## WhatsApp mobile — Android (28/11 17:05 UTC), antes dos follow-ups
 - [x] 1: prévia de áudio gravado antes de envio; teste sem mensagem real
 - [x] 2/10: cores e fonte oficiais, tokens exclusivos mobile

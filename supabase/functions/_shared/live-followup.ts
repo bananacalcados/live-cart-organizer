@@ -47,8 +47,10 @@ export async function scheduleGlobalFollowups(sb: Client, simulation?: {eventId:
     let type: FollowupType | null = null;
     let base: string | null = null;
     let sequence = o ? 'order:' + o.id : 'access:' + a?.id;
-    if (o?.origin === 'catalog' && o.attribution?.source !== 'vitrine_grupo' && c.paid_same_day) { type='E'; base=c.first_item_at || o.created_at; }
-    else if (o && (o.selfservice_cart_sent_at || c.cart_sent_at)) { type='D'; base=o.selfservice_cart_sent_at || c.cart_sent_at; }
+    // An unpaid cart whose payment link was sent always gets D, including catalog/recurring orders.
+    // E is retained for its original pre-cart-link scenario, never substituted for D after the link.
+    if (o && (o.selfservice_cart_sent_at || c.cart_sent_at)) { type='D'; base=o.selfservice_cart_sent_at || c.cart_sent_at; }
+    else if (o?.origin === 'catalog' && o.attribution?.source !== 'vitrine_grupo' && c.paid_same_day) { type='E'; base=c.first_item_at || o.created_at; }
     // Only customers with an open cart get follow-ups: a registration without an order never does.
     else if (o && a && !a.registered_at && !a.whatsapp_confirmed_at && phone) { type='A'; base=a.created_at; sequence='registration:'+ev.id+':'+customer; }
     else if (o && phone && (a?.registered_at || o.registered_at || c.registration)) {
@@ -60,6 +62,13 @@ export async function scheduleGlobalFollowups(sb: Client, simulation?: {eventId:
     if (type === 'F' && o?.id) {
       const { data: dms } = await sb.from('ig_live_cart_notifications').select('status').eq('order_id', o.id).eq('kind', 'selfservice_register_dm');
       if (!followupFAllowed((dms || []).map((d: any) => d.status))) { await ack(); continue; }
+    }
+    // Guard-first deployment: keep D sources until the atomic SQL cutover is installed.
+    // A fixed server cutover also excludes old carts younger than the existing 60-minute guard.
+    if (type === 'D' && !simulation) {
+      const cutover = Date.parse(c.cart_followup_cutover_at || '');
+      if (!Number.isFinite(cutover)) { deferred++; continue; }
+      if (Date.parse(base) < cutover) { await ack(); continue; }
     }
     // Stale bases (e.g. a source that changed hours later or a recovered backlog) never create late reminders.
     if (!simulation && Date.now() - Date.parse(base) > MAX_SCHEDULE_BASE_AGE_MIN * 60000) { await ack(); continue; }

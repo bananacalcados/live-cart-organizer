@@ -56,7 +56,7 @@ beforeAll(() => {
 }, 120_000);
 
 async function schedule(sources: Source[], baseline = false) {
-  const path = baseline ? '../../supabase/functions/_shared/live-followup.ts' : '../../docs/followups/prepared/manual-cart-scheduler.ts';
+  const path = baseline ? '../../docs/followups/rollback/20261128-scheduler-before-manual-catalog.ts' : '../../docs/followups/prepared/manual-cart-scheduler.ts';
   const { scheduleGlobalFollowups } = await import(/* @vite-ignore */ path);
   const jobs: any[] = [];
   const acks: string[] = [];
