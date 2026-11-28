@@ -170,6 +170,10 @@
 - [x] Dar veredito não, diferenças remanescentes e roteiro posterior; manter fontes Shopify e dados reais intactos
 
 ## Follow-ups (28/11/2026)
+- [x] Prioridade v2 preparada: D 10 min primeiro, D 25/45 só com folga; v1 intacto e motivo próprio de congestionamento.
+- [x] Carga de 300 jobs/1h em 1 e 2 números independentes: 75/75 D iniciais, 5,10/1,06 min de atraso; limite e folga no SQL real, sem mensagens.
+- [ ] Implantar prioridade v2: bloqueada por comentários recentes (checagem de live); não aplicar nem agendar durante live.
+- [ ] Garantia de 100% em pico prolongado: limite nominal 80/h, simulação de 6h perde validade a partir de 76/h; ajustar janela útil do worker/reserva de capacidade exige aprovação fora deste escopo.
 - [x] Fase 1 — saúde das filas, alarme e ponto do vigia externo.
 - [x] Fase 2 — enviador v2 por instância + regra nova do D (interruptor em v2).
 - [ ] Matthews: preencher o número do alarme e cadastrar o segredo do vigia (QUEUE_WATCH_SECRET).
