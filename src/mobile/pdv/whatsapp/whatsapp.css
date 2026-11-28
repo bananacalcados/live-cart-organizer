@@ -28,6 +28,8 @@ body[data-mobile-pdv-whatsapp] [role="dialog"] { overflow-wrap:anywhere; }
 }
 .m-wa-list, .m-wa-surface, .m-wa-chat-header { background:var(--wa-surface); color:var(--wa-text); }
 .m-wa-title { color:var(--wa-brand); }
+.m-wa-seller-badge { background:var(--wa-search); color:var(--wa-secondary); }
+.m-wa-seller-badge[data-assigned="true"] { background:var(--wa-chip); color:var(--wa-chip-text); }
 .m-wa-search { background:var(--wa-search); }
 .m-wa-chip { display:inline-flex; align-items:center; gap:4px; min-height:44px; padding:0 14px; border:1px solid var(--wa-border); border-radius:9999px; background:var(--wa-surface); color:var(--wa-icon); font-size:14px; font-weight:500; white-space:nowrap; }
 .m-wa-chip[data-active="true"] { border-color:var(--wa-chip); background:var(--wa-chip); color:var(--wa-chip-text); }

@@ -23,10 +23,27 @@ import { MobileWhatsappReplies } from './MobileWhatsappReplies';
 import { toast } from 'sonner';
 import './whatsapp.css';
 import { readQuotedHistory } from './quotedHistory';
+import { readWhatsappSeller,saveWhatsappSeller } from './sellerSession';
 
 const LANES:[string,string][]=[['all','Todas as linhas'],...Object.entries(CHAT_LANE_META).map(([k,v])=>[k,v.title]),['awaiting_payment','Aguardando pagamento'],['archived','Arquivadas'],['dispatch','Disparos']] as [string,string][];
 const listTime=(iso:string)=>{const d=new Date(iso),now=new Date(),y=new Date();y.setDate(now.getDate()-1);if(d.toDateString()===now.toDateString())return d.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});if(d.toDateString()===y.toDateString())return 'Ontem';return d.toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit',year:'2-digit'});};
-export function MobileWhatsapp({storeId,sellerId}:{storeId:string;sellerId:string|null}){
+export function MobileWhatsapp({storeId}:{storeId:string;sellerId:string|null}){
+ const [sellerId,setSellerId]=useState(()=>readWhatsappSeller(storeId));
+ const [gate,setGate]=useState(()=>!readWhatsappSeller(storeId));
+ const candidates=useQuery({queryKey:['m-wa-seller-gate',storeId],enabled:gate,staleTime:300000,queryFn:async()=>{
+  const {data,error}=await supabase.from('pos_sellers').select('id,name,linked_user_id').eq('store_id',storeId).eq('is_active',true).order('name').limit(100);
+  if(error)throw error;return (data||[]).filter(s=>!isVirtualSeller(s.name));
+ }});
+ useEffect(()=>{const saved=readWhatsappSeller(storeId);setSellerId(saved);setGate(!saved);},[storeId]);
+ useEffect(()=>{document.body.setAttribute('data-mobile-pdv-whatsapp','');return()=>document.body.removeAttribute('data-mobile-pdv-whatsapp');},[]);
+ if(gate)return <main className="m-wa-list mx-auto min-h-screen max-w-md p-4 pb-24"><h1 className="m-wa-title mb-5 text-xl font-semibold">Quem está atendendo?</h1>
+  {candidates.isLoading&&<Loader2 className="animate-spin"/>}{candidates.isError&&<p role="alert">Não consegui carregar os vendedores. <Button variant="ghost" onClick={()=>void candidates.refetch()}>Atualizar</Button></p>}
+  <div className="space-y-2">{candidates.data?.map(s=><Button variant="outline" key={s.id} className="min-h-14 w-full justify-start" onClick={()=>{saveWhatsappSeller(storeId,s);setSellerId(s.id);setGate(false);}}><User className="h-6 w-6"/>{s.name}</Button>)}</div>
+  <Button variant="ghost" className="mt-4 min-h-12 w-full" onClick={()=>{setSellerId(null);setGate(false);}}>Pular (sem vendedor)</Button>
+ </main>;
+ return <MobileWhatsappScreen key={`${storeId}:${sellerId}`} storeId={storeId} sellerId={sellerId} onChangeSeller={()=>setGate(true)}/>;
+}
+function MobileWhatsappScreen({storeId,sellerId,onChangeSeller}:{storeId:string;sellerId:string|null;onChangeSeller:()=>void}){
  const navigate=useNavigate(),location=useLocation();const currentUserId=useCurrentUserId();
  const [term,setTerm]=useState('');const [query,setQuery]=useState('');const [numberId,setNumberId]=useState<string|null>(null);const [lane,setLane]=useState('all');const [quoted,setQuoted]=useState<MobileMessage|null>(null);
  const parts=location.pathname.replace(/^\/m\/pdv\/whatsapp\/?/,'').split('/').filter(Boolean);
@@ -48,7 +65,6 @@ export function MobileWhatsapp({storeId,sellerId}:{storeId:string;sellerId:strin
  },[targetKey,storeId,sellerId]);
  // Keep headers/assignment current after a message refresh without rebuilding targets every render.
  useEffect(()=>{if(!phone)return;const row=api.rows.find(c=>c.phone===phone&&c.whatsapp_number_id===routeNumber);if(row)setChosen(prev=>JSON.stringify(prev)===JSON.stringify(row)?prev:row);},[api.rows,phone,routeNumber]);
- useEffect(()=>{document.body.setAttribute('data-mobile-pdv-whatsapp','');return()=>document.body.removeAttribute('data-mobile-pdv-whatsapp');},[]);
  const frame=useRef<HTMLDivElement>(null);
  useEffect(()=>{
   const viewport=window.visualViewport;const resize=()=>{frame.current?.style.setProperty('--m-wa-height',`${viewport?.height||window.innerHeight}px`);frame.current?.style.setProperty('--m-wa-top',`${viewport?.offsetTop||0}px`);};
@@ -82,9 +98,11 @@ export function MobileWhatsapp({storeId,sellerId}:{storeId:string;sellerId:strin
   <header className="sticky top-0 z-10 m-wa-surface">
    <div className="flex min-h-14 items-center gap-1 px-2"><Button asChild variant="ghost" size="icon" className="h-11 w-11 text-[var(--wa-icon)]" aria-label="Voltar ao PDV"><Link to="/m/pdv/mais"><ArrowLeft/></Link></Button><h1 className="m-wa-title flex-1 text-[22px] font-bold">WhatsApp</h1><Button variant="ghost" size="icon" className="h-11 w-11 text-[var(--wa-icon)]" aria-label="Atualizar conversas" onClick={()=>void api.refresh()}><RefreshCw className={api.loading?'animate-spin':''}/></Button></div>
    <div className="px-3 pb-2"><label className="flex h-11 items-center gap-3 rounded-full m-wa-search px-4"><Search className="h-5 w-5 shrink-0 text-[var(--wa-icon)]"/><input className="min-w-0 flex-1 bg-transparent text-base outline-none placeholder:text-[var(--wa-tick)]" aria-label="Buscar conversa" placeholder="Pesquisar nome ou telefone" value={term} onChange={e=>setTerm(e.target.value)}/></label></div>
+   <Button variant="ghost" className="mx-3 mb-2 min-h-11 max-w-[calc(100%-24px)] justify-start text-[var(--wa-brand)]" onClick={onChangeSeller}><User className="h-5 w-5"/><span className="truncate">Atendendo: {seller.data?.name||'Sem vendedor'}</span><span className="text-xs">Trocar</span></Button>
    <div className="flex gap-2 overflow-x-auto px-3 pb-2 [scrollbar-width:none]" role="toolbar" aria-label="Filtros">
     <button type="button" className="m-wa-chip" data-active={lane==='all'} onClick={()=>setLane('all')}>Todas</button>
     <button type="button" className="m-wa-chip" data-active={lane==='unread'} onClick={()=>setLane('unread')}>Não lidas</button>
+    <Button variant="ghost" className="m-wa-chip" data-active={lane==='mine'} disabled={!sellerId} onClick={()=>setLane('mine')}>Minhas</Button>
     <button type="button" className="m-wa-chip" data-active={!!numberId} onClick={()=>setPicker('number')}>{numberLabel}<ChevronDown className="h-4 w-4"/></button>
     <button type="button" className="m-wa-chip" data-active={lane!=='all'&&lane!=='unread'} onClick={()=>setPicker('lane')}>{laneLabel}<ChevronDown className="h-4 w-4"/></button>
    </div>
@@ -95,7 +113,8 @@ export function MobileWhatsapp({storeId,sellerId}:{storeId:string;sellerId:strin
   <span aria-hidden className="flex h-[52px] w-[52px] shrink-0 items-center justify-center rounded-full bg-[var(--wa-avatar)] text-lg font-semibold text-[var(--wa-icon)]">{c.customer_name?.[0]?.toUpperCase()||<User className="h-7 w-7"/>}</span>
   <span className="min-w-0 flex-1 border-b border-[var(--wa-divider)] py-2"><span className="flex items-baseline justify-between gap-2"><strong className="truncate text-[17px] font-medium text-[var(--wa-text)]">{c.customer_name}</strong><time className={`shrink-0 text-xs ${unread?'font-semibold text-[var(--wa-brand)]':'text-[var(--wa-secondary)]'}`}>{listTime(c.last_message_at)}</time></span>
   <span className="mt-0.5 flex items-center gap-2"><span className="flex min-w-0 flex-1 items-center gap-1 text-[15px] text-[var(--wa-secondary)]">{ours&&<CheckCheck className="h-4 w-4 shrink-0 text-[var(--wa-tick)]"/>}<span className="truncate">{c.last_message}</span></span>{unread&&<span aria-label={`${c.unread_count} não lidas`} className="m-wa-unread flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full px-1.5 text-xs font-semibold">{c.unread_count}</span>}</span>
-  <span className="block truncate text-[11px] text-[var(--wa-tick)]">{CHAT_LANE_META[c.lane]?.title} · {api.numbers.find(n=>n.id===c.whatsapp_number_id)?.label||'Sem instância'}{c.assigned_name?` · ${c.assigned_name}`:''}</span></span>
+  <span className="mt-1 inline-flex max-w-full items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium m-wa-seller-badge" data-assigned={!!c.assigned_to}><User className="h-3.5 w-3.5 shrink-0"/><span className="truncate">{c.assigned_name||'Sem vendedor'}</span></span>
+  <span className="block truncate text-[11px] text-[var(--wa-tick)]">{CHAT_LANE_META[c.lane]?.title} · {api.numbers.find(n=>n.id===c.whatsapp_number_id)?.label||'Sem instância'}</span></span>
   </button></li>;})}
   </ul>{(api.loading||api.scopeLoading)&&<Loader2 className="mx-auto my-6 animate-spin text-[var(--wa-brand)]"/>}{!api.loading&&!api.scopeLoading&&!api.rows.length&&!api.error&&<p className="p-6 text-center text-[var(--wa-secondary)]">Nenhuma conversa encontrada.</p>}{api.hasMore&&<Button variant="outline" className="mx-3 my-4 h-12 w-[calc(100%-24px)] rounded-full" disabled={api.loading} onClick={()=>void api.refresh(true)}>Carregar mais conversas</Button>}
   <Sheet open={!!picker} onOpenChange={o=>{if(!o)setPicker(null);}}><SheetContent side="bottom" className="max-h-[80dvh] overflow-y-auto rounded-t-2xl"><SheetHeader><SheetTitle>{picker==='number'?'Instância':'Linha de atendimento'}</SheetTitle></SheetHeader><div className="mt-2">
@@ -103,6 +122,7 @@ export function MobileWhatsapp({storeId,sellerId}:{storeId:string;sellerId:strin
   </div></SheetContent></Sheet>
  </div>;
  return <div ref={frame} className="m-wa-frame fixed inset-x-0 z-50 mx-auto flex w-full max-w-md flex-col bg-background">
+  <Button variant="ghost" className="m-wa-surface h-11 shrink-0 justify-start rounded-none px-3 text-[var(--wa-brand)]" onClick={onChangeSeller}><User className="h-5 w-5"/><span className="min-w-0 truncate">Atendendo: {seller.data?.name||'Sem vendedor'}</span><span className="ml-auto text-xs">Trocar</span></Button>
   <header className="m-wa-chat-header flex h-14 shrink-0 items-center gap-1 px-1 shadow-sm"><button type="button" className="m-wa-icon" aria-label="Voltar às conversas" onClick={()=>navigate(action?baseUrl:'/m/pdv/whatsapp')}><ArrowLeft className="h-6 w-6"/></button><button type="button" className="flex min-w-0 flex-1 items-center gap-2 text-left" aria-label="Ações da cliente" onClick={()=>navigate(`${baseUrl}/cliente`)}><span aria-hidden className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[var(--wa-avatar)] font-semibold text-[var(--wa-icon)]">{target?.customer_name?.[0]?.toUpperCase()||<User className="h-6 w-6"/>}</span><span className="min-w-0"><h1 className="truncate text-[17px] font-semibold">{target?.customer_name||'Conversa'}</h1><p className="truncate text-xs text-[var(--wa-secondary)]">{sendNumber?.label||target?.phone}</p></span></button><button type="button" className="m-wa-icon" aria-label="Atendente e linha" onClick={()=>navigate(`${baseUrl}/atendente`)}><MoreVertical className="h-6 w-6"/></button></header>
   {!online&&<p role="status" className="shrink-0 bg-muted p-2 text-sm">Sem internet. Não haverá reenvio automático.</p>}
   {!target?<div className="p-6"><p>Conversa indisponível nesta loja ou para este atendente.</p><Button variant="outline" className="mt-4 h-12" onClick={()=>navigate('/m/pdv/whatsapp')}>Voltar à lista</Button></div>:action?<main className="min-h-0 flex-1 overflow-y-auto p-4">

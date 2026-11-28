@@ -6,7 +6,7 @@
 - [x] 4: galeria com fotos/vídeos, prévia e mesmo envio desktop
 - [x] 5: citação abre original e trecho sob demanda, sem baixar histórico inteiro; recentes preservadas
 - [x] 6: gestos com ponteiro capturado e pan-y, cancelamento sem resposta, menu Responder/Copiar; referência real preservada
-- [ ] 7: escolha de vendedor como desktop, etiqueta e filtro Minhas
+- [x] 7: vendedor por sessão como desktop, etiquetas e Minhas no servidor; 15 testes e abertura autenticada em 360–412px
 - [ ] 8: nova conversa reutilizando abertura desktop
 - [ ] 9: proposta somente leitura com métricas reais, sem implementação
 - [ ] Testes 360–412px, sem mensagens reais; um commit por item, sem publicar
