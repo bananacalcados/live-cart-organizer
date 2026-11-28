@@ -5,8 +5,8 @@
 - [x] 3: apenas lojas ativas não simuladas, inclusive contagens e lista no servidor
 - [x] 4: envio/conferência/emissão confirmada/documentos existentes; mesma gravação e testes sem operação real
 - [ ] 4: compra de nova etiqueta bloqueada — timeout externo pode liberar recompra no caminho desktop; corrigir exige autorização fora do escopo
-- [ ] 5: Instagram Direct apenas, filtros e contadores no servidor mobile
-- [ ] Verificar 360–412px, testes isolados sem nota/etiqueta/mensagem real; um commit por item
+- [x] 5: Instagram Direct apenas, filtros e contadores no servidor mobile; arquivo e cursor preservados
+- [x] Verificar 360–412px, 1.326 testes sem nota/etiqueta/mensagem real; entregas em commits separados
 ## PDV mobile — melhorias Expedição/WhatsApp (Matthews 28/11)
 - [x] Parte A: todas as lojas, filtros, seleção múltipla, frete/origem/dados, detalhe e edição (commit separado)
 - [x] Parte B: aparência WhatsApp na lista, conversa e barra de escrever (commit separado)

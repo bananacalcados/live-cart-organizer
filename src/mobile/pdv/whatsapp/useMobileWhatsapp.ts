@@ -2,7 +2,8 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useQuery } from '@tanstack/react-query';
 import { useWaMessageBroadcast } from '@/hooks/useWaMessageBroadcast';
-import { fetchMobileConversationPage, fetchMobileMessagePage, fetchMobileMessageUpdates, mergeMobileMessages, type MobileConversation, type MobileMessage } from '@/lib/chat/mobileWhatsappReads';
+import { fetchMobileConversationPage, mergeMobileMessages, type MobileConversation, type MobileMessage } from '@/lib/chat/mobileWhatsappReads';
+import { fetchMobileMessagePage, fetchMobileMessageUpdates } from './directReads';
 
 export function useMobileWhatsapp(storeId: string, sellerId: string | null, query: string, numberId: string | null, lane: string, target: MobileConversation | null) {
   const scope = useQuery({ queryKey: ['m-wa-scope', storeId], staleTime: 300000, queryFn: async () => {

@@ -8,6 +8,22 @@
 - 10 testes passaram (6 novos, 4 regressões). Leituras dos dois pedidos reais, sem qualquer gravação. Teste visual final abaixo.
 
 ## Escopo e desempenho
+## 5 — Instagram só Direct
+- Migrações 0332/0333 somente de leitura: lista mobile deriva o último Direct, direção e atendimento de mensagens reais. Comentários `💬 Comentário…` (Live/post/Reel/anúncio) e fontes explícitas ig_comment/instagram_comment/live_comment são excluídos. Interações de botão no Direct permanecem.
+- Contagem exata de Direct não lido calculada apenas para os 50 registros da página, incluindo arquivo. Não há consulta por mensagem no navegador. Histórico/cursor/atualização de status Instagram usam RPC mobile própria, com mesmas permissões e `quoted_message_id`; WhatsApp/Messenger continuam no leitor anterior.
+- Não altera resumo, triggers, envio, arquivo, desktop nem mensagens salvas. Publicação necessária para o novo leitor de histórico; leitura da lista já aplicada no servidor.
+- Consulta usa idx_wm_channel_created e índices phone/instância do histórico, sem índice novo nem polling. Plano descartado de consultas laterais para 3.379 conversas levou 722 ms; não foi implantado. Consulta em lote de candidatos Direct: 93,6 ms no EXPLAIN. Caminho WhatsApp preservado sem enriquecimento extra.
+- Medições autenticadas da página de 50 na conta principal: 246–524 ms incluindo rede, com variação conforme carga; conta secundária: 53–86 ms. Não é garantia de latência sob carga concorrente. Zero comentários nas 50 prévias e na leitura do Direct testado. Não foram executadas mensagens de teste nem gravações.
+
+## Verificação final e limites
+- **1.326 testes em 196 arquivos passaram**, incluindo 7 leitores/avisos de endereço, 4 lojas no PostgreSQL descartável, 5 confirmações/toque duplo/retomada fiscal e 8 Direct/lista/não-lidas/arquivo/cursor/permissão, além das regressões anteriores.
+- Navegador autenticado 360×844 e 412×844: lojas reais, ambos pedidos citados com rua no cartão e detalhe, editor preenchido com rua em tela cheia, conferência com dados/envio e documentos, lista Instagram principal sem comentários, sem largura excedente e sem erros de execução.
+- Conferência visual identificou e corrigiu checkbox alongado pelo tamanho de toque: caixa visual pequena, área da linha permanece grande. Título do editor preserva espaço para fechar.
+- Não testados em aparelho real: câmera/leitor físico, teclado, gravação de áudio e impressora. Não testados: salvar edição, selecionar frete real, emitir NF-e, comprar etiqueta, concluir/despachar pedido real, download de documento real nem evento recebido de Direct com a conversa aberta. Essas operações não foram exercidas em produção; emissão/toque duplo/retomada foram simulados.
+- Documento HTML legado não foi convertido em PDF; compra de nova etiqueta bloqueada pelo risco documentado. Não declarar o fluxo completo de compra de etiqueta homologado.
+- **Publicação:** alterações das telas, editor e leitor de histórico dependem de publicação do frontend pelo Matthews. Consultas de leitura 0331–0333 já aplicadas. Nenhum site publicado; nenhum interruptor, pagamento, checkout, enviador ou fila alterado.
+- Follow-ups continuam no roadmap: validade → lembretes PDV → Fila de disparos. Implantação de envio somente sem live ou nova autorização; nada dessas entregas foi iniciado neste pedido.
+
 ## 4 — Conferência e documentos (entrega segura parcial)
 - Escolha de envio pelo mesmo ExpShippingFields: opções cadastradas, mototaxista, retirada, valor. Cotação e seleção pelo mesmo ExpFreightQuotePanel / sale-freight-quote, sem cotação automática ao abrir.
 - Correção dos dados pelo mesmo ExpOrderEditDialog, agora em tela cheia apenas quando a expedição mobile está montada. Leitor normaliza aliases no objeto de exibição antes de abrir, sem persistência automática.

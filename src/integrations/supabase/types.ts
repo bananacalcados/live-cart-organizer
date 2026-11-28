@@ -34814,6 +34814,24 @@ export type Database = {
         }
         Returns: Json
       }
+      mobile_instagram_is_direct: {
+        Args: { p_message: string; p_source: string }
+        Returns: boolean
+      }
+      mobile_instagram_message_page: {
+        Args: {
+          p_after_at?: string
+          p_after_id?: string
+          p_archive?: boolean
+          p_before_at?: string
+          p_before_id?: string
+          p_ids?: string[]
+          p_limit?: number
+          p_number_id?: string
+          p_phone: string
+        }
+        Returns: Json
+      }
       mobile_masters_list: {
         Args: {
           p_active_only?: boolean

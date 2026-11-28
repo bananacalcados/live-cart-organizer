@@ -2325,6 +2325,20 @@
       "when": 1795884166624,
       "tag": "0331_mobile_expedition_real_stores",
       "breakpoints": true
+    },
+    {
+      "idx": 332,
+      "version": "7",
+      "when": 1795884525601,
+      "tag": "0332_mobile_instagram_direct_read_only",
+      "breakpoints": true
+    },
+    {
+      "idx": 333,
+      "version": "7",
+      "when": 1795884724388,
+      "tag": "0333_mobile_instagram_direct_summary_fast_path",
+      "breakpoints": true
     }
   ]
 }
