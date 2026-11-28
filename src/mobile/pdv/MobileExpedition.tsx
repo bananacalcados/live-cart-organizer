@@ -17,6 +17,7 @@ import { itemPhotoKey } from "@/lib/pos/itemPhotoCache";
 import { brl, EXP_STAGES, fetchExpeditionOrders, nextStage, type ExpOrder, type ExpStage } from "@/lib/pos/expedition";
 import { advanceMode, canBulkAdvance, originLabel, shippingMethodOf, shippingTag, sortMobileExpedition, type ShippingTone } from "@/lib/pos/expeditionReadiness";
 import { mobileOrderAddress, mobileAddressLine, mobileMissingOrderData } from "./expeditionData";
+import { buildExchangeLocks, type ExchangeLock } from "@/lib/pos/exchangeReplacementLock";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { ExpOrderEditDialog } from "@/components/pos/expedition/ExpOrderEditDialog";
 import { expeditionShippingError, finishExpedition, moveExpeditionOrders, type ExpeditionShipping } from "@/lib/pos/expeditionActions";
@@ -39,7 +40,12 @@ function feedback(ok: boolean) {
   } catch { /* Sound is best-effort; visible feedback always remains. */ }
 }
 
-function MobileConference({ order, userId, onClose, onRefresh }: { order: ExpOrder; userId: string; onClose: () => void; onRefresh: () => void }) {
+type MobileExpOrder = ExpOrder & { exchangeLock?: ExchangeLock };
+function ExchangeBadge({ order }: { order: MobileExpOrder }) {
+  return order.exchangeLock ? <Badge variant="destructive" className="h-auto whitespace-normal">TROCA {order.exchangeLock.code}{!order.exchangeLock.canConclude ? " — AGUARDANDO FINALIZAR A TROCA NO PDV" : ""}</Badge> : null;
+}
+
+function MobileConference({ order, userId, onClose, onRefresh }: { order: MobileExpOrder; userId: string; onClose: () => void; onRefresh: () => void }) {
   const outbox = useExpeditionOutbox(order, userId);
   const [code, setCode] = useState("");
   const [camera, setCamera] = useState(false);
@@ -67,7 +73,7 @@ function MobileConference({ order, userId, onClose, onRefresh }: { order: ExpOrd
     finally { setCode(""); if (!camera) input.current?.focus(); }
   };
   const conclude = async () => {
-    if (!complete || outbox.pending || outbox.stale || outbox.invalid || !outbox.online) return;
+    if (!complete || outbox.pending || outbox.stale || outbox.invalid || !outbox.online || order.exchangeLock?.canConclude === false) return;
     setBusy(true);
     try {
       const result = await finishExpedition(order, Object.fromEntries(order.items.map(item => [item.id, { scanned: true, feet_ok: !!checks[item.id]?.feet_ok, has_defect: !!checks[item.id]?.has_defect }])), shipping);
@@ -78,6 +84,7 @@ function MobileConference({ order, userId, onClose, onRefresh }: { order: ExpOrd
   return <section className="space-y-4" aria-label="Conferência do pedido">
     <div className="flex items-center justify-between gap-2"><div className="min-w-0"><h2 className="break-words text-lg font-bold">{order.customer_name || "Cliente"}</h2><p className="text-xs text-muted-foreground">Pedido {order.id.slice(0, 8).toUpperCase()}</p></div><Button variant="ghost" size="icon" className="h-11 w-11 shrink-0" aria-label="Voltar à fila" onClick={onClose}><X className="h-5 w-5" /></Button></div>
     <div className="flex items-center justify-between"><span className="text-3xl font-bold" aria-live="polite">{scanned} de {quantity}</span><Badge variant="outline">Conferência</Badge></div>
+    <ExchangeBadge order={order} />
     {!outbox.online && <p className="flex items-center gap-2 text-sm text-destructive"><WifiOff className="h-5 w-5" />Sem internet · bipes guardados no aparelho</p>}
     {(outbox.pending > 0 || outbox.error) && <div className="space-y-2 border-l-4 border-primary pl-3"><p className="text-sm">{outbox.pending} bipe(s) pendente(s)</p>{outbox.error && <p role="alert" className="break-words text-sm text-destructive">{outbox.error}</p>}<Button variant="outline" className="h-11 w-full" disabled={!outbox.online || outbox.syncing} onClick={() => void outbox.sync()}><RefreshCw className={`mr-2 h-4 w-4 ${outbox.syncing ? "animate-spin" : ""}`} />Sincronizar</Button></div>}
     {outbox.stale && <p role="alert" className="text-sm text-destructive">O pedido mudou. Volte à fila para conferir a etapa atual; os bipes anteriores continuam guardados.</p>}
@@ -88,7 +95,7 @@ function MobileConference({ order, userId, onClose, onRefresh }: { order: ExpOrd
     {message && <p role="status" className="break-words border-l-4 border-primary pl-3 text-sm font-semibold">{message}</p>}
     <ul className="divide-y">{order.items.map(item => <li key={item.id} className="space-y-2 py-3"><div className="flex items-start justify-between gap-2"><p className="min-w-0 break-words font-medium">{item.product_name} · {item.size}</p><span className="shrink-0 text-sm font-bold">{outbox.totals[item.id] || 0}/{item.quantity}</span></div><label className="flex min-h-11 items-center gap-3 text-sm"><Checkbox checked={!!checks[item.id]?.feet_ok} onCheckedChange={checked => setChecks(current => ({ ...current, [item.id]: { has_defect: current[item.id]?.has_defect || false, feet_ok: checked === true } }))} />Pés e numeração conferidos</label><label className="flex min-h-11 items-center gap-3 text-sm"><Checkbox checked={!!checks[item.id]?.has_defect} onCheckedChange={checked => setChecks(current => ({ ...current, [item.id]: { feet_ok: current[item.id]?.feet_ok || false, has_defect: checked === true } }))} />Tem defeito</label></li>)}</ul>
     {missingShipping && <><p role="alert" className="text-sm text-destructive">{missingShipping}. Complete na versão completa.</p><FullExpedition label="Conferir dados de envio" /></>}
-    <Button className="h-12 w-full text-base" disabled={!complete || outbox.pending > 0 || outbox.stale || outbox.invalid || !!missingShipping || busy || !outbox.online} onClick={() => void conclude()}>{busy ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <CheckCircle2 className="mr-2 h-5 w-5" />}Concluir conferência e despacho</Button>
+    <Button className="h-12 w-full text-base" disabled={!complete || outbox.pending > 0 || outbox.stale || outbox.invalid || !!missingShipping || busy || !outbox.online || order.exchangeLock?.canConclude === false} onClick={() => void conclude()}>{busy ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <CheckCircle2 className="mr-2 h-5 w-5" />}Concluir conferência e despacho</Button>
     {outbox.stale && outbox.pending === 0 && <Button variant="outline" className="h-12 w-full" onClick={() => { outbox.reset(); onClose(); }}>Recomeçar com o pedido atualizado</Button>}
   </section>;
 }
@@ -116,13 +123,14 @@ function Row({ label, value }: { label: string; value?: string | number | null }
   return <div className="flex justify-between gap-3 py-2 text-sm"><span className="text-muted-foreground">{label}</span><span className="min-w-0 break-words text-right font-medium">{value || "—"}</span></div>;
 }
 
-function MobileOrderDetail({ order, onClose, onSaved, onConference }: { order: ExpOrder; onClose: () => void; onSaved: () => void; onConference?: () => void }) {
+function MobileOrderDetail({ order, onClose, onSaved, onConference }: { order: MobileExpOrder; onClose: () => void; onSaved: () => void; onConference?: () => void }) {
   const [editing, setEditing] = useState(false);
   const a = mobileOrderAddress(order);
   const photos = useItemPhotos(order.items.map(itemPhotoKey));
   return <section className="space-y-3" aria-label="Detalhe do pedido">
     <div className="flex items-center gap-2"><Button variant="ghost" size="icon" className="h-11 w-11" aria-label="Voltar à lista" onClick={onClose}><ArrowLeft className="h-5 w-5" /></Button><div className="min-w-0 flex-1"><h2 className="break-words text-lg font-bold">{order.customer_name || "Cliente"}</h2><p className="text-xs text-muted-foreground">#{order.id.slice(0, 8).toUpperCase()} · {order.store_name || "Loja"}</p></div></div>
     <div className="flex flex-wrap items-center gap-2"><ShippingBadge order={order} /><Badge variant="outline">{originLabel(order)}</Badge></div>
+    <ExchangeBadge order={order} />
     <DataStatus order={order} />
     <div className="divide-y rounded-lg border px-3">
       <Row label="Telefone" value={order.resolved_phone || order.customer_phone} /><Row label="CPF" value={order.customer_cpf} /><Row label="E-mail" value={order.customer_email} />
@@ -149,7 +157,7 @@ export function MobileExpedition({ storeId: _userStore }: { storeId: string }) {
   const [search, setSearch] = useState("");
   const [serverSearch, setServerSearch] = useState("");
   const [offset, setOffset] = useState(0);
-  const [conference, setConference] = useState<ExpOrder | null>(null);
+  const [conference, setConference] = useState<MobileExpOrder | null>(null);
   const [detailId, setDetailId] = useState("");
   const [busyId, setBusyId] = useState("");
   const [selecting, setSelecting] = useState(false);
@@ -162,7 +170,15 @@ export function MobileExpedition({ storeId: _userStore }: { storeId: string }) {
     const { data, error } = await supabase.from("pos_stores").select("id,name").eq("is_active", true).order("name"); if (error) throw error; return data || [];
   } });
   const orders = useQuery({ queryKey: ["mobile-pdv-expedition", store, stage, serverSearch, shipping, origin, offset],
-    queryFn: async () => sortMobileExpedition(await fetchExpeditionOrders(store, stage, undefined, "all", serverSearch, { limit: 50, offset, shipping, origin }), stage) });
+    queryFn: async () => {
+      const rows = sortMobileExpedition(await fetchExpeditionOrders(store, stage, undefined, "all", serverSearch, { limit: 50, offset, shipping, origin }), stage);
+      if (!rows.length) return [] as MobileExpOrder[];
+      const { data, error } = await supabase.from("trocas_devolucoes").select("pedido_novo_id,codigo_devolucao,status,modo_expedicao")
+        .in("pedido_novo_id", rows.map(o => o.id)).not("status", "in", "(cancelada,concluida)");
+      if (error) throw error;
+      const locks = buildExchangeLocks(data || []);
+      return rows.map(o => ({ ...o, exchangeLock: locks[o.id] }));
+    } });
   const counts = useQuery({ queryKey: ["pos-expedition-counts", store], queryFn: async () => {
     const { data, error } = await supabase.rpc("pos_expedition_stage_counts", { p_store_id: store === "all" ? null : store }); if (error) throw error;
     return Object.fromEntries((data || []).map(row => [row.stage, Number(row.total)]));
@@ -221,6 +237,7 @@ export function MobileExpedition({ storeId: _userStore }: { storeId: string }) {
           <h2 className="break-words font-bold">{order.customer_name || "Cliente"}</h2>
           <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground"><span className="font-semibold text-foreground">{originLabel(order)}</span>{order.seller_label && <span>Vend.: {order.seller_label}</span>}<span>#{order.id.slice(0, 8).toUpperCase()}</span><span>{new Date(order.created_at).toLocaleDateString("pt-BR")}</span></div>
           <DataStatus order={order} />
+          <ExchangeBadge order={order} />
           {mobileAddressLine(order) && <p className="break-words text-xs text-muted-foreground">{mobileAddressLine(order)}</p>}
         </button>
       </div>

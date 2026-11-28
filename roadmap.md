@@ -1,7 +1,7 @@
 # Remoção do Tiny — Fase 2, primeiro lote
 ## PDV mobile — ajustes após teste publicado (28/11 16:39 UTC)
 - [x] 1: endereço completo e diagnóstico de dados por etapa, sem alterar desktop; 10 testes passaram
-- [ ] 2: destaque TROCA com o mesmo critério desktop
+- [x] 2: destaque TROCA com o mesmo critério desktop e trava de conclusão preservada
 - [ ] 3: apenas lojas ativas não simuladas, inclusive contagens e lista no servidor
 - [ ] 4: conferência completa segura, reaproveitar gravações; PDFs no celular; relatar bloqueios de proteção
 - [ ] 5: Instagram Direct apenas, filtros e contadores no servidor mobile

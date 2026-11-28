@@ -8,5 +8,10 @@
 - 10 testes passaram (6 novos, 4 regressões). Leituras dos dois pedidos reais, sem qualquer gravação. Teste visual final abaixo.
 
 ## Escopo e desempenho
+## 2 — TROCA
+- Mesmo critério e helper do desktop: `trocas_devolucoes.pedido_novo_id`, status diferente de cancelada/concluida, `buildExchangeLocks`. Uma consulta em lote dos 50 pedidos, índice existente, nunca por cartão.
+- Etiqueta no cartão, detalhe e conferência; bloqueio visual de conclusão quando a troca aguarda finalização no PDV, além da trava que já existe no servidor.
+- Sem alterar pedido ou troca. Testes do helper compartilhado executados sem gravações.
+
 - Desktop, pagamento/checkout, envio de mensagem e follow-ups intocados. Sem publicação e sem polling.
 - Abertura de Expedição preserva consultas existentes: lojas + contagens + IDs + vendas + enriquecimentos em lote (itens, vendedores/eventos/fontes quando houver, lojas, atribuições/instâncias) + fotos em lote; até cerca de 13 chamadas conforme os dados. Nenhuma consulta por cartão. Atualização por eventos e botão.
