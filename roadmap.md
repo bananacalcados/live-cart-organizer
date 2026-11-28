@@ -1,4 +1,11 @@
 # Remoção do Tiny — Fase 2, primeiro lote
+## PDV mobile — ajustes após teste publicado (28/11 16:39 UTC)
+- [x] 1: endereço completo e diagnóstico de dados por etapa, sem alterar desktop; 10 testes passaram
+- [ ] 2: destaque TROCA com o mesmo critério desktop
+- [ ] 3: apenas lojas ativas não simuladas, inclusive contagens e lista no servidor
+- [ ] 4: conferência completa segura, reaproveitar gravações; PDFs no celular; relatar bloqueios de proteção
+- [ ] 5: Instagram Direct apenas, filtros e contadores no servidor mobile
+- [ ] Verificar 360–412px, testes isolados sem nota/etiqueta/mensagem real; um commit por item
 ## PDV mobile — melhorias Expedição/WhatsApp (Matthews 28/11)
 - [x] Parte A: todas as lojas, filtros, seleção múltipla, frete/origem/dados, detalhe e edição (commit separado)
 - [x] Parte B: aparência WhatsApp na lista, conversa e barra de escrever (commit separado)

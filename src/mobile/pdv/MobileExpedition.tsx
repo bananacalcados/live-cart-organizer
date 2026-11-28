@@ -15,7 +15,8 @@ import { useItemPhotos } from "@/hooks/useItemPhotos";
 import { ItemPhotoThumb } from "@/components/pos/ItemPhotoThumb";
 import { itemPhotoKey } from "@/lib/pos/itemPhotoCache";
 import { brl, EXP_STAGES, fetchExpeditionOrders, nextStage, type ExpOrder, type ExpStage } from "@/lib/pos/expedition";
-import { advanceMode, canBulkAdvance, missingOrderData, originLabel, shippingMethodOf, shippingTag, sortMobileExpedition, type ShippingTone } from "@/lib/pos/expeditionReadiness";
+import { advanceMode, canBulkAdvance, originLabel, shippingMethodOf, shippingTag, sortMobileExpedition, type ShippingTone } from "@/lib/pos/expeditionReadiness";
+import { mobileOrderAddress, mobileAddressLine, mobileMissingOrderData } from "./expeditionData";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { ExpOrderEditDialog } from "@/components/pos/expedition/ExpOrderEditDialog";
 import { expeditionShippingError, finishExpedition, moveExpeditionOrders, type ExpeditionShipping } from "@/lib/pos/expeditionActions";
@@ -106,7 +107,7 @@ function ShippingBadge({ order }: { order: ExpOrder }) {
   return <span className={`inline-flex min-h-7 items-center rounded-full px-3 text-xs font-bold ${TONE[tag.tone]}`}>{tag.label}</span>;
 }
 function DataStatus({ order }: { order: ExpOrder }) {
-  const missing = missingOrderData(order);
+  const missing = mobileMissingOrderData(order);
   return missing.length ? <p className="flex items-center gap-1 text-xs font-semibold text-destructive"><AlertTriangle className="h-4 w-4 shrink-0" />Faltando: {missing.join(", ")}</p>
     : <p className="flex items-center gap-1 text-xs font-semibold text-emerald-700"><CheckCircle2 className="h-4 w-4 shrink-0" />Dados completos</p>;
 }
@@ -117,7 +118,7 @@ function Row({ label, value }: { label: string; value?: string | number | null }
 
 function MobileOrderDetail({ order, onClose, onSaved, onConference }: { order: ExpOrder; onClose: () => void; onSaved: () => void; onConference?: () => void }) {
   const [editing, setEditing] = useState(false);
-  const a = order.shipping_address || {};
+  const a = mobileOrderAddress(order);
   const photos = useItemPhotos(order.items.map(itemPhotoKey));
   return <section className="space-y-3" aria-label="Detalhe do pedido">
     <div className="flex items-center gap-2"><Button variant="ghost" size="icon" className="h-11 w-11" aria-label="Voltar à lista" onClick={onClose}><ArrowLeft className="h-5 w-5" /></Button><div className="min-w-0 flex-1"><h2 className="break-words text-lg font-bold">{order.customer_name || "Cliente"}</h2><p className="text-xs text-muted-foreground">#{order.id.slice(0, 8).toUpperCase()} · {order.store_name || "Loja"}</p></div></div>
@@ -220,6 +221,7 @@ export function MobileExpedition({ storeId: _userStore }: { storeId: string }) {
           <h2 className="break-words font-bold">{order.customer_name || "Cliente"}</h2>
           <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground"><span className="font-semibold text-foreground">{originLabel(order)}</span>{order.seller_label && <span>Vend.: {order.seller_label}</span>}<span>#{order.id.slice(0, 8).toUpperCase()}</span><span>{new Date(order.created_at).toLocaleDateString("pt-BR")}</span></div>
           <DataStatus order={order} />
+          {mobileAddressLine(order) && <p className="break-words text-xs text-muted-foreground">{mobileAddressLine(order)}</p>}
         </button>
       </div>
       <ul className="space-y-2">{order.items.map(item => <li key={item.id} className="flex items-center gap-3"><ItemPhotoThumb photo={photos.get(itemPhotoKey(item))} size={56} alt={item.product_name || "Item"} /><div className="min-w-0 flex-1"><p className="break-words text-sm font-semibold">{item.product_name}</p><p className="break-words text-xs text-muted-foreground">{item.variant_name} · {item.size} · {item.quantity} par(es)</p></div></li>)}</ul>

@@ -9,3 +9,4 @@
 - Mobile WhatsApp Option A keeps send endpoints untouched: synchronous per-conversation locks and persisted uncertain attempts never auto-retry; only explicit human retry dispatches, and provider echo matching fails closed on target/content/sender/time ambiguity.
 - Mobile Expedition lists via mobile_pdv_expedition_ids_v2 (all stores default, SEDEX/moto first) and readiness/bulk rules in lib/pos/expeditionReadiness.ts; bulk advance runs one pos_expedition_transition per order so failures are reported per order. Edits reuse the desktop ExpOrderEditDialog (single save path).
 - Mobile WhatsApp look lives only in whatsapp.css (scoped classes); visual changes never touch the send path.
+- Mobile expeditionData reads the desktop address aliases without writing them; readiness adds shipping guards only at conference, so imported street fields and earlier stages never produce false blocks.
