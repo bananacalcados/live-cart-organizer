@@ -28,4 +28,9 @@ describe("mobile address reads without writes", () => {
     expect(mobileMissingOrderData(order({ shipping_carrier: "Correios PAC" }))).toEqual(["CEP", "endereço"]);
     expect(mobileMissingOrderData(order({ shipping_carrier: "Retirada na loja" }))).toEqual([]);
   });
+  it("matches desktop conversion of empty shipping cost to zero", () => {
+    const o = order({ expedition_stage: "conferencia", shipping_carrier: "Mototaxi", courier_name: "Entregador", shipping_cost: null,
+      shipping_address: { street: "Rua A", number: "1", neighborhood: "Centro", city: "GV", state: "MG", cep: "35000000" } });
+    expect(mobileMissingOrderData(o)).toEqual([]);
+  });
 });

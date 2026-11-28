@@ -36,7 +36,7 @@ export function mobileMissingOrderData(order: ExpOrder): string[] {
   }
   if (order.expedition_stage === "conferencia") {
     const error = expeditionShippingError({ carrier, tracking: order.tracking_code || "", courier: order.courier_name || "",
-      trackingUrl: order.tracking_url || "", deliveryDays: order.delivery_days || "", cost: order.shipping_cost == null ? NaN : Number(order.shipping_cost) });
+      trackingUrl: order.tracking_url || "", deliveryDays: order.delivery_days || "", cost: Number(order.shipping_cost) });
     if (error) missing.push(error === "Selecione a forma de envio" ? "frete" : error);
   }
   return missing;

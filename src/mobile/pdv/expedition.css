@@ -1,7 +1,7 @@
 /* Applies only while the mobile expedition is mounted, including portalled editors. */
-.mobile-expedition-workspace button,
+.mobile-expedition-workspace button:not([role="checkbox"]),
 .mobile-expedition-workspace input,
-body:has(.mobile-expedition-workspace) [role="dialog"] button,
+body:has(.mobile-expedition-workspace) [role="dialog"] button:not([role="checkbox"]),
 body:has(.mobile-expedition-workspace) [role="dialog"] input,
 body:has(.mobile-expedition-workspace) [role="option"] { min-height: 48px; }
 body:has(.mobile-expedition-workspace) [role="dialog"] {
@@ -16,3 +16,4 @@ body:has(.mobile-expedition-workspace) [role="dialog"] {
   padding: 20px 16px calc(24px + env(safe-area-inset-bottom));
 }
 body:has(.mobile-expedition-workspace) [role="dialog"] button { white-space: normal; }
+body:has(.mobile-expedition-workspace) [role="dialog"] h2 { padding-right: 36px; font-size: 20px; }

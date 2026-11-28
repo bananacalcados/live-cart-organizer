@@ -70,7 +70,7 @@ function MobileConference({ order, userId, onClose, onRefresh }: { order: Mobile
   const scanned = Object.values(outbox.totals).reduce((sum, total) => sum + total, 0);
   const featured = order.items.find(item => item.id === lastItemId) || order.items[0];
   const shipping: ExpeditionShipping = { carrier: shippingFields.carrier, tracking, trackingUrl, deliveryDays, courier: shippingFields.courier,
-    courierProviderId: shippingFields.courierProviderId, cost: shippingFields.cost === "" ? NaN : Number(shippingFields.cost), storeId: order.store_id };
+    courierProviderId: shippingFields.courierProviderId, cost: Number(shippingFields.cost), storeId: order.store_id };
   const missingShipping = expeditionShippingError(shipping);
   const complete = order.items.every(item => (outbox.totals[item.id] || 0) === item.quantity && checks[item.id]?.feet_ok);
   useEffect(() => { if (!camera) input.current?.focus(); }, [camera]);
