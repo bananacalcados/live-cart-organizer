@@ -34695,6 +34695,16 @@ export type Database = {
           variant_count: number
         }[]
       }
+      mobile_pdv_expedition_ids: {
+        Args: {
+          p_limit?: number
+          p_offset?: number
+          p_search?: string
+          p_stage: string
+          p_store_id: string
+        }
+        Returns: string[]
+      }
       mobile_product_name_hints: {
         Args: { p_limit?: number; p_term: string }
         Returns: {
@@ -34859,12 +34869,24 @@ export type Database = {
         Returns: string[]
       }
       pos_estoque_divergence_summary: { Args: never; Returns: Json }
+      pos_expedition_scan_batch: { Args: { p_entries: Json }; Returns: Json }
       pos_expedition_stage_counts: {
         Args: { p_store_id?: string }
         Returns: {
           stage: string
           total: number
         }[]
+      }
+      pos_expedition_transition: {
+        Args: {
+          p_finished_at?: string
+          p_items?: Json
+          p_mode: string
+          p_orders: Json
+          p_shipping?: Json
+          p_target?: string
+        }
+        Returns: Json
       }
       pos_item_photos: {
         Args: { p_keys: string[] }

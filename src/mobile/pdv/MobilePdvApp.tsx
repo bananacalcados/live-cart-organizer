@@ -8,6 +8,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { isExpeditionOnly } from "@/lib/pos/sectionAccess";
 import { setPdvDesktopPreference } from "./redirect";
 import { BOTTOM_TABS, MOBILE_PDV_TABS, MobilePdvTab, fullVersionUrl, visibleMobileTabs } from "./sections";
+import { MobileExpedition } from "./MobileExpedition";
 
 /** PDV no celular — Fase 0: só leitura (estrutura, loja, vendedora, "Em breve"). Nada grava. */
 const STORE_KEY = "m_pdv_store";
@@ -159,7 +160,7 @@ export default function MobilePdvApp() {
     <>
       <Routes>
         <Route index element={<Navigate to={`/m/pdv/${tabs[0]}`} replace />} />
-        {tabs.map((id) => <Route key={id} path={id} element={screen(MOBILE_PDV_TABS.find((t) => t.id === id)!.label, <ComingSoon tab={id} />)} />)}
+        {tabs.map((id) => <Route key={id} path={id} element={screen(MOBILE_PDV_TABS.find((t) => t.id === id)?.label || "PDV", id === "expedicao" && store ? <MobileExpedition storeId={store} /> : <ComingSoon tab={id} />)} />)}
         <Route path="mais" element={screen("Mais", <MoreScreen tabs={tabs} storeName={storeName!} sellerName={sellerName} onChangeStore={() => setPicking("store")} onChangeSeller={() => setPicking("seller")} />)} />
         <Route path="*" element={<Navigate to={`/m/pdv/${tabs[0]}`} replace />} />
       </Routes>

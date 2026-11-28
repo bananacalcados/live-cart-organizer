@@ -1,3 +1,5 @@
+import { moveExpeditionOrders } from "@/lib/pos/expeditionActions";
+import { usePdvStoreEvents } from "@/hooks/usePdvStoreEvents";
 import { useItemPhotos } from "@/hooks/useItemPhotos";
 import { itemPhotoKey } from "@/lib/pos/itemPhotoCache";
 import { ItemPhotoThumb } from "@/components/pos/ItemPhotoThumb";
@@ -59,6 +61,11 @@ const ExpRefundsPanel = lazyNamed(() => import("./ExpRefundsPanel"), "ExpRefunds
 const ExchangeDesk = lazyNamed(() => import("@/pages/ExchangeDesk"), "default");
 
 
+
+function StoreEventListener({ storeId, refresh }: { storeId: string; refresh: () => void }) {
+  usePdvStoreEvents(storeId, "sales_changed", refresh);
+  return null;
+}
 
 interface Props {
   storeId: string;
@@ -371,23 +378,14 @@ export function POSExpedition({ storeId, storeName, focusSaleId }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [orders]);
 
+  usePdvStoreEvents(storeId, "sales_changed", () => void loadRef.current(), !showExchanges && !allStores);
+  const [eventStoreIds, setEventStoreIds] = useState<string[]>([]);
   useEffect(() => {
-    if (!storeId || showExchanges) return;
-    const ch = supabase
-      .channel(`pos-expedition-${allStores ? "all" : storeId}`)
-      .on(
-        "postgres_changes",
-        allStores
-          ? { event: "*", schema: "public", table: "pos_sales" }
-          : { event: "*", schema: "public", table: "pos_sales", filter: `store_id=eq.${storeId}` },
-        () => loadRef.current(),
-      )
-      .subscribe();
-    return () => {
-      supabase.removeChannel(ch);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [storeId, allStores, stage, finishedRange, filterGateway, showExchanges]);
+    if (!allStores) return;
+    let alive = true;
+    void supabase.from("pos_stores").select("id").eq("is_active", true).then(({ data }) => { if (alive) setEventStoreIds((data || []).map(store => store.id)); });
+    return () => { alive = false; };
+  }, [allStores]);
 
   const filtered = useMemo(() => {
     const fold = (v: string) => v.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
@@ -556,14 +554,12 @@ export function POSExpedition({ storeId, storeName, focusSaleId }: Props) {
     }
     setBusyId(o.id);
     try {
-      const patch: any = { expedition_stage: to };
-      if (to === "concluido") patch.expedition_finished_at = new Date().toISOString();
-      const { error } = await supabase.from("pos_sales").update(patch).eq("id", o.id);
-      if (error) throw error;
+      await moveExpeditionOrders([o], to);
       toast.success(`Pedido movido para ${EXP_STAGES.find((s) => s.id === to)?.label}`);
       load();
     } catch (e: any) {
       toast.error(e.message || "Erro ao avançar etapa");
+      void load();
     } finally {
       setBusyId(null);
     }
@@ -575,31 +571,7 @@ export function POSExpedition({ storeId, storeName, focusSaleId }: Props) {
     if (!to) return;
     setBusyId(o.id);
     try {
-      if (o.expedition_stage === "aguardando") {
-        await Promise.all(o.items.map((item) =>
-          supabase.from("pos_sale_items").update({
-            expedition_waiting_qty: 0,
-            expedition_picked_qty:
-              (Number(item.expedition_conference_qty) || 0) + (Number(item.expedition_completed_qty) || 0),
-          } as any).eq("id", item.id),
-        ));
-      } else if (["novo", "preparacao", "separacao"].includes(to)) {
-        // As abas Separação/Aguardando/Conferência são montadas pelas quantidades
-        // de cada produto. Ao voltar, zera o que estava em conferência/aguardando;
-        // senão o pedido continua aparecendo na Conferência mesmo com a etapa trocada.
-        const { error: itemErr } = await supabase
-          .from("pos_sale_items")
-          .update({ expedition_conference_qty: 0, expedition_waiting_qty: 0, expedition_picked_qty: 0 } as any)
-          .eq("sale_id", o.id)
-          .eq("expedition_completed_qty", 0);
-        if (itemErr) throw itemErr;
-      }
-      const { error } = await supabase.from("pos_sales").update({
-        expedition_stage: to,
-        expedition_finished_at: null,
-        ...(["novo", "preparacao", "separacao"].includes(to) ? { expedition_waiting_products: false } : {}),
-      }).eq("id", o.id);
-      if (error) throw error;
+      await moveExpeditionOrders([o], to, "back");
       toast.success(`Pedido voltou para ${EXP_STAGES.find((s) => s.id === to)?.label}`);
       load();
     } catch (e: any) {
@@ -699,13 +671,7 @@ export function POSExpedition({ storeId, storeName, focusSaleId }: Props) {
         load();
         return;
       }
-      const patch: any = { expedition_stage: to };
-      if (to === "concluido") patch.expedition_finished_at = new Date().toISOString();
-      const { error } = await supabase
-        .from("pos_sales")
-        .update(patch)
-        .in("id", bulkEligible.map((o) => o.id));
-      if (error) throw error;
+      await moveExpeditionOrders(bulkEligible, to);
       toast.success(`${bulkEligible.length} pedido(s) movidos para ${EXP_STAGES.find((s) => s.id === to)?.label}`);
       setSelected(new Set());
       load();
@@ -719,23 +685,7 @@ export function POSExpedition({ storeId, storeName, focusSaleId }: Props) {
   const moveVisibleItems = async (list: ExpOrder[], target: "conferencia" | "aguardando") => {
     const items = list.flatMap((o) => o.items);
     if (!items.length) return;
-    for (let i = 0; i < items.length; i += 20) {
-      await Promise.all(items.slice(i, i + 20).map((item) => {
-        const qty = Number(item.quantity) || 0;
-        const conference = (Number(item.expedition_conference_qty) || 0) + (target === "conferencia" ? qty : 0);
-        const waiting = (Number(item.expedition_waiting_qty) || 0) + (target === "aguardando" ? qty : 0);
-        return supabase.from("pos_sale_items").update({
-          expedition_picked_qty: conference + waiting + (Number(item.expedition_completed_qty) || 0),
-          expedition_conference_qty: conference,
-          expedition_waiting_qty: waiting,
-        } as any).eq("id", item.id);
-      }));
-    }
-    const { error } = await supabase.from("pos_sales").update({
-      expedition_stage: target,
-    } as any).in("id", list.map((o) => o.id));
-    if (error) throw error;
-    await syncWaitingProductsFlag(list.map((o) => o.id));
+    await moveExpeditionOrders(list, target, "items");
     toast.success(`${items.reduce((sum, item) => sum + (Number(item.quantity) || 0), 0)} produto(s) movido(s)`);
   };
 
@@ -759,11 +709,7 @@ export function POSExpedition({ storeId, storeName, focusSaleId }: Props) {
     if (!to || !bulkSelectedOrders.length) return;
     setBulkBusy(true);
     try {
-      const { error } = await supabase
-        .from("pos_sales")
-        .update({ expedition_stage: to, expedition_finished_at: null })
-        .in("id", bulkSelectedOrders.map((o) => o.id));
-      if (error) throw error;
+      await moveExpeditionOrders(bulkSelectedOrders, to, "bulk_back");
       toast.success(`${bulkSelectedOrders.length} pedido(s) voltaram para ${EXP_STAGES.find((s) => s.id === to)?.label}`);
       setSelected(new Set());
       load();
@@ -789,6 +735,7 @@ export function POSExpedition({ storeId, storeName, focusSaleId }: Props) {
 
   return (
     <div className="flex flex-col h-full bg-pos-bg">
+      {allStores && !showExchanges && eventStoreIds.map(id => <StoreEventListener key={id} storeId={id} refresh={() => void loadRef.current()} />)}
       {!showExchanges && <SupportGuardBanner className="m-3 mb-0" />}
       {/* Header */}
       <div className="px-4 py-4 border-b border-pos-border bg-pos-card">
@@ -1733,23 +1680,11 @@ export function POSExpedition({ storeId, storeName, focusSaleId }: Props) {
                                onClick={async () => {
                                  setBusyId(o.id);
                                  try {
-                                   await Promise.all(o.items.map((item) => {
-                                     const qty = Number(item.quantity) || 0;
-                                     const waiting = Math.max(0, (Number(item.expedition_waiting_qty) || 0) - qty);
-                                     const conference = (Number(item.expedition_conference_qty) || 0) + qty;
-                                     return supabase.from("pos_sale_items").update({
-                                       expedition_waiting_qty: waiting,
-                                       expedition_conference_qty: conference,
-                                       expedition_picked_qty: conference + waiting + (Number(item.expedition_completed_qty) || 0),
-                                     } as any).eq("id", item.id);
-                                   }));
-                                   await supabase.from("pos_sales").update({
-                                     expedition_stage: "conferencia",
-                                   } as any).eq("id", o.id);
-                                   await syncWaitingProductsFlag([o.id]);
+                                   await moveExpeditionOrders([o], "conferencia", "waiting");
                                    await load();
                                  } catch (e: any) {
                                    toast.error(e.message || "Erro ao avançar produto");
+                                   void load();
                                  } finally {
                                    setBusyId(null);
                                  }

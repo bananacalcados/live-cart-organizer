@@ -1,3 +1,5 @@
+import { finishExpedition } from "@/lib/pos/expeditionActions";
+import { matchExpeditionScan } from "@/lib/pos/expeditionScanMatch";
 import { useItemPhotos } from "@/hooks/useItemPhotos";
 import { itemPhotoKey } from "@/lib/pos/itemPhotoCache";
 import { ItemPhotoThumb } from "@/components/pos/ItemPhotoThumb";
@@ -262,20 +264,10 @@ export function ExpConferenceDialog({ order, storeId, open, onOpenChange, onFini
     const rawCode = raw ?? scanInput;
     const code = rawCode.replace(/\s/g, "");
     if (!code) return;
-    let item = order.items.find((i) => i.barcode === code && !checks[i.id]?.scanned);
-    let resolved: ResolvedStockCode | null = null;
-
-    // Etiqueta nova: só consulta depois que a bipagem atual não encontrou o item.
-    if (!item && isNewStockLabelCode(code)) {
-      try {
-        resolved = await resolveStockLabelCode(code, storeId || order.store_id || null);
-        if (resolved) {
-          item = order.items.find((i) => !checks[i.id]?.scanned && itemMatchesResolvedStockLabel(i, resolved!));
-        }
-      } catch {
-        // Falha na consulta segue o fluxo atual de código não encontrado.
-      }
-    }
+    let result: Awaited<ReturnType<typeof matchExpeditionScan>> = { item: undefined, resolved: null, alreadyScanned: false };
+    try { result = await matchExpeditionScan(order.items, rawCode, item => !checks[item.id]?.scanned, storeId || order.store_id || null); }
+    catch { /* Same legacy behavior: resolver failure follows code-not-found path. */ }
+    const { item, resolved } = result;
 
     if (item) {
       setChecks((p) => ({ ...p, [item.id]: { ...p[item.id], scanned: true } }));
@@ -466,65 +458,10 @@ export function ExpConferenceDialog({ order, storeId, open, onOpenChange, onFini
 
     setFinishing(true);
     try {
-      await supabase.from("pos_expedition_checks").delete().in("sale_id", groupIds);
-      const rows = order.items.map((it) => ({
-        sale_id: it.sale_id || order.id,
-        sale_item_id: it.id,
-        barcode: it.barcode,
-        scanned: !!checks[it.id]?.scanned,
-        feet_ok: !!checks[it.id]?.feet_ok,
-        has_defect: !!checks[it.id]?.has_defect,
-      }));
-      const { error: insErr } = await supabase.from("pos_expedition_checks").insert(rows);
-      if (insErr) throw insErr;
-
-      await Promise.all(order.items.map((item) =>
-        supabase.from("pos_sale_items").update({
-          expedition_completed_qty:
-            (Number(item.expedition_completed_qty) || 0) + (Number(item.expedition_conference_qty) || Number(item.quantity) || 0),
-          expedition_conference_qty: 0,
-        } as any).eq("id", item.id),
-      ));
-
-      const { data: groupItems, error: groupItemsError } = await supabase
-        .from("pos_sale_items")
-        .select("quantity, expedition_conference_qty, expedition_waiting_qty, expedition_completed_qty")
-        .in("sale_id", groupIds);
-      if (groupItemsError) throw groupItemsError;
-      const allCompleted = (groupItems || []).every((item: any) =>
-        (Number(item.expedition_completed_qty) || 0) >= (Number(item.quantity) || 0),
-      );
-      const hasConference = (groupItems || []).some((item: any) => (Number(item.expedition_conference_qty) || 0) > 0);
-      const hasWaiting = (groupItems || []).some((item: any) => (Number(item.expedition_waiting_qty) || 0) > 0);
-      const nextSummary = allCompleted ? "concluido" : hasConference ? "conferencia" : hasWaiting ? "aguardando" : "separacao";
-      const { error } = await supabase.from("pos_sales").update({
-        expedition_stage: nextSummary,
-        expedition_finished_at: allCompleted ? new Date().toISOString() : null,
-        expedition_waiting_products: !allCompleted,
-        shipping_carrier: carrier,
-        tracking_carrier: trackingCarrierFor(trackingUrl, tracking, carrier),
-        tracking_code: tracking.trim() || null,
-        tracking_url: trackingUrl.trim() || null,
-        delivery_days: deliveryDays.trim() || null,
-        courier_name: courier.trim() || null,
-      } as any).in("id", groupIds);
-      if (error) throw error;
-
-      // Ao registrar o código real, o acompanhamento do cliente pula direto para "Enviado".
-      if (tracking.trim()) {
-        await attachRealTracking({ saleIds: groupIds, realCode: tracking.trim(), carrier: trackingCarrierFor(trackingUrl, tracking, carrier) });
-      }
-
-      await saveExpeditionShippingCost({
-        saleId: order.id,
-        storeId: storeId || order.store_id,
-        carrier,
-        courierProviderId: shipping.courierProviderId,
-        courierName: courier,
-        cost: Number(shipping.cost) || 0,
-        customerName: order.customer_name,
+      const { allCompleted } = await finishExpedition(order, checks, {
+        carrier, tracking, trackingUrl, deliveryDays, courier, cost: Number(shipping.cost) || 0,
+        courierProviderId: shipping.courierProviderId, storeId: storeId || order.store_id,
       });
-
 
       toast.success(allCompleted
         ? "Expedição concluída — pedido liberado na aba PEDIDOS"
@@ -532,6 +469,7 @@ export function ExpConferenceDialog({ order, storeId, open, onOpenChange, onFini
       onFinished();
     } catch (e: any) {
       toast.error(e.message || "Erro ao concluir expedição");
+      onRefresh?.();
     } finally {
       setFinishing(false);
     }

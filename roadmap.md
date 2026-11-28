@@ -1,8 +1,10 @@
 # Remoção do Tiny — Fase 2, primeiro lote
 ## PDV — desempenho desktop e Expedição mobile (Matthews 28/11)
-- [ ] Entrega 1: Envios paginados/eventos, cartões live por eventos; paridade, medições, commit separado
-- [ ] Entrega 2: Expedição mobile, câmera/leitor/fila offline, avanço concorrente compartilhado; testes, commit separado
-- [ ] Conferir navegador 390×844 sem escritas reais; suíte completa e validação automática; relatório sem publicação
+- [x] Entrega 1: Envios paginados/eventos, cartões live por eventos; paridade, medições, commit 6b4b48f3b
+- [x] Entrega 2: Expedição mobile, câmera/leitor/fila offline, avanço concorrente compartilhado; testes isolados e commit separado
+- [x] Conferir navegador 390×844 sem escritas reais; suíte completa e validação automática; relatório sem publicação
+- [ ] Tipos e build de produção separados: execução manual vedada pelo ambiente; validação automática só expõe build OK
+- [ ] Câmera/leitor/impressão e eventos reais: aguardam aparelho e operação legítima do Matthews
 
 - [x] Item 1: retirar Tiny da exclusão do PDV, manter devolução única e classificar ajustes; testar, implantar e commitar
 - [x] Item 2: validar lista guardada e vendas recentes; usar somente formas locais; testar, implantar e commitar

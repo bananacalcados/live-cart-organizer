@@ -1,0 +1,12 @@
+CREATE OR REPLACE FUNCTION public.mobile_pdv_expedition_ids(p_store_id uuid,p_stage text,p_search text DEFAULT '',p_limit integer DEFAULT 50,p_offset integer DEFAULT 0) RETURNS uuid[] LANGUAGE sql STABLE SECURITY INVOKER SET search_path='' AS $$
+WITH eligible AS (
+ SELECT s.id,s.created_at,s.expedition_stage,s.is_sedex,s.shipping_type,s.is_store_pickup,s.pickup_store_id,s.pickup_date,s.shipping_carrier,s.shipping_address,s.customer_city,s.customer_state
+ FROM public.pos_sales s WHERE s.store_id=p_store_id AND s.sale_type IN ('live','online') AND s.status<>'cancelled' AND ((s.status NOT IN ('online_pending','pending','pending_pickup','payment_failed') AND (s.paid_at IS NOT NULL OR s.status IN ('completed','paid','pending_sync'))) OR s.payment_on_delivery IS TRUE)
+ AND ((p_stage IN ('novo','preparacao','concluido') AND s.expedition_stage=p_stage) OR (p_stage IN ('separacao','aguardando','conferencia') AND s.expedition_stage IN ('separacao','aguardando','conferencia') AND EXISTS(SELECT 1 FROM public.pos_sale_items i WHERE i.sale_id=s.id AND CASE p_stage WHEN 'separacao' THEN greatest(0,coalesce(i.quantity,0)-coalesce(i.expedition_conference_qty,0)-coalesce(i.expedition_waiting_qty,0)-coalesce(i.expedition_completed_qty,0)) WHEN 'aguardando' THEN coalesce(i.expedition_waiting_qty,0) WHEN 'conferencia' THEN coalesce(i.expedition_conference_qty,0) ELSE 0 END>0)))
+ AND (p_search='' OR s.customer_name ILIKE '%'||p_search||'%' OR s.id::text LIKE lower(p_search)||'%')
+), page AS (
+SELECT id FROM eligible ORDER BY CASE WHEN coalesce(is_sedex,false) OR shipping_type IN ('sedex','correios','transportadora') THEN 0 WHEN coalesce(is_store_pickup,false) OR pickup_store_id IS NOT NULL OR pickup_date IS NOT NULL OR lower(coalesce(shipping_carrier,'')) SIMILAR TO '%(retirad|pickup)%' THEN 1 WHEN lower(coalesce(shipping_address->>'city',customer_city,'')) LIKE '%governador valadares%' OR lower(coalesce(shipping_address->>'city',customer_city,''))='valadares' THEN 2 ELSE 3 END,
+CASE WHEN p_stage='concluido' THEN NULL ELSE created_at END ASC,CASE WHEN p_stage='concluido' THEN created_at ELSE NULL END DESC,id LIMIT greatest(1,least(coalesce(p_limit,50),100)) OFFSET greatest(0,coalesce(p_offset,0))) SELECT coalesce(array_agg(id),'{}'::uuid[]) FROM page;
+$$;
+REVOKE ALL ON FUNCTION public.mobile_pdv_expedition_ids(uuid,text,text,integer,integer) FROM PUBLIC,anon;
+GRANT EXECUTE ON FUNCTION public.mobile_pdv_expedition_ids(uuid,text,text,integer,integer) TO authenticated,service_role;
