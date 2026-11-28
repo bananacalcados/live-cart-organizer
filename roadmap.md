@@ -8,8 +8,8 @@
 - [x] 6: gestos com ponteiro capturado e pan-y, cancelamento sem resposta, menu Responder/Copiar; referência real preservada
 - [x] 7: vendedor por sessão como desktop, etiquetas e Minhas no servidor; 15 testes e abertura autenticada em 360–412px
 - [ ] 8: BLOQUEADO — abertura desktop ignora erros e não tem Opção A/trava síncrona; corrigir/compartilhar exige autorização para desktop/envio
-- [ ] 9: proposta somente leitura com métricas reais, sem implementação
-- [ ] Testes 360–412px, sem mensagens reais; um commit por item, sem publicar
+- [x] 9: proposta somente leitura salva, 23 grupos e 89 linhas por hora; limites de identificação humana documentados
+- [x] 1.344 testes passaram; telas autenticadas 360/390/412px, gestos Chrome por toque, histórico único após correção; sem mensagens reais/publicação
 ## PDV mobile — ajustes após teste publicado (28/11 16:39 UTC)
 - [x] 1: endereço completo e diagnóstico de dados por etapa, sem alterar desktop; 10 testes passaram
 - [x] 2: destaque TROCA com o mesmo critério desktop e trava de conclusão preservada
