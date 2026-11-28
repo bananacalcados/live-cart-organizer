@@ -3,7 +3,7 @@
 - [x] 1: prévia de áudio gravado antes de envio; teste sem mensagem real
 - [x] 2/10: cores e fonte oficiais, tokens exclusivos mobile
 - [x] 3: câmera com vídeo e prévia, limite desktop 64MB, sem limite de duração inventado
-- [ ] 4: galeria com vídeos pelo mesmo envio desktop
+- [x] 4: galeria com fotos/vídeos, prévia e mesmo envio desktop
 - [ ] 5: citação abre original com histórico sob demanda
 - [ ] 6: arrastar e toque longo com menu, resposta verdadeira preservada
 - [ ] 7: escolha de vendedor como desktop, etiqueta e filtro Minhas

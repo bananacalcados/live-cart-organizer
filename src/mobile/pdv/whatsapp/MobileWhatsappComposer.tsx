@@ -77,7 +77,7 @@ export function MobileWhatsappComposer({disabled,quoted,cancelQuote,send,openCat
   </div>}
   {sheet==='emoji'&&<div aria-label="Emojis" className="mt-2 grid grid-cols-8 gap-1 rounded-2xl m-wa-surface p-2 shadow-lg">{EMOJIS.map(e=><button key={e} type="button" className="h-11 text-2xl" onClick={()=>{setText(t=>t+e);field.current?.focus();}}>{e}</button>)}</div>}
   {sheet==='camera'&&<div className="mt-2 grid grid-cols-2 gap-2 rounded-2xl m-wa-surface p-3"><Button variant="ghost" className="min-h-14" onClick={()=>camera.current?.click()}><Camera className="h-6 w-6"/>Tirar foto</Button><Button variant="ghost" className="min-h-14" onClick={()=>videoCamera.current?.click()}><Video className="h-6 w-6"/>Gravar vídeo</Button></div>}
-  <input ref={image} type="file" accept="image/*" hidden onChange={e=>{pick(e.target.files?.[0]);e.target.value='';}}/>
+  <input ref={image} aria-label="Fotos e vídeos da galeria" type="file" accept="image/*,video/*" hidden onChange={e=>{pick(e.target.files?.[0]);e.target.value='';}}/>
   <input ref={camera} type="file" accept="image/*" capture="environment" hidden onChange={e=>{pick(e.target.files?.[0]);e.target.value='';}}/>
   <input ref={videoCamera} aria-label="Vídeo da câmera" type="file" accept="video/*" capture="environment" hidden onChange={e=>{pick(e.target.files?.[0]);e.target.value='';}}/>
   <input ref={audio} type="file" accept="audio/*" hidden onChange={e=>{pick(e.target.files?.[0]);e.target.value='';}}/>

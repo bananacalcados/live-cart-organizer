@@ -5,6 +5,16 @@ import type { AttemptPayload } from '@/lib/chat/mobileSendAttempt';
 vi.mock('@/components/MediaAttachmentPicker', () => ({ uploadMediaToStorage: vi.fn(async () => 'https://example.test/audio') }));
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 describe('prévia antes do envio', () => {
+  it('galeria aceita vídeo e usa o mesmo envio de mídia após confirmação', async () => {
+    const send = vi.fn(async (_payload: AttemptPayload) => true);
+    URL.createObjectURL = vi.fn(() => 'blob:gallery'); URL.revokeObjectURL = vi.fn();
+    render(<MobileWhatsappComposer disabled={false} quoted={null} cancelQuote={() => {}} send={send} openCatalog={() => {}} openReplies={() => {}} />);
+    fireEvent.change(screen.getByLabelText('Fotos e vídeos da galeria'), { target: { files: [new File(['video'], 'gallery.mp4', { type: 'video/mp4' })] } });
+    expect(send).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByLabelText('Enviar mensagem'));
+    await waitFor(() => expect(send).toHaveBeenCalledTimes(1));
+    expect(send.mock.calls[0]?.[0]).toMatchObject({ mediaType: 'video' });
+  });
   it('vídeo da câmera só envia após confirmar e permanece no tipo vídeo', async () => {
     const send = vi.fn(async (_payload: AttemptPayload) => true);
     URL.createObjectURL = vi.fn(() => 'blob:video'); URL.revokeObjectURL = vi.fn();
