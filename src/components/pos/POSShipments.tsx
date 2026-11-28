@@ -1,4 +1,5 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
+import { usePdvStoreEvents } from '@/hooks/usePdvStoreEvents';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -99,134 +100,37 @@ export function POSShipments({ storeId }: Props) {
   const [trackingNumberId, setTrackingNumberId] = useState<string | null>(null);
   const [sendingWa, setSendingWa] = useState(false);
 
-  const fetchOrders = async () => {
-    setLoading(true);
-    try {
-      const { data: sales } = await supabase
-        .from('pos_sales')
-        .select('*')
-        .eq('store_id', storeId)
-        .in('sale_type', ['online', 'pickup'])
-        .in('status', ['completed', 'paid'])
-        .order('created_at', { ascending: false })
-        .limit(200);
-
-      if (!sales || sales.length === 0) {
-        setOrders([]);
-        setLoading(false);
-        return;
-      }
-
-      // Fetch customer and seller data
-      const customerIds = [...new Set(sales.filter(s => s.customer_id).map(s => s.customer_id!))];
-      const sellerIds = [...new Set(sales.filter(s => s.seller_id).map(s => s.seller_id!))];
-      const saleIds = sales.map(s => s.id);
-
-      // Also fetch checkout attempts for sales without customer_id
-      const salesWithoutCustomer = sales.filter(s => !s.customer_id).map(s => s.id);
-
-      const [customersRes, sellersRes, itemsRes, checkoutRes, fiscalRes] = await Promise.all([
-        customerIds.length > 0
-          ? supabase.from('pos_customers').select('id, name, whatsapp, cep, city, state, address').in('id', customerIds)
-          : { data: [] },
-        sellerIds.length > 0
-          ? supabase.from('pos_sellers').select('id, name').in('id', sellerIds)
-          : { data: [] },
-        supabase.from('pos_sale_items').select('*').in('sale_id', saleIds),
-        salesWithoutCustomer.length > 0
-          ? supabase.from('pos_checkout_attempts')
-              .select('sale_id, customer_name, customer_phone, customer_email')
-              .in('sale_id', salesWithoutCustomer)
-              .not('customer_name', 'is', null)
-              .order('created_at', { ascending: false })
-          : { data: [] },
-        supabase.from('fiscal_documents')
-          .select('pos_sale_id, status, danfe_url, numero, created_at, companies(cnpj)')
-          .in('pos_sale_id', saleIds)
-          .in('status', ['authorized', 'autorizada', 'autorizado'])
-          .order('created_at', { ascending: false }),
-      ]);
-
-      const fmap: Record<string, { status: string; danfe_url: string | null; numero: number | null; company_cnpj: string | null }> = {};
-      (fiscalRes.data || []).forEach((f: any) => {
-        if (!fmap[f.pos_sale_id]) fmap[f.pos_sale_id] = { status: f.status, danfe_url: f.danfe_url, numero: f.numero, company_cnpj: f.companies?.cnpj || null };
-      });
-      setFiscalMap(fmap);
-
-      const customerMap = new Map((customersRes.data || []).map(c => [c.id, c]));
-      const sellerMap = new Map((sellersRes.data || []).map(s => [s.id, s]));
-      const itemsMap = new Map<string, SaleItem[]>();
-      (itemsRes.data || []).forEach((item: any) => {
-        if (!itemsMap.has(item.sale_id)) itemsMap.set(item.sale_id, []);
-        itemsMap.get(item.sale_id)!.push(item);
-      });
-
-      // Build checkout fallback map (sale_id -> customer data)
-      const checkoutMap = new Map<string, any>();
-      (checkoutRes.data || []).forEach((c: any) => {
-        if (c.customer_name) checkoutMap.set(c.sale_id, c);
-      });
-
-      const enriched: ShipmentOrder[] = sales.map(s => {
-        const customer = s.customer_id ? customerMap.get(s.customer_id) : null;
-        const checkoutFallback = !customer ? checkoutMap.get(s.id) : null;
-        const seller = s.seller_id ? sellerMap.get(s.seller_id) : null;
-        
-        // Also check payment_details for seller name fallback
-        const paymentDetails = s.payment_details as any;
-
-        return {
-          ...s,
-          customer_name: customer?.name || checkoutFallback?.customer_name || null,
-          customer_phone: customer?.whatsapp || checkoutFallback?.customer_phone || null,
-          customer_cep: customer?.cep || null,
-          customer_city: customer?.city || null,
-          customer_state: customer?.state || null,
-          customer_address: customer?.address || null,
-          seller_name: seller?.name || paymentDetails?.seller_name || null,
-          items: itemsMap.get(s.id) || [],
-        } as ShipmentOrder;
-      });
-
-      setOrders(enriched);
-    } catch (e: any) {
-      console.error('Fetch shipments error:', e);
-    } finally {
-      setLoading(false);
-    }
-  };
-
+  const [counts, setCounts] = useState<Record<ExpeditionFilter, number>>({ all: 0, pending: 0, separating: 0, packed: 0, shipped: 0 });
+  const [offset, setOffset] = useState(0);
+  const [total, setTotal] = useState(0);
+  const [serverSearch, setServerSearch] = useState('');
+  const seq = useRef(0);
   useEffect(() => {
-    fetchOrders();
-    const interval = setInterval(() => {
-      fetchOrders();
-    }, 5000);
-    return () => clearInterval(interval);
-  }, [storeId]);
-
-  const filteredOrders = orders.filter(o => {
-    // Filter by expedition status
-    if (filter !== 'all' && o.expedition_status !== filter) return false;
-    // Search
-    if (searchTerm) {
-      const term = searchTerm.toLowerCase();
-      return (
-        o.customer_name?.toLowerCase().includes(term) ||
-        o.customer_phone?.toLowerCase().includes(term) ||
-        o.tiny_order_number?.toLowerCase().includes(term) ||
-        o.items?.some(i => i.product_name?.toLowerCase().includes(term) || i.sku?.toLowerCase().includes(term))
-      );
+    const timer = setTimeout(() => { setServerSearch(searchTerm); setOffset(0); }, 350);
+    return () => clearTimeout(timer);
+  }, [searchTerm]);
+  const fetchOrders = async () => {
+    const request = ++seq.current;
+    try {
+      const { data, error } = await supabase.rpc('pos_shipments_page', {
+        p_store_id: storeId, p_filter: filter, p_search: serverSearch, p_limit: 50, p_offset: offset,
+      });
+      if (error) throw error;
+      if (request !== seq.current) return;
+      const page = data as unknown as { orders: ShipmentOrder[]; counts: Record<ExpeditionFilter, number>; fiscal: typeof fiscalMap; total: number };
+      setOrders(current => JSON.stringify(current) === JSON.stringify(page.orders) ? current : page.orders);
+      setCounts(current => JSON.stringify(current) === JSON.stringify(page.counts) ? current : page.counts);
+      setFiscalMap(current => JSON.stringify(current) === JSON.stringify(page.fiscal) ? current : page.fiscal);
+      setTotal(page.total);
+    } catch (error) {
+      if (request === seq.current) toast.error(error instanceof Error ? error.message : 'Erro ao carregar envios');
+    } finally {
+      if (request === seq.current) setLoading(false);
     }
-    return true;
-  });
-
-  const counts = {
-    all: orders.length,
-    pending: orders.filter(o => o.expedition_status === 'pending').length,
-    separating: orders.filter(o => o.expedition_status === 'separating').length,
-    packed: orders.filter(o => o.expedition_status === 'packed').length,
-    shipped: orders.filter(o => o.expedition_status === 'shipped').length,
   };
+  useEffect(() => { void fetchOrders(); return () => { seq.current++; }; }, [storeId, filter, serverSearch, offset]);
+  usePdvStoreEvents(storeId, 'sales_changed', () => void fetchOrders());
+  const filteredOrders = orders; // Filter/search/counts are server-side, with the unchanged legacy scope.
 
   const updateStatus = async (id: string, newStatus: string, extra?: Record<string, any>) => {
     setSaving(true);
@@ -337,7 +241,7 @@ export function POSShipments({ storeId }: Props) {
               <Badge className="bg-red-500 text-white border-0 animate-pulse">{counts.pending}</Badge>
             )}
           </div>
-          <Button variant="outline" size="sm" onClick={fetchOrders} className="text-gray-500 hover:text-black border-gray-300">
+          <Button variant="outline" size="sm" onClick={() => void fetchOrders()} aria-label="Atualizar" title="Atualizar" className="text-gray-500 hover:text-black border-gray-300">
             <RefreshCw className="h-4 w-4" />
           </Button>
         </div>
@@ -358,7 +262,7 @@ export function POSShipments({ storeId }: Props) {
           {EXPEDITION_TABS.map(tab => (
             <button
               key={tab.key}
-              onClick={() => setFilter(tab.key)}
+              onClick={() => { setFilter(tab.key); setOffset(0); }}
               className={cn(
                 'px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-all',
                 filter === tab.key
@@ -585,6 +489,11 @@ export function POSShipments({ storeId }: Props) {
               </Card>
             );
           })}
+        </div>
+        <div className="flex items-center justify-between gap-2 py-4">
+          <Button variant="outline" disabled={offset === 0} onClick={() => setOffset(Math.max(0, offset - 50))}>Anterior</Button>
+          <span className="text-xs text-muted-foreground">{total ? offset + 1 : 0}–{Math.min(offset + 50, total)} de {total}</span>
+          <Button variant="outline" disabled={offset + 50 >= total} onClick={() => setOffset(offset + 50)}>Próxima</Button>
         </div>
       </ScrollArea>
 

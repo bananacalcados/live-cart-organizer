@@ -22,6 +22,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { supabase } from "@/integrations/supabase/client";
 import { resolveChatContacts, invalidateChatContactsCache } from "@/lib/chatContactsCache";
+import { usePdvStoreEvents } from "@/hooks/usePdvStoreEvents";
 import { useWaMessageBroadcast } from "@/hooks/useWaMessageBroadcast";
 import { fetchConversationRows } from "@/lib/chat/fetchConversations";
 import { mergeConversationRows } from "@/lib/chat/conversationSync";
@@ -388,7 +389,9 @@ export function POSWhatsApp({ storeId, initialFilter, initialPhone, initialWhats
 
 
 
-  // Load live customers (phones from db_orders of active events of this store) with their kanban stage
+  const liveRefreshRef = useRef<() => void>(() => {});
+  usePdvStoreEvents(storeId, "live_changed", () => liveRefreshRef.current());
+  // Same projection and ordering; only the 60s timer is replaced by private per-store events.
   useEffect(() => {
     let cancelled = false;
     const loadLive = async () => {
@@ -467,14 +470,22 @@ export function POSWhatsApp({ storeId, initialFilter, initialPhone, initialWhats
             whatsapp_number_id: eventWnById[o.event_id] || null,
           });
         }
-        if (!cancelled) { setLiveStageMap(map); setLiveGhostRows(ghosts); }
+        if (!cancelled) { setLiveStageMap(current => JSON.stringify(current) === JSON.stringify(map) ? current : map); setLiveGhostRows(current => JSON.stringify(current) === JSON.stringify(ghosts) ? current : ghosts); }
       } catch (e) {
         console.error("loadLive error", e);
       }
     };
-    loadLive();
-    const id = setInterval(() => { if (!document.hidden) void loadLive(); }, 60000);
-    return () => { cancelled = true; clearInterval(id); };
+    let running = false;
+    let again = false;
+    const refresh = async () => {
+      if (running) { again = true; return; }
+      running = true;
+      do { again = false; await loadLive(); } while (again && !cancelled && !document.hidden);
+      running = false;
+    };
+    liveRefreshRef.current = () => void refresh();
+    void refresh();
+    return () => { cancelled = true; liveRefreshRef.current = () => {}; };
   }, [storeId]);
 
   // Helpers consumed by ConversationList

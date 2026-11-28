@@ -34895,6 +34895,16 @@ export type Database = {
           sale_id: string
         }[]
       }
+      pos_shipments_page: {
+        Args: {
+          p_filter?: string
+          p_limit?: number
+          p_offset?: number
+          p_search?: string
+          p_store_id: string
+        }
+        Returns: Json
+      }
       pos_stock_balance_to: {
         Args: {
           p_product_id: string

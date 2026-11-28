@@ -2220,6 +2220,20 @@
       "when": 1795867497960,
       "tag": "0316_pos_mobile_redirect_setting",
       "breakpoints": true
+    },
+    {
+      "idx": 317,
+      "version": "7",
+      "when": 1795868477247,
+      "tag": "0317_pdv_shipments_pages_and_private_doorbells",
+      "breakpoints": true
+    },
+    {
+      "idx": 318,
+      "version": "7",
+      "when": 1795868592444,
+      "tag": "0318_pdv_child_change_doorbells",
+      "breakpoints": true
     }
   ]
 }
