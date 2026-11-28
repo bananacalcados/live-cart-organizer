@@ -1,7 +1,7 @@
-# Fase 2 — pausa exigida pela preservação do envio do computador
+# Fase 2 — diagnóstico anterior e proposta da Fase 3
 
 ## Resultado
-Nenhuma tela, regra de envio, função implantada, migração, interruptor ou dado real foi alterado. A Fase 2 não está implementada.
+Este é o diagnóstico da pausa anterior. Matthews escolheu depois a Opção A: manter o envio intacto e não garantir reenvio sem duplicação. A implementação e suas pendências estão em `ENTREGA-FASE-2-WHATSAPP-2026-11-28.md`. A proposta da Fase 3 abaixo continua somente documentada, sem implementação.
 
 O requisito de reenvio sem duplicação não é garantido pelo caminho atual: `useChatSender` e `posWhatsappSend` enviam diretamente, sem uma identidade persistente da tentativa. Os endpoints de texto uazapi e WaSender repassam cada chamada ao provedor. `withGroupSendRouting` não reserva envios individuais: para telefone de cliente, passa direto ao handler.
 

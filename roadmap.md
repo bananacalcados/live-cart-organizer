@@ -1,8 +1,11 @@
 # Remoção do Tiny — Fase 2, primeiro lote
 ## PDV mobile — Fase 2 WhatsApp (Matthews 28/11)
-- [ ] Conferir paridade de lista, envio e ações; pausado: reenvio sem duplicação exige extensão do caminho compartilhado, não só extração
-- [ ] Construir WhatsApp mobile com lista/histórico paginados, envio e ações compartilhadas
-- [ ] Testar sem dados reais, medir consultas e documentar limites/roteiro
+- [x] Decisão Opção A: envio intacto, trava síncrona, tentativa incerta sem repetição automática; Opção B fora desta fase
+- [x] Conferir caminho de envio intacto e prioridades/paginação por testes isolados; nenhuma tela/regra desktop alterada
+- [x] Construir WhatsApp mobile com lista/histórico paginados, Opção A, catálogo e ações compartilhadas
+- [x] Suíte 1.277 testes, 30 focados, navegador simulado/leituras reais, medições e relatório; sem publicação
+- [ ] Homologação integral mobile: catálogo/mídias e fluxos completos troca/estorno ainda não exercitados no contexto mobile; aparelho e operação de teste autorizada necessários para validar efeitos reais
+- [ ] Paridade exaustiva/filtros legados, reconexão real e EXPLAIN/carga concorrente ainda não comprovados; não tratar Fase 2 como integralmente homologada
 - [x] Proposta preliminar da Fase 3 documentada sem implementação; aguarda conclusão da Fase 2 e aprovação
 ## PDV — desempenho desktop e Expedição mobile (Matthews 28/11)
 - [x] Entrega 1: Envios paginados/eventos, cartões live por eventos; paridade, medições, commit 6b4b48f3b

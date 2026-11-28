@@ -1,0 +1,23 @@
+.m-wa-frame { top: var(--m-wa-top, 0px); height: var(--m-wa-height, 100dvh); }
+body[data-mobile-pdv-whatsapp] [role="dialog"] {
+  max-width: 448px;
+  width: 100%;
+  max-height: 100dvh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+body[data-mobile-pdv-whatsapp] [role="dialog"] button,
+body[data-mobile-pdv-whatsapp] [role="dialog"] input:not([type="checkbox"]),
+body[data-mobile-pdv-whatsapp] [role="dialog"] [role="combobox"],
+body[data-mobile-pdv-whatsapp] [role="dialog"] textarea,
+body[data-mobile-pdv-whatsapp] .m-wa-frame button,
+body[data-mobile-pdv-whatsapp] .m-wa-frame [role="combobox"] {
+  min-height: 44px;
+}
+body[data-mobile-pdv-whatsapp] [role="dialog"] input,
+body[data-mobile-pdv-whatsapp] [role="dialog"] textarea { font-size: 16px; }
+body[data-mobile-pdv-whatsapp] [role="dialog"] { overflow-wrap: anywhere; }
+@media (max-width: 767px) {
+ body[data-mobile-pdv-whatsapp] [role="dialog"] { left: 0; top: 0; transform: none; height: 100dvh; border-radius: 0; padding: 16px; }
+ body[data-mobile-pdv-whatsapp] [role="dialog"] .grid { grid-template-columns: minmax(0,1fr); }
+}

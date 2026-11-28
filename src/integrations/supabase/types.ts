@@ -34727,6 +34727,18 @@ export type Database = {
           variant_id: string
         }[]
       }
+      mobile_whatsapp_page: {
+        Args: {
+          p_lane?: string
+          p_limit?: number
+          p_number_id?: string
+          p_offset?: number
+          p_query?: string
+          p_seller_id?: string
+          p_store_id: string
+        }
+        Returns: Json
+      }
       next_event_wa_initial_variant: {
         Args: { p_event_id: string }
         Returns: number
