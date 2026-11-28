@@ -2213,6 +2213,13 @@
       "when": 1795816868008,
       "tag": "0315_correios_pi_service_only_writes",
       "breakpoints": true
+    },
+    {
+      "idx": 316,
+      "version": "7",
+      "when": 1795867497960,
+      "tag": "0316_pos_mobile_redirect_setting",
+      "breakpoints": true
     }
   ]
 }

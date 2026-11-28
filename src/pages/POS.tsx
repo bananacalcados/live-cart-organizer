@@ -39,7 +39,7 @@ const POSCustomersHub = lazyNamed(() => import("@/components/pos/POSCustomersHub
 const POSMetaPixelDashboard = lazyNamed(() => import("@/components/pos/POSMetaPixelDashboard"), "POSMetaPixelDashboard");
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { allowedPOSSections, isExpeditionOnly } from "@/lib/pos/sectionAccess";
+import { allowedPOSSections, initialPOSSection, isExpeditionOnly } from "@/lib/pos/sectionAccess";
 
 type POSSection = "dashboard" | "sales" | "online" | "cash" | "returns" | "chat" | "requests" | "config" | "whatsapp" | "daily" | "searches" | "pickups" | "checkout" | "slowmoving" | "shipments" | "expedition" | "seller-dashboard" | "customers" | "meta-pixel" | "transfer";
 
@@ -73,10 +73,7 @@ export default function POS() {
   const navigate = useNavigate();
   const isMobile = useIsMobile();
   const [selectedStore, setSelectedStore] = useState<string>("");
-  const [section, setSection] = useState<POSSection>(() => {
-    const q = new URLSearchParams(window.location.search).get("section");
-    return q === "expedition" || q === "transfer" ? q : "dashboard";
-  });
+  const [section, setSection] = useState<POSSection>(() => initialPOSSection(window.location.search) as POSSection);
   const [whatsappFilter, setWhatsappFilter] = useState<WhatsAppFilter>(undefined);
   const [allowedModules, setAllowedModules] = useState<string[] | null>(null);
   const [pendingRequests, setPendingRequests] = useState(0);

@@ -1,0 +1,1 @@
+INSERT INTO public.app_settings (key, value) VALUES ('pos_mobile_redirect', '"off"'::jsonb) ON CONFLICT (key) DO NOTHING;

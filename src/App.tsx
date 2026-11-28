@@ -28,6 +28,8 @@ const POS = lazy(() => import("./pages/POS"));
 import { MobileInventoryRedirect } from "./mobile/inventory/MobileInventoryRedirect";
 const Inventory = lazy(() => import("./pages/Inventory"));
 const MobileInventoryApp = lazy(() => import("./mobile/inventory/MobileInventoryApp"));
+const MobilePdvApp = lazy(() => import("./mobile/pdv/MobilePdvApp"));
+import { MobilePdvRedirect } from "./mobile/pdv/MobilePdvRedirect";
 const InventoryCategories = lazy(() => import("./pages/InventoryCategories"));
 const InventoryProductCodes = lazy(() => import("./pages/InventoryProductCodes"));
 const ProductStockManager = lazy(() => import("./pages/ProductStockManager"));
@@ -183,7 +185,8 @@ const App = () => (
               <Route path="/marketing/publicos-meta" element={<ProtectedRoute requiredModule="marketing"><MetaAudiences /></ProtectedRoute>} />
               <Route path="/expedition" element={<ProtectedRoute requiredModule="expedition"><Navigate to="/pos?section=expedition" replace /></ProtectedRoute>} />
               <Route path="/expedition-beta" element={<ProtectedRoute requiredModule="expedition"><Navigate to="/pos?section=expedition" replace /></ProtectedRoute>} />
-              <Route path="/pos" element={<ProtectedRoute requiredModule={["pos", "expedition"]}><POS /></ProtectedRoute>} />
+              <Route path="/pos" element={<ProtectedRoute requiredModule={["pos", "expedition"]}><MobilePdvRedirect><POS /></MobilePdvRedirect></ProtectedRoute>} />
+              <Route path="/m/pdv/*" element={<ProtectedRoute requiredModule={["pos", "expedition"]}><MobilePdvApp /></ProtectedRoute>} />
               <Route path="/inventory" element={<ProtectedRoute requiredModule="inventory"><MobileInventoryRedirect><Inventory /></MobileInventoryRedirect></ProtectedRoute>} />
               <Route path="/m/estoque/*" element={<ProtectedRoute requiredModule="inventory"><MobileInventoryApp /></ProtectedRoute>} />
               <Route path="/inventory/categorias" element={<ProtectedRoute requiredModule="inventory"><InventoryCategories /></ProtectedRoute>} />
