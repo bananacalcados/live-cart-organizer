@@ -3,7 +3,7 @@ import { matchExpeditionScan } from "@/lib/pos/expeditionScanMatch";
 import { useItemPhotos } from "@/hooks/useItemPhotos";
 import { itemPhotoKey } from "@/lib/pos/itemPhotoCache";
 import { ItemPhotoThumb } from "@/components/pos/ItemPhotoThumb";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -85,6 +85,7 @@ export function ExpConferenceDialog({ order, storeId, open, onOpenChange, onFini
   const [nfeStatus, setNfeStatus] = useState<string | null>(null);
   const [nfeReject, setNfeReject] = useState<string | null>(null);
   const [nfeDoc, setNfeDoc] = useState<any | null>(null);
+  const emissionLock = useRef(false);
   const [backfilling, setBackfilling] = useState(false);
   // Código público do acompanhamento (o cliente nunca vê o código real da transportadora).
   const [publicCode, setPublicCode] = useState<string | null>(null);
@@ -334,29 +335,34 @@ export function ExpConferenceDialog({ order, storeId, open, onOpenChange, onFini
 
 
   const emitNfe = async () => {
-    // Pré-validação local: evita rejeição 237 (CPF do destinatário inválido) na SEFAZ.
-    // Se a venda não tem CPF/e-mail, puxamos da ficha do cliente e persistimos.
-    const { cpf } = await hydrateSaleCustomer(order, groupIds);
-    if (cpf) order.customer_cpf = cpf;
-    if (!isValidCpf(cpf || "")) {
-      const msg = onlyDigitsCpf(cpf || "")
-        ? `CPF do cliente inválido (${formatCpf(cpf || "")}) — dígito verificador não confere. Corrija em "Editar dados do pedido / NF-e".`
-        : 'Pedido sem CPF do destinatário. Informe em "Editar dados do pedido / NF-e".';
-      setNfeReject(msg);
-      toast.error(msg, { duration: 12000 });
-      return;
-    }
-
+    if (emissionLock.current) return;
+    emissionLock.current = true;
     setEmitting(true);
     try {
+      // Retomada usa o snapshot fiscal, sem alterar dados da venda/ficha.
+      if (nfeDoc?.status !== "pending_sefaz") {
+        // Pré-validação local: evita rejeição 237 (CPF do destinatário inválido) na SEFAZ.
+        // Se a venda não tem CPF/e-mail, puxamos da ficha do cliente e persistimos.
+        const { cpf } = await hydrateSaleCustomer(order, groupIds);
+        if (cpf) order.customer_cpf = cpf;
+        if (!isValidCpf(cpf || "")) {
+          const msg = onlyDigitsCpf(cpf || "")
+            ? `CPF do cliente inválido (${formatCpf(cpf || "")}) — dígito verificador não confere. Corrija em "Editar dados do pedido / NF-e".`
+            : 'Pedido sem CPF do destinatário. Informe em "Editar dados do pedido / NF-e".';
+          setNfeReject(msg);
+          toast.error(msg, { duration: 12000 });
+          return;
+        }
+      }
       let data: any = null;
       let error: any = null;
       // Envio unificado: cada venda tem a sua própria NF-e — emitimos uma a uma.
       for (const sid of groupIds) {
-        const res = await supabase.functions.invoke("nfe-emitir", { body: { sale_id: sid } });
+        const res = await supabase.functions.invoke("nfe-emitir", { body: { sale_id: sid,
+          ...(sid === order.id && nfeDoc?.status === "pending_sefaz" ? { retry_document_id: nfeDoc.id } : {}) } });
         data = res.data;
         error = res.error;
-        if (error || (res.data as any)?.error) break;
+        if (error || (res.data as any)?.error || (res.data as any)?.contingencia) break;
       }
       if (error) {
         const msg = await extractEdgeError(error, "Erro ao emitir NF-e");
@@ -371,8 +377,14 @@ export function ExpConferenceDialog({ order, storeId, open, onOpenChange, onFini
         await loadNfeStatus();
         return;
       }
+      if (data?.contingencia || !data?.ok) {
+        toast.warning(data?.message || "Emissão pendente. Use Tentar novamente para consultar e retomar a mesma nota.", { duration: 12000 });
+        await loadNfeStatus();
+        return;
+      }
       setNfeReject(null);
       setNfeStatus(`authorized${(data as any)?.numero ? ` nº ${(data as any).numero}` : ""}`);
+      await loadNfeStatus();
       toast.success("NF-e autorizada");
     } catch (e: any) {
       const msg = await extractEdgeError(e, "Erro ao emitir NF-e");
@@ -380,6 +392,7 @@ export function ExpConferenceDialog({ order, storeId, open, onOpenChange, onFini
       toast.error(msg, { duration: 12000 });
       await loadNfeStatus();
     } finally {
+      emissionLock.current = false;
       setEmitting(false);
     }
   };
@@ -599,13 +612,18 @@ export function ExpConferenceDialog({ order, storeId, open, onOpenChange, onFini
               </Badge>
               <Button onClick={emitNfe} disabled={emitting} className="bg-exp-prep hover:bg-exp-prep/90 text-white font-bold">
                 {emitting ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <FileText className="h-4 w-4 mr-1" />}
-                {isAuthorized ? "Reemitir NF-e" : "Emitir NF-e"}
+                {nfeDoc?.status === "pending_sefaz" ? "Tentar novamente" : isAuthorized ? "Reemitir NF-e" : "Emitir NF-e"}
               </Button>
               <Button variant="outline" className="font-bold" onClick={() => setShowEdit(true)}>
                 <Pencil className="h-4 w-4 mr-1" /> Editar dados do pedido / NF-e
               </Button>
             </div>
 
+            {nfeDoc?.status === "pending_sefaz" && (
+              <p className="mt-2 text-sm text-muted-foreground">
+                {nfeDoc.rejection_message || "Emissão pendente."} Use Tentar novamente para consultar e retomar a mesma nota. Não há reenvio automático de NF-e.
+              </p>
+            )}
             {isAuthorized && (
               <div className="mt-3 rounded-lg border-2 border-exp-prep/30 bg-exp-prep/5 p-3 space-y-2">
                 <div>

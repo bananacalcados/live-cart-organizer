@@ -1,0 +1,2 @@
+- Pending model-55 recovery queries BrasilNFe by identifier and verifies the reserved number before sending the original snapshot; an atomic document lease excludes concurrent retries, and uncertain evidence never allocates another document/number or triggers automatic retries.
+- Provider HTML/HTTP outages store a short provider-unavailable summary, not the page body, because transport failures do not prove SEFAZ downtime.

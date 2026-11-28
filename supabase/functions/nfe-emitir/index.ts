@@ -2,6 +2,8 @@ import { withAccessLog } from "../_shared/withAccessLog.ts";
 import { requireStaffOrInternal } from "../_shared/staff-or-internal.ts";
 import { resolveFiscalCompanyForSource, recordFiscalCompanyPending, resolveFiscalPending } from "../_shared/fiscal/gateway-company.ts";
 import { applyReservedFiscalNumber, fiscalEmissionReuseBody, getFiscalEmissionClaim } from "../_shared/fiscal/emission-claim.ts";
+import { resumePendingNfe, fiscalProviderFailure } from "../_shared/fiscal/provider-recovery.ts";
+import { persistFiscalFiles } from "../_shared/fiscal-persist-files.ts";
 // Edge function: nfe-emitir
 // Emite NF-e modelo 55 (venda online) via BrasilNFe, com endereço completo do cliente
 // e fluxo de contingência idêntico ao nfce-emitir (SEFAZ offline → pending_sefaz).
@@ -163,6 +165,35 @@ Deno.serve(withAccessLog("nfe-emitir", async (req) => {
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
+
+    // NÃO REMOVER: retomar antes de hidratar venda/resolver gateway/reservar número.
+    // A empresa, o ambiente, os itens e a numeração permanecem os do documento original.
+    {
+      let query = supabase.from("fiscal_documents")
+        .select("id,company_id,status,numero,serie,ambiente,created_at,brasilnfe_request,retry_count,last_retry_at,next_retry_at")
+        .eq("modelo", 55).or("finalidade.eq.1,finalidade.is.null");
+      if (sale_id) query = query.eq("pos_sale_id", sale_id);
+      else query = query.eq("order_id", beta_order_id || order_id);
+      if (body.retry_document_id) query = query.eq("id", body.retry_document_id);
+      else query = query.eq("status", "pending_sefaz");
+      const { data: pendingDoc, error: pendingError } = await query.order("created_at", { ascending: false }).limit(1).maybeSingle();
+      if (pendingError) throw pendingError;
+      if (body.retry_document_id && !pendingDoc) throw new Error("Documento fiscal não pertence a esta venda/pedido.");
+      if (pendingDoc?.status === "pending_sefaz") {
+        const { data: originalCompany } = await supabase.from("companies").select("brasilnfe_token,cnpj")
+          .eq("id", pendingDoc.company_id).single();
+        if (!originalCompany?.brasilnfe_token || digits(originalCompany.cnpj) !== digits(pendingDoc.brasilnfe_request?.Emitente?.CpfCnpj)) {
+          throw new Error("Emitente original não confirmado; não foi feito reenvio.");
+        }
+        const result = await resumePendingNfe(supabase, pendingDoc, originalCompany.brasilnfe_token, fetch, persistFiscalFiles);
+        return new Response(JSON.stringify(result), { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: result.ok ? 200 : 202 });
+      }
+      if (body.retry_document_id) {
+        return new Response(JSON.stringify({ ok: pendingDoc?.status === "authorized", reused: true,
+          document_id: pendingDoc?.id, numero: pendingDoc?.numero, message: "Documento já atualizado; recarregue o status fiscal." }),
+          { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 202 });
+      }
+    }
 
     // 1. Carrega pedido (expedition_orders) ou venda PDV (pos_sales) e normaliza
     type NormItem = { product_name: string; sku: string | null; barcode: string | null; quantity: number; unit_price: number };
@@ -708,8 +739,10 @@ Deno.serve(withAccessLog("nfe-emitir", async (req) => {
       networkError = e?.message || String(e);
     }
 
+    const providerFailure = fiscalProviderFailure(resp?.status ?? 0, respText, networkError);
     let respJson: any = null;
-    if (respText) { try { respJson = JSON.parse(respText); } catch { respJson = { raw: respText }; } }
+    if (providerFailure.unavailable) respJson = providerFailure.response;
+    else if (respText) { try { respJson = JSON.parse(respText); } catch { respJson = { summary: providerFailure.summary }; } }
 
     const ret = respJson?.ReturnNF || {};
     const ok = !!ret.Ok && !!ret.ChaveNF;
@@ -753,15 +786,15 @@ Deno.serve(withAccessLog("nfe-emitir", async (req) => {
     }
     const numeroRet = ret.Numero ? Number(ret.Numero) : doc.numero;
     const serieRet = ret.Serie ? Number(ret.Serie) : nfeSerie;
-    const protocolo = ret.Protocolo || respJson?.Protocolo || null;
-    const errorMsg = respJson?.Error || ret.DsStatusRespostaSefaz || networkError || null;
+    const protocolo = ret.NumeroProtocolo || ret.Protocolo || respJson?.Protocolo || null;
+    const errorMsg = providerFailure.unavailable ? providerFailure.summary : respJson?.Error || ret.DsStatusRespostaSefaz || networkError || null;
     const codSefaz = ret.CodStatusRespostaSefaz ? Number(ret.CodStatusRespostaSefaz) : null;
 
     const httpStatus = resp?.status ?? 0;
     const msgLow = String(errorMsg || "").toLowerCase();
     const sefazOffline =
       !ok && (
-        networkError != null ||
+        providerFailure.unavailable || networkError != null ||
         httpStatus >= 500 || httpStatus === 0 ||
         codSefaz === 108 || codSefaz === 109 || codSefaz === 999 ||
         (msgLow.includes("sefaz") && (msgLow.includes("fora") || msgLow.includes("indispon") || msgLow.includes("paralis") || msgLow.includes("offline"))) ||
@@ -769,7 +802,7 @@ Deno.serve(withAccessLog("nfe-emitir", async (req) => {
       );
 
     const finalStatus = ok ? "authorized" : (sefazOffline ? "pending_sefaz" : "rejected");
-    const nextRetry = sefazOffline ? new Date(Date.now() + 5 * 60 * 1000).toISOString() : null;
+    const nextRetry = null; // NF-e 55: retomada manual, sem promessa de cron automático.
 
     await supabase.from("fiscal_documents").update({
       status: finalStatus,
@@ -834,7 +867,7 @@ Deno.serve(withAccessLog("nfe-emitir", async (req) => {
       chave_acesso: chave, protocolo, error: ok ? null : errorMsg,
       company_id: companyId, company_cnpj: company.cnpj,
       company_selection_rule: selectionRule, company_selection_gateway: selectionGateway,
-      message: sefazOffline ? "SEFAZ indisponível — nota em fila de contingência, será reemitida automaticamente" : null,
+      message: sefazOffline ? `${errorMsg || "Emissão pendente"} Use Tentar novamente para consultar e retomar a mesma nota.` : null,
       response: respJson,
     }), { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: httpResp });
 

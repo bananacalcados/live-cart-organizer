@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -26,6 +26,7 @@ interface FiscalDoc {
   xml_url: string | null;
   xml_content: string | null;
   rejection_message: string | null;
+  company_id: string;
   companies?: { cnpj: string | null; legal_name: string | null } | null;
 }
 
@@ -35,13 +36,14 @@ export function EmitNfeButton({ betaOrderId, orderId, onSuccess, size = 'sm' }: 
   const [loading, setLoading] = useState(false);
   const [emitting, setEmitting] = useState(false);
   const [showDialog, setShowDialog] = useState(false);
+  const emissionLock = useRef(false);
 
   const load = useCallback(async () => {
     if (!targetId) return;
     setLoading(true);
     const { data } = await supabase
       .from('fiscal_documents')
-      .select('id, status, numero, serie, chave_acesso, danfe_url, xml_url, xml_content, rejection_message, companies(cnpj, legal_name)')
+      .select('id, company_id, status, numero, serie, chave_acesso, danfe_url, xml_url, xml_content, rejection_message, companies(cnpj, legal_name)')
       .eq('order_id', targetId)
       .eq('modelo', 55)
       .order('created_at', { ascending: false })
@@ -54,11 +56,14 @@ export function EmitNfeButton({ betaOrderId, orderId, onSuccess, size = 'sm' }: 
   useEffect(() => { load(); }, [load]);
 
   const handleEmit = async (companyId: string) => {
+    if (emissionLock.current) return;
+    emissionLock.current = true;
     setEmitting(true);
     try {
       const body: any = { company_id: companyId };
       if (betaOrderId) body.beta_order_id = betaOrderId;
       else body.order_id = orderId;
+      if (doc?.status === 'pending_sefaz') body.retry_document_id = doc.id;
 
       const { data, error } = await supabase.functions.invoke('nfe-emitir', { body });
       if (error) {
@@ -66,7 +71,7 @@ export function EmitNfeButton({ betaOrderId, orderId, onSuccess, size = 'sm' }: 
         return;
       }
       if (data?.contingencia) {
-        toast.warning('SEFAZ indisponível — NF-e em fila de contingência. Será reemitida automaticamente.');
+        toast.warning(data.message || 'Emissão pendente. Use Tentar novamente para consultar e retomar a mesma nota.');
       } else if (data?.ok) {
         toast.success(`NF-e ${data.numero} autorizada!`);
       } else {
@@ -78,6 +83,7 @@ export function EmitNfeButton({ betaOrderId, orderId, onSuccess, size = 'sm' }: 
     } catch (e: any) {
       toast.error(`Erro ao emitir NF-e: ${await extractEdgeError(e, 'Falha na emissão')}`, { duration: 12000 });
     } finally {
+      emissionLock.current = false;
       setEmitting(false);
     }
   };
@@ -106,7 +112,8 @@ export function EmitNfeButton({ betaOrderId, orderId, onSuccess, size = 'sm' }: 
         </Badge>
         {doc.danfe_url && (
           <Button size={size} variant="outline" className="gap-1" onClick={() => {
-            void openFiscalDocument(doc.danfe_url!, { autoPrint: true }).catch((e) => {
+            if (!doc.danfe_url) return;
+            void openFiscalDocument(doc.danfe_url, { autoPrint: true }).catch((e) => {
               toast.error(e?.message || 'Erro ao abrir DANFE');
             });
           }}>
@@ -124,9 +131,13 @@ export function EmitNfeButton({ betaOrderId, orderId, onSuccess, size = 'sm' }: 
 
   if (doc?.status === 'pending_sefaz') {
     return (
-      <Badge variant="secondary" className="gap-1">
-        <AlertCircle className="h-3 w-3" /> NF-e em contingência (SEFAZ offline)
-      </Badge>
+      <div className="flex flex-col gap-2">
+        <Badge variant="secondary" className="gap-1"><AlertCircle className="h-3 w-3" /> NF-e pendente nº {doc.numero}</Badge>
+        <Button size={size} variant="outline" disabled={emitting} onClick={() => handleEmit(doc.company_id)}>
+          {emitting ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : <FileText className="h-3 w-3 mr-1" />} Tentar novamente
+        </Button>
+        <span className="text-xs text-muted-foreground">Consulta antes de retomar a mesma nota; sem reenvio automático.</span>
+      </div>
     );
   }
 

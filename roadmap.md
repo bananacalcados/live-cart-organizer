@@ -1,4 +1,9 @@
 # Remoção do Tiny — Fase 2, primeiro lote
+## Prioridade — NF-e 4060 pendente (Matthews 28/11)
+- [x] Consultar o provedor antes de qualquer retomada; preservar documento, número e empresa
+- [x] Inexistência confirmada por identificador e número/série; 4060 autorizada no documento original, XML e DANFE PDF verificados
+- [x] Retomada manual segura de NF-e 55, classificação de falha do provedor e aviso correto na conferência
+- [x] 1.289 testes Vitest + 3 Deno, simulação dos dois botões, deploy do emissor e diagnóstico temporário apagado; sem cron/publicação
 ## PDV mobile — Fase 2 WhatsApp (Matthews 28/11)
 - [x] Decisão Opção A: envio intacto, trava síncrona, tentativa incerta sem repetição automática; Opção B fora desta fase
 - [x] Conferir caminho de envio intacto e prioridades/paginação por testes isolados; nenhuma tela/regra desktop alterada
