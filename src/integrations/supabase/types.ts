@@ -34846,6 +34846,18 @@ export type Database = {
         }
         Returns: string[]
       }
+      mobile_pdv_expedition_ids_v2: {
+        Args: {
+          p_limit?: number
+          p_offset?: number
+          p_origin?: string
+          p_search?: string
+          p_shipping?: string
+          p_stage: string
+          p_store_id: string
+        }
+        Returns: string[]
+      }
       mobile_product_name_hints: {
         Args: { p_limit?: number; p_term: string }
         Returns: {

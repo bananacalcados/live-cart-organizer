@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
-import { Camera, CheckCircle2, ChevronLeft, ChevronRight, Loader2, Monitor, Package, RefreshCw, ScanBarcode, Undo2, WifiOff, X } from "lucide-react";
+import { AlertTriangle, ArrowLeft, ListChecks, Pencil, SlidersHorizontal, Camera, CheckCircle2, ChevronLeft, ChevronRight, Loader2, Monitor, Package, RefreshCw, ScanBarcode, Undo2, WifiOff, X } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -14,9 +14,11 @@ import { usePdvStoreEvents } from "@/hooks/usePdvStoreEvents";
 import { useItemPhotos } from "@/hooks/useItemPhotos";
 import { ItemPhotoThumb } from "@/components/pos/ItemPhotoThumb";
 import { itemPhotoKey } from "@/lib/pos/itemPhotoCache";
-import { EXP_STAGES, fetchExpeditionOrders, nextStage, type ExpOrder, type ExpStage } from "@/lib/pos/expedition";
+import { brl, EXP_STAGES, fetchExpeditionOrders, nextStage, type ExpOrder, type ExpStage } from "@/lib/pos/expedition";
+import { advanceMode, canBulkAdvance, missingOrderData, originLabel, shippingMethodOf, shippingTag, sortMobileExpedition, type ShippingTone } from "@/lib/pos/expeditionReadiness";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { ExpOrderEditDialog } from "@/components/pos/expedition/ExpOrderEditDialog";
 import { expeditionShippingError, finishExpedition, moveExpeditionOrders, type ExpeditionShipping } from "@/lib/pos/expeditionActions";
-import { isSedexOrder } from "@/lib/expeditionPriority";
 import { useExpeditionOutbox } from "./useExpeditionOutbox";
 import { MobilePdvCamera } from "./MobilePdvCamera";
 import { fullVersionUrl } from "./sections";
@@ -90,46 +92,148 @@ function MobileConference({ order, userId, onClose, onRefresh }: { order: ExpOrd
   </section>;
 }
 
-export function MobileExpedition({ storeId }: { storeId: string }) {
+function StoreEvents({ storeId, refresh }: { storeId: string; refresh: () => void }) { usePdvStoreEvents(storeId, "sales_changed", refresh); return null; }
+
+const TONE: Record<ShippingTone, string> = {
+  sedex: "bg-amber-500 text-white", moto: "bg-violet-600 text-white", pickup: "bg-sky-600 text-white",
+  carrier: "bg-slate-700 text-white", none: "border border-dashed text-muted-foreground",
+};
+const SHIPPING_FILTERS = [["all", "Todas as formas"], ["moto", "Mototaxista"], ["carrier", "Correios/transportadora"], ["pickup", "Retirada"], ["none", "Sem frete"]] as const;
+const ORIGIN_FILTERS = [["all", "Todas as origens"], ["live", "Live"], ["whatsapp", "WhatsApp"], ["online", "Online/Site"]] as const;
+
+function ShippingBadge({ order }: { order: ExpOrder }) {
+  const tag = shippingTag(order);
+  return <span className={`inline-flex min-h-7 items-center rounded-full px-3 text-xs font-bold ${TONE[tag.tone]}`}>{tag.label}</span>;
+}
+function DataStatus({ order }: { order: ExpOrder }) {
+  const missing = missingOrderData(order);
+  return missing.length ? <p className="flex items-center gap-1 text-xs font-semibold text-destructive"><AlertTriangle className="h-4 w-4 shrink-0" />Faltando: {missing.join(", ")}</p>
+    : <p className="flex items-center gap-1 text-xs font-semibold text-emerald-700"><CheckCircle2 className="h-4 w-4 shrink-0" />Dados completos</p>;
+}
+
+function Row({ label, value }: { label: string; value?: string | number | null }) {
+  return <div className="flex justify-between gap-3 py-2 text-sm"><span className="text-muted-foreground">{label}</span><span className="min-w-0 break-words text-right font-medium">{value || "—"}</span></div>;
+}
+
+function MobileOrderDetail({ order, onClose, onSaved, onConference }: { order: ExpOrder; onClose: () => void; onSaved: () => void; onConference?: () => void }) {
+  const [editing, setEditing] = useState(false);
+  const a = order.shipping_address || {};
+  const photos = useItemPhotos(order.items.map(itemPhotoKey));
+  return <section className="space-y-3" aria-label="Detalhe do pedido">
+    <div className="flex items-center gap-2"><Button variant="ghost" size="icon" className="h-11 w-11" aria-label="Voltar à lista" onClick={onClose}><ArrowLeft className="h-5 w-5" /></Button><div className="min-w-0 flex-1"><h2 className="break-words text-lg font-bold">{order.customer_name || "Cliente"}</h2><p className="text-xs text-muted-foreground">#{order.id.slice(0, 8).toUpperCase()} · {order.store_name || "Loja"}</p></div></div>
+    <div className="flex flex-wrap items-center gap-2"><ShippingBadge order={order} /><Badge variant="outline">{originLabel(order)}</Badge></div>
+    <DataStatus order={order} />
+    <div className="divide-y rounded-lg border px-3">
+      <Row label="Telefone" value={order.resolved_phone || order.customer_phone} /><Row label="CPF" value={order.customer_cpf} /><Row label="E-mail" value={order.customer_email} />
+      <Row label="Endereço" value={[a.address, a.number, a.complement, a.neighborhood].filter(Boolean).join(", ")} /><Row label="Cidade" value={[a.city, a.state].filter(Boolean).join("/")} /><Row label="CEP" value={a.cep} />
+      <Row label="Frete" value={shippingMethodOf(order)} /><Row label="Valor do frete" value={order.shipping_cost == null ? null : brl(order.shipping_cost)} /><Row label="Entregador" value={order.courier_name} /><Row label="Rastreio" value={order.tracking_code} />
+      <Row label="Pagamento" value={[order.payment_method, order.payment_gateway].filter(Boolean).join(" · ")} /><Row label="Total" value={brl(order.total)} />
+      <Row label="Vendedor(a)" value={order.seller_label} /><Row label="Live" value={order.event_name} /><Row label="Observações" value={order.shipping_notes || order.notes} />
+    </div>
+    <ul className="space-y-2">{order.items.map(item => <li key={item.id} className="flex items-center gap-3"><ItemPhotoThumb photo={photos.get(itemPhotoKey(item))} size={56} alt={item.product_name || "Item"} /><div className="min-w-0 flex-1"><p className="break-words text-sm font-semibold">{item.product_name}</p><p className="text-xs text-muted-foreground">{item.variant_name} · {item.size} · {item.quantity} par(es)</p></div></li>)}</ul>
+    <Button className="h-12 w-full" onClick={() => setEditing(true)}><Pencil className="mr-2 h-5 w-5" />Editar dados do pedido</Button>
+    {onConference && <Button variant="outline" className="h-12 w-full" onClick={onConference}><ScanBarcode className="mr-2 h-5 w-5" />Conferir pedido</Button>}
+    {editing && <ExpOrderEditDialog order={order} storeId={order.store_id} open={editing} onOpenChange={value => !value && setEditing(false)} onSaved={() => { setEditing(false); onSaved(); }} />}
+  </section>;
+}
+
+export function MobileExpedition({ storeId: _userStore }: { storeId: string }) {
   const userId = useCurrentUserId();
   const queryClient = useQueryClient();
   const [stage, setStage] = useState<ExpStage>("novo");
+  const [store, setStore] = useState("all");
+  const [shipping, setShipping] = useState("all");
+  const [origin, setOrigin] = useState("all");
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const [search, setSearch] = useState("");
   const [serverSearch, setServerSearch] = useState("");
   const [offset, setOffset] = useState(0);
-  const [selected, setSelected] = useState<ExpOrder | null>(null);
+  const [conference, setConference] = useState<ExpOrder | null>(null);
+  const [detailId, setDetailId] = useState("");
   const [busyId, setBusyId] = useState("");
+  const [selecting, setSelecting] = useState(false);
+  const [picked, setPicked] = useState<Set<string>>(new Set());
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const [bulkResult, setBulkResult] = useState<{ ok: number; failed: { name: string; reason: string }[] } | null>(null);
   useEffect(() => { const timer = setTimeout(() => { setServerSearch(search.trim()); setOffset(0); }, 400); return () => clearTimeout(timer); }, [search]);
-  const key = ["mobile-pdv-expedition", storeId, stage, serverSearch, offset];
-  const orders = useQuery({ queryKey: key, queryFn: () => fetchExpeditionOrders(storeId, stage, undefined, "all", serverSearch, { limit: 50, offset }) });
-  const counts = useQuery({ queryKey: ["pos-expedition-counts", storeId], queryFn: async () => {
-    const { data, error } = await supabase.rpc("pos_expedition_stage_counts", { p_store_id: storeId }); if (error) throw error;
+  useEffect(() => { setPicked(new Set()); }, [stage, store, shipping, origin, serverSearch, offset]);
+  const stores = useQuery({ queryKey: ["mobile-pdv-stores"], staleTime: 600_000, queryFn: async () => {
+    const { data, error } = await supabase.from("pos_stores").select("id,name").eq("is_active", true).order("name"); if (error) throw error; return data || [];
+  } });
+  const orders = useQuery({ queryKey: ["mobile-pdv-expedition", store, stage, serverSearch, shipping, origin, offset],
+    queryFn: async () => sortMobileExpedition(await fetchExpeditionOrders(store, stage, undefined, "all", serverSearch, { limit: 50, offset, shipping, origin }), stage) });
+  const counts = useQuery({ queryKey: ["pos-expedition-counts", store], queryFn: async () => {
+    const { data, error } = await supabase.rpc("pos_expedition_stage_counts", { p_store_id: store === "all" ? null : store }); if (error) throw error;
     return Object.fromEntries((data || []).map(row => [row.stage, Number(row.total)]));
   } });
-  const refresh = () => { void queryClient.invalidateQueries({ queryKey: ["mobile-pdv-expedition", storeId] }); void queryClient.invalidateQueries({ queryKey: ["pos-expedition-counts", storeId] }); };
-  usePdvStoreEvents(storeId, "sales_changed", refresh);
-  const photos = useItemPhotos((orders.data || []).flatMap(order => order.items.map(itemPhotoKey)));
+  const refresh = () => { void queryClient.invalidateQueries({ queryKey: ["mobile-pdv-expedition"] }); void queryClient.invalidateQueries({ queryKey: ["pos-expedition-counts"] }); };
+  const list = orders.data || [];
+  const photos = useItemPhotos(list.flatMap(order => order.items.map(itemPhotoKey)));
+  const eligible = list.filter(order => canBulkAdvance(order, stage));
+  const to = nextStage(stage);
+  const toLabel = EXP_STAGES.find(item => item.id === to)?.label;
+  const activeFilters = (shipping !== "all" ? 1 : 0) + (origin !== "all" ? 1 : 0);
   const move = async (order: ExpOrder) => {
-    const to = nextStage(stage); if (!to) return;
+    if (!to) return;
     setBusyId(order.id);
-    try { await moveExpeditionOrders([order], to, stage === "separacao" ? "items" : stage === "aguardando" ? "waiting" : "advance"); toast.success("Pedido avançado"); }
+    try { await moveExpeditionOrders([order], to, advanceMode(stage)); toast.success("Pedido avançado"); }
     catch (failure) { toast.error((failure as { message?: string })?.message || "Erro ao avançar"); }
     finally { setBusyId(""); refresh(); }
   };
-  if (selected && userId) return <MobileConference key={`${selected.id}:${selected.updated_at || selected.expedition_stage}`} order={selected} userId={userId} onClose={() => setSelected(null)} onRefresh={refresh} />;
-  return <div className="space-y-3">
+  const bulkAdvance = async () => {
+    if (!to) return;
+    const chosen = eligible.filter(order => picked.has(order.id));
+    setBulkBusy(true);
+    const failed: { name: string; reason: string }[] = []; let ok = 0;
+    // One transition per order: each keeps its own lock/validation, so a failure never hides behind a partial batch.
+    for (const order of chosen) {
+      try { await moveExpeditionOrders([order], to, advanceMode(stage)); ok += 1; }
+      catch (failure) { failed.push({ name: order.customer_name || `#${order.id.slice(0, 8).toUpperCase()}`, reason: (failure as { message?: string })?.message || "Erro ao avançar" }); }
+    }
+    setBulkBusy(false); setPicked(new Set()); setSelecting(false); setBulkResult({ ok, failed }); refresh();
+  };
+  const detail = list.find(order => order.id === detailId);
+  const storeEvents = (store === "all" ? (stores.data || []).map(item => item.id) : [store]).map(id => <StoreEvents key={id} storeId={id} refresh={refresh} />);
+  if (conference && userId) return <>{storeEvents}<MobileConference key={`${conference.id}:${conference.updated_at || conference.expedition_stage}`} order={conference} userId={userId} onClose={() => setConference(null)} onRefresh={refresh} /></>;
+  if (detail) return <>{storeEvents}<MobileOrderDetail order={detail} onClose={() => setDetailId("")} onSaved={refresh} onConference={stage === "conferencia" && userId ? () => { setDetailId(""); setConference(detail); } : undefined} /></>;
+  return <div className={`space-y-3 ${selecting ? "pb-24" : ""}`}>
+    {storeEvents}
     <div className="flex gap-2"><Input aria-label="Buscar pedido" placeholder="Nome ou número do pedido" className="h-12 min-w-0" value={search} onChange={event => setSearch(event.target.value)} /><Button variant="outline" size="icon" className="h-12 w-12 shrink-0" aria-label="Atualizar fila" onClick={refresh}><RefreshCw className="h-5 w-5" /></Button></div>
+    <div className="flex gap-2">
+      <Select value={store} onValueChange={value => { setStore(value); setOffset(0); }}><SelectTrigger aria-label="Loja" className="h-12 min-w-0 flex-1"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all" className="min-h-11">Todas as lojas</SelectItem>{(stores.data || []).map(item => <SelectItem key={item.id} value={item.id} className="min-h-11">{item.name}</SelectItem>)}</SelectContent></Select>
+      <Button variant="outline" className="h-12 shrink-0" onClick={() => setFiltersOpen(true)}><SlidersHorizontal className="mr-2 h-5 w-5" />Filtros{activeFilters ? ` (${activeFilters})` : ""}</Button>
+    </div>
     <Select value={stage} onValueChange={(value: ExpStage) => { setStage(value); setOffset(0); }}><SelectTrigger aria-label="Etapa da expedição" className="h-12"><SelectValue /></SelectTrigger><SelectContent>{EXP_STAGES.map(item => <SelectItem key={item.id} value={item.id} className="min-h-11">{item.label} ({counts.data?.[item.id] || 0})</SelectItem>)}</SelectContent></Select>
+    {to && stage !== "conferencia" && stage !== "concluido" && <div className="flex gap-2">
+      <Button variant={selecting ? "default" : "outline"} className="h-11 flex-1" onClick={() => { setSelecting(value => !value); setPicked(new Set()); }}><ListChecks className="mr-2 h-5 w-5" />{selecting ? "Sair da seleção" : "Selecionar vários"}</Button>
+      {selecting && <Button variant="outline" className="h-11 flex-1" disabled={!eligible.length} onClick={() => setPicked(picked.size === eligible.length ? new Set() : new Set(eligible.map(order => order.id)))}>{picked.size === eligible.length && eligible.length ? "Desmarcar todos" : `Selecionar todos (${eligible.length})`}</Button>}
+    </div>}
+    {bulkResult && <div role="status" className="space-y-1 rounded-lg border p-3 text-sm"><div className="flex items-start justify-between gap-2"><p className="font-semibold">{bulkResult.ok} pedido(s) avançaram{bulkResult.failed.length ? ` · ${bulkResult.failed.length} não avançaram` : ""}</p><Button variant="ghost" size="icon" className="h-9 w-9 shrink-0" aria-label="Fechar resultado" onClick={() => setBulkResult(null)}><X className="h-4 w-4" /></Button></div>{bulkResult.failed.map((item, index) => <p key={index} className="break-words text-destructive">{item.name}: {item.reason}</p>)}</div>}
     {orders.isPending && <Loader2 className="mx-auto h-8 w-8 animate-spin" />}
     {(orders.isError || counts.isError) && <p role="alert" className="text-sm text-destructive">Não consegui carregar a fila. Tente atualizar.</p>}
     {orders.data?.length === 0 && <div className="py-10 text-center text-muted-foreground"><Package className="mx-auto mb-2 h-10 w-10" /><p>Nenhum pedido nesta etapa</p></div>}
-    <ul className="space-y-3">{(orders.data || []).map(order => <li key={order.id} className="space-y-3 rounded-lg border bg-card p-3">
-      <div className="flex items-start justify-between gap-2"><h2 className="min-w-0 break-words font-bold">{order.customer_name || "Cliente"}</h2>{isSedexOrder(order) && <Badge className="shrink-0">SEDEX</Badge>}</div>
-      <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground"><span>{EXP_STAGES.find(item => item.id === stage)?.label}</span><span>#{order.id.slice(0, 8).toUpperCase()}</span><span>{new Date(order.created_at).toLocaleDateString("pt-BR")}</span></div>
+    <ul className="space-y-3">{list.map(order => { const canPick = canBulkAdvance(order, stage); return <li key={order.id} className={`space-y-3 rounded-lg border bg-card p-3 ${picked.has(order.id) ? "ring-2 ring-primary" : ""}`}>
+      <div className="flex items-start gap-3">
+        {selecting && <Checkbox className="mt-1 h-6 w-6" aria-label={`Selecionar ${order.customer_name || "pedido"}`} disabled={!canPick} checked={picked.has(order.id)} onCheckedChange={checked => setPicked(current => { const next = new Set(current); if (checked === true) next.add(order.id); else next.delete(order.id); return next; })} />}
+        <button type="button" className="min-w-0 flex-1 space-y-2 text-left" onClick={() => selecting ? canPick && setPicked(current => { const next = new Set(current); if (next.has(order.id)) next.delete(order.id); else next.add(order.id); return next; }) : setDetailId(order.id)}>
+          <div className="flex flex-wrap items-center gap-2"><ShippingBadge order={order} /><span className="text-xs font-medium text-muted-foreground">{order.store_name || "Loja"}</span></div>
+          <h2 className="break-words font-bold">{order.customer_name || "Cliente"}</h2>
+          <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground"><span className="font-semibold text-foreground">{originLabel(order)}</span>{order.seller_label && <span>Vend.: {order.seller_label}</span>}<span>#{order.id.slice(0, 8).toUpperCase()}</span><span>{new Date(order.created_at).toLocaleDateString("pt-BR")}</span></div>
+          <DataStatus order={order} />
+        </button>
+      </div>
       <ul className="space-y-2">{order.items.map(item => <li key={item.id} className="flex items-center gap-3"><ItemPhotoThumb photo={photos.get(itemPhotoKey(item))} size={56} alt={item.product_name || "Item"} /><div className="min-w-0 flex-1"><p className="break-words text-sm font-semibold">{item.product_name}</p><p className="break-words text-xs text-muted-foreground">{item.variant_name} · {item.size} · {item.quantity} par(es)</p></div></li>)}</ul>
-      {order.is_avulso && !order.avulso_ready ? <FullExpedition label="Completar pedido avulso" /> : stage === "conferencia" ? <Button className="h-12 w-full" disabled={!userId} onClick={() => setSelected(order)}><ScanBarcode className="mr-2 h-5 w-5" />Conferir pedido</Button> : nextStage(stage) ? <Button className="h-12 w-full" disabled={busyId === order.id} onClick={() => void move(order)}>{busyId === order.id ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <ChevronRight className="mr-2 h-5 w-5" />}Avançar para {EXP_STAGES.find(item => item.id === nextStage(stage))?.label}</Button> : null}
-    </li>)}</ul>
-    <div className="flex items-center justify-between gap-2"><Button variant="outline" className="h-12" disabled={offset === 0 || orders.isFetching} onClick={() => setOffset(Math.max(0, offset - 50))}><ChevronLeft className="mr-1 h-4 w-4" />Anterior</Button><span className="text-xs text-muted-foreground">Página {offset / 50 + 1}</span><Button variant="outline" className="h-12" disabled={(orders.data?.length || 0) < 50 || orders.isFetching} onClick={() => setOffset(offset + 50)}>Próxima<ChevronRight className="ml-1 h-4 w-4" /></Button></div>
-    <FullExpedition label="Editar, frete, etiquetas e outras ações" />
+      {!selecting && (order.is_avulso && !order.avulso_ready ? <FullExpedition label="Completar pedido avulso" /> : stage === "conferencia" ? <Button className="h-12 w-full" disabled={!userId} onClick={() => setConference(order)}><ScanBarcode className="mr-2 h-5 w-5" />Conferir pedido</Button> : to ? <Button className="h-12 w-full" disabled={busyId === order.id} onClick={() => void move(order)}>{busyId === order.id ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <ChevronRight className="mr-2 h-5 w-5" />}Avançar para {toLabel}</Button> : null)}
+    </li>; })}</ul>
+    <div className="flex items-center justify-between gap-2"><Button variant="outline" className="h-12" disabled={offset === 0 || orders.isFetching} onClick={() => setOffset(Math.max(0, offset - 50))}><ChevronLeft className="mr-1 h-4 w-4" />Anterior</Button><span className="text-xs text-muted-foreground">Página {offset / 50 + 1}</span><Button variant="outline" className="h-12" disabled={list.length < 50 || orders.isFetching} onClick={() => setOffset(offset + 50)}>Próxima<ChevronRight className="ml-1 h-4 w-4" /></Button></div>
+    <FullExpedition label="Etiquetas e outras ações" />
+    {selecting && <div className="fixed inset-x-0 bottom-[calc(3.6rem+env(safe-area-inset-bottom))] z-40 border-t bg-background p-3 shadow-lg"><Button className="h-12 w-full text-base" disabled={!picked.size || bulkBusy} onClick={() => void bulkAdvance()}>{bulkBusy ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <ChevronRight className="mr-2 h-5 w-5" />}Avançar {picked.size} pedido(s) para {toLabel}</Button></div>}
+    <Sheet open={filtersOpen} onOpenChange={setFiltersOpen}><SheetContent side="bottom" className="h-[100dvh] overflow-y-auto"><SheetHeader><SheetTitle>Filtros</SheetTitle></SheetHeader>
+      <div className="mt-4 space-y-5">
+        <fieldset className="space-y-2"><legend className="mb-2 font-semibold">Forma de envio</legend>{SHIPPING_FILTERS.map(([value, label]) => <Button key={value} variant={shipping === value ? "default" : "outline"} className="h-12 w-full justify-start" onClick={() => { setShipping(value); setOffset(0); }}>{label}</Button>)}</fieldset>
+        <fieldset className="space-y-2"><legend className="mb-2 font-semibold">Origem</legend>{ORIGIN_FILTERS.map(([value, label]) => <Button key={value} variant={origin === value ? "default" : "outline"} className="h-12 w-full justify-start" onClick={() => { setOrigin(value); setOffset(0); }}>{label}</Button>)}</fieldset>
+        <div className="flex gap-2"><Button variant="outline" className="h-12 flex-1" onClick={() => { setShipping("all"); setOrigin("all"); setOffset(0); }}>Limpar</Button><Button className="h-12 flex-1" onClick={() => setFiltersOpen(false)}>Ver pedidos</Button></div>
+      </div>
+    </SheetContent></Sheet>
   </div>;
 }

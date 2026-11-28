@@ -293,13 +293,15 @@ export async function fetchExpeditionOrders(
   finishedRange?: { from?: string; to?: string },
   gateway = "all",
   search?: string,
-  page?: { limit: number; offset: number },
+  page?: { limit: number; offset: number; shipping?: string; origin?: string },
 ): Promise<ExpOrder[]> {
   const allStores = storeId === "all";
   let pageIds: string[] | undefined;
   if (page) {
-    const { data, error } = await supabase.rpc("mobile_pdv_expedition_ids", {
-      p_store_id: storeId, p_stage: stage, p_search: search || "", p_limit: page.limit, p_offset: page.offset,
+    // Paginated path is mobile-only (desktop never passes `page`): v2 adds all-stores + shipping/origin filters.
+    const { data, error } = await supabase.rpc("mobile_pdv_expedition_ids_v2", {
+      p_store_id: allStores ? null : storeId, p_stage: stage, p_search: search || "", p_limit: page.limit, p_offset: page.offset,
+      p_shipping: page.shipping || "all", p_origin: page.origin || "all",
     });
     if (error) throw error;
     pageIds = data || [];
