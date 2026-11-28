@@ -1,4 +1,7 @@
 # Remoção do Tiny — Fase 2, primeiro lote
+## Prioridade D aplicada com live (autorizado 28/11 15:37 UTC)
+- [x] Aplicada a ordem nova, interruptor v2, rollback salvo em docs/followups/PRIORIDADE-V2-ROLLBACK.sql; observado 10 min sem anomalias
+- [ ] Entregas seguintes (validade, lembretes PDV, Fila de disparos): só implantar sem live, salvo nova liberação
 ## Prioridade — NF-e 4060 pendente (Matthews 28/11)
 - [x] Consultar o provedor antes de qualquer retomada; preservar documento, número e empresa
 - [x] Inexistência confirmada por identificador e número/série; 4060 autorizada no documento original, XML e DANFE PDF verificados

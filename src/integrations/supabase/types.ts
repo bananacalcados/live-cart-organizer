@@ -34559,6 +34559,10 @@ export type Database = {
         Args: { p_step: number; p_type: string }
         Returns: number
       }
+      live_followup_priority_v2: {
+        Args: { p_step: number; p_type: string }
+        Returns: number
+      }
       live_followup_simulate: { Args: never; Returns: Json }
       live_followup_source_contexts: {
         Args: { p_limit?: number }
