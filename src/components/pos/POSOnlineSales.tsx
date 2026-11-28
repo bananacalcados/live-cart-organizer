@@ -420,7 +420,8 @@ export function POSOnlineSales({ storeId, sellers }: Props) {
         link = "";
       } else if (gateway === "yampi") {
         // Yampi monta o carrinho pela variação da Shopify: item só do ERP não entra.
-        if (cart.some(c => !isShopifyVariantGid(c.variantId))) throw new Error("Há produto só do ERP no carrinho: use Pix ou o checkout da loja.");
+        // NÃO REMOVER: identificadores antigos da Shopify passam intactos; a validação estrita é só de itens vindos do ERP.
+        if (cart.some(c => c.erpVariantId && !isShopifyVariantGid(c.variantId))) throw new Error("Há produto só do ERP no carrinho: use Pix ou o checkout da loja.");
         const items = cart.map(c => ({
           sku: c.sku,
           shopify_variant_id: c.variantId,

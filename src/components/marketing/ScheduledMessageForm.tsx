@@ -20,6 +20,7 @@ import { toast } from "sonner";
 import { WhatsAppFormattingToolbar } from "./WhatsAppFormattingToolbar";
 import { type ShopifyProduct } from "@/lib/shopify";
 import { fetchMarketingProducts, erpMasterFromId } from "@/lib/marketing/erpMarketing";
+import { erpMasterOf, getProductSource } from "@/lib/liveProductSource";
 import { whatsappSendCandidates } from "@/lib/whatsapp/erpProductPhotos";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Switch } from "@/components/ui/switch";
@@ -1008,9 +1009,12 @@ export function ScheduledMessageForm({ open, onOpenChange, onSubmit, onSendNow, 
     finally { setIsLoadingProducts(false); }
   };
 
-  const selectShopifyProduct = (product: ShopifyProduct, rawImageUrl: string) => {
-    // Foto do ERP é WebP; o grupo recebe o JPG do mesmo arquivo.
-    const imageUrl = whatsappSendCandidates(rawImageUrl)[0] || rawImageUrl;
+  const selectShopifyProduct = async (product: ShopifyProduct, rawImageUrl: string) => {
+    // NÃO REMOVER: Shopify conserva a URL original; JPG só com Marketing ERP e procedência ERP (inclusive vinculados).
+    const fromErp = !!product.node.variants && !!erpMasterOf(product);
+    const imageUrl = fromErp && (await getProductSource("product_source_marketing")) === "erp"
+      ? whatsappSendCandidates(rawImageUrl)[0] || rawImageUrl
+      : rawImageUrl;
     const erpOnly = !!erpMasterFromId(product.node.id);
     const targetBlock = blocks.find(b => b.id === shopifyTargetBlockId);
     if (!targetBlock) return;

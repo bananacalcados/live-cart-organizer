@@ -58,21 +58,8 @@ export function TeamChat() {
               setIsReady(true);
               return;
             }
-            const emailKey = `email:${(user.email || '').toLowerCase()}`;
-            const { data: profileByEmail } = await supabase
-              .from('user_profiles')
-              .select('id, display_name')
-              .eq('user_id', emailKey)
-              .maybeSingle();
-            if (profileByEmail?.display_name) {
-              await supabase.from('user_profiles')
-                .update({ user_id: user.id } as any)
-                .eq('id', profileByEmail.id);
-              setSenderName(profileByEmail.display_name);
-              localStorage.setItem('team_chat_name', profileByEmail.display_name);
-              setIsReady(true);
-              return;
-            }
+            // user_id é UUID: nunca consultar "email:..." nem tentar regravar vínculos ao abrir o chat.
+            // Sem perfil pelo UUID, mantém o nome da sessão abaixo.
           } catch (profileErr) {
             console.warn('user_profiles lookup failed:', profileErr);
           }

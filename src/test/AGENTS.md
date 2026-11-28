@@ -1,0 +1,2 @@
+- Shopify phase-parity tests execute frozen pre-phase handlers and current handlers with in-memory dependencies, so comparisons never create real messages or sales.
+- Freight resolver regression tests run the versioned PL/pgSQL in socket-only disposable PostgreSQL with restricted grants, so testing needs neither production writes nor public execution grants.

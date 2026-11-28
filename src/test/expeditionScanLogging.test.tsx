@@ -1,6 +1,14 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render as baseRender, screen, waitFor } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import type { ReactElement } from "react";
+
+function render(ui: ReactElement) {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } });
+  client.setQueryData(["product_color_photos_mode_raw"], "off");
+  return baseRender(<QueryClientProvider client={client}>{ui}</QueryClientProvider>);
+}
 
 const { rpc, from, invoke, toast } = vi.hoisted(() => ({
   rpc: vi.fn(), from: vi.fn(), invoke: vi.fn(),

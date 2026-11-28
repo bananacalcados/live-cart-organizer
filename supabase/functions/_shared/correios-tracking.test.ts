@@ -22,6 +22,7 @@ Deno.test('Rastro: converte movimentações reais sem inventar fuso ou local', (
     description: 'Objeto entregue ao destinatário',
     location: 'Belo Horizonte/MG',
     type: 'BDE',
+    status: '01',
   }]);
 });
 

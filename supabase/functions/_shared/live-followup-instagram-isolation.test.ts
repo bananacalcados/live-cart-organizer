@@ -44,6 +44,9 @@ Deno.test('erro no Instagram de um item não descarta nem impede os outros do lo
       throw new Error(`RPC inesperada: ${name}`);
     },
     from: (table: string) => {
+      if (table === 'ig_live_cart_notifications') {
+        return { select: () => ({ eq: () => ({ eq: async () => ({ data: [], error: null }) }) }) };
+      }
       if (table === 'live_followup_settings') {
         return {
           select: () => ({

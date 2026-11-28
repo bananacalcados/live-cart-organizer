@@ -139,3 +139,12 @@
 - [ ] Abrir somente AP696380658BR e consultar — bloqueado: Correios HTTP 403 GTW-012 (API 577 restrita) e e-mail do remetente vazio
 - [ ] Confirmar timeout de 120000 da agenda — ferramenta gerenciada não expõe esse ajuste; chamadas de teste usaram 120000
 - [ ] Verificação Deno completa — erros preexistentes nos helpers compartilhados de autenticação/log; mantidos fora do escopo
+
+# Correções da verificação antes de publicar (Matthews, sem publicação)
+- [x] Preservar caminho Shopify em fotos VIP, identificadores e promoções; 20 testes antes/depois de 89e788d95
+- [x] Corrigir somente os 12 testes antigos; 1195 Vitest + 295 Deno + 21 AustPay passaram
+- [x] Diagnosticar os HTTP 400/404; remover consulta de e-mail em UUID; tabela de reclamações ausente relatada, sem alterar
+- [x] Relatar origem das mudanças de troca e inventário completo desde o commit público 1f084258d
+- [x] Reexecutar suítes e cinco telas com gravações bloqueadas; Venda abre com caixa fechado, sem abrir caixa real
+- [ ] Obter evidência separada de tipos e build de produção — validação automática só expõe build OK; execução manual vedada pelo ambiente
+- [x] Dar veredito não, diferenças remanescentes e roteiro posterior; manter fontes Shopify e dados reais intactos

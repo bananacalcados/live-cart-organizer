@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { fetchLiveProducts, fetchCrossellProducts, getProductSource, isErpOnlyId, promoKeyOf } from "@/lib/liveProductSource";
+import { fetchCrossellProducts, getProductSource, isErpOnlyId, promoKeyOf } from "@/lib/liveProductSource";
 
-/** Com product_source_crossell="erp" a promoção aceita produto só do ERP (chave erp:<id>). */
+/** NÃO REMOVER: somente product_source_crossell controla promoções; product_source_live nunca escolhe esta fonte. */
 async function promoFetch(limit: number, q: string) {
   const erp = (await getProductSource("product_source_crossell")) === "erp";
-  return { erp, ps: await (erp ? fetchCrossellProducts : fetchLiveProducts)(limit, q) };
+  return { erp, ps: await fetchCrossellProducts(limit, q) };
 }
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
