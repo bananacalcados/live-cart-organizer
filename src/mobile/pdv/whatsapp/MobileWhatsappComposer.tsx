@@ -1,29 +1,31 @@
 import { useEffect,useRef,useState } from 'react';
-import { Camera,Image,FileText,Mic,Send,ShoppingBag,Zap,X,Loader2,Paperclip,Smile,Trash2,Headphones,LayoutTemplate } from 'lucide-react';
+import { Camera,Video,Image,FileText,Mic,Send,ShoppingBag,Zap,X,Loader2,Paperclip,Smile,Trash2,Headphones,LayoutTemplate } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import { uploadMediaToStorage } from '@/components/MediaAttachmentPicker';
 import { toast } from 'sonner';
 import type { AttemptPayload } from '@/lib/chat/mobileSendAttempt';
 import type { MobileMessage } from '@/lib/chat/mobileWhatsappReads';
 import { getMaxSizeForType,getMaxSizeLabel } from '@/constants/mediaLimits';
 import { MobileMediaPreview } from './MobileMediaPreview';
+import { mobileMediaKind,mediaDraftError } from './mediaDraft';
 interface Props { disabled:boolean; quoted:MobileMessage|null; cancelQuote:()=>void; send:(p:AttemptPayload)=>Promise<boolean>; openCatalog:()=>void; openReplies:()=>void; openTemplates?:()=>void }
 const EMOJIS='😀 😂 😍 🥰 😘 😊 😉 🙏 👍 👏 🙌 💪 ❤️ 💛 💚 💜 🔥 ✨ 🎉 🎁 👠 👡 👟 🛍️ 📦 🚚 💳 💰 ✅ ❌ ⏰ 📍 📸 😢 😅 🤩 😎 🤗 👋 💬'.split(' ');
 const fmt=(s:number)=>`${Math.floor(s/60)}:${String(s%60).padStart(2,'0')}`;
 export function MobileWhatsappComposer({disabled,quoted,cancelQuote,send,openCatalog,openReplies,openTemplates}:Props){
  const [text,setText]=useState('');const [file,setFile]=useState<File|null>(null);const [busy,setBusy]=useState(false);const lock=useRef(false);
  const [recording,setRecording]=useState(false);const [seconds,setSeconds]=useState(0);const recorder=useRef<MediaRecorder|null>(null);const stream=useRef<MediaStream|null>(null);const discard=useRef(false);
- const [sheet,setSheet]=useState<'attach'|'emoji'|null>(null);
- const image=useRef<HTMLInputElement>(null),camera=useRef<HTMLInputElement>(null),document=useRef<HTMLInputElement>(null),audio=useRef<HTMLInputElement>(null),field=useRef<HTMLTextAreaElement>(null);
+ const [sheet,setSheet]=useState<'attach'|'emoji'|'camera'|null>(null);
+ const image=useRef<HTMLInputElement>(null),camera=useRef<HTMLInputElement>(null),videoCamera=useRef<HTMLInputElement>(null),document=useRef<HTMLInputElement>(null),audio=useRef<HTMLInputElement>(null),field=useRef<HTMLTextAreaElement>(null);
  useEffect(()=>()=>{discard.current=true;if(recorder.current?.state==='recording')recorder.current.stop();stream.current?.getTracks().forEach(t=>t.stop());},[]);
  useEffect(()=>{if(!recording)return;setSeconds(0);const t=setInterval(()=>setSeconds(s=>s+1),1000);return()=>clearInterval(t);},[recording]);
- const pick=(f?:File)=>{if(f)setFile(f);setSheet(null);};
+ const pick=(f?:File)=>{if(f){const error=mediaDraftError(f);if(error){toast.error(error);return;}setFile(f);}setSheet(null);};
  const submit=async(override?:File)=>{
    const current=override||file;
    if(lock.current||disabled||(!text.trim()&&!current)||!navigator.onLine)return;
    lock.current=true;setBusy(true);
    try{
      const draft=text.trim();let url:string|null=null;let kind:string|undefined;
-     if(current){kind=current.type.startsWith('image/')?'image':current.type.startsWith('audio/')?'audio':'document';
+     if(current){kind=mobileMediaKind(current);
        if(kind!=='image'&&current.size>getMaxSizeForType(current.type))throw new Error(`Arquivo muito grande. Limite ${getMaxSizeLabel(current.type)}.`);
        url=await uploadMediaToStorage(current);if(!url)throw new Error('Arquivo não enviado.');
      }
@@ -49,7 +51,7 @@ export function MobileWhatsappComposer({disabled,quoted,cancelQuote,send,openCat
  const cancelRecording=()=>{discard.current=true;recorder.current?.stop();};
  const hasContent=!!text.trim()||!!file;
  const attach:[typeof Camera,string,string,()=>void][]=[
-   [FileText,'Documento','var(--wa-violet)',()=>document.current?.click()],[Camera,'Câmera','var(--wa-camera)',()=>camera.current?.click()],[Image,'Galeria','var(--wa-gallery)',()=>image.current?.click()],
+   [FileText,'Documento','var(--wa-violet)',()=>document.current?.click()],[Camera,'Câmera','var(--wa-camera)',()=>setSheet('camera')],[Image,'Galeria','var(--wa-gallery)',()=>image.current?.click()],
    [Headphones,'Áudio','var(--wa-audio)',()=>audio.current?.click()],[ShoppingBag,'Catálogo','var(--wa-brand)',()=>{setSheet(null);openCatalog();}],[Zap,'Respostas rápidas','var(--wa-quick)',()=>{setSheet(null);openReplies();}],
    ...(openTemplates?[[LayoutTemplate,'Modelos API','var(--wa-template)',()=>{setSheet(null);openTemplates();}] as [typeof Camera,string,string,()=>void]]:[]),
  ];
@@ -74,8 +76,10 @@ export function MobileWhatsappComposer({disabled,quoted,cancelQuote,send,openCat
    {attach.map(([Icon,label,color,run])=><button key={label} role="menuitem" type="button" className="flex flex-col items-center gap-1 text-xs text-[var(--wa-icon)]" onClick={run}><span className="flex h-14 w-14 items-center justify-center rounded-full m-wa-attachment" style={{background:color}}><Icon className="h-6 w-6"/></span>{label}</button>)}
   </div>}
   {sheet==='emoji'&&<div aria-label="Emojis" className="mt-2 grid grid-cols-8 gap-1 rounded-2xl m-wa-surface p-2 shadow-lg">{EMOJIS.map(e=><button key={e} type="button" className="h-11 text-2xl" onClick={()=>{setText(t=>t+e);field.current?.focus();}}>{e}</button>)}</div>}
+  {sheet==='camera'&&<div className="mt-2 grid grid-cols-2 gap-2 rounded-2xl m-wa-surface p-3"><Button variant="ghost" className="min-h-14" onClick={()=>camera.current?.click()}><Camera className="h-6 w-6"/>Tirar foto</Button><Button variant="ghost" className="min-h-14" onClick={()=>videoCamera.current?.click()}><Video className="h-6 w-6"/>Gravar vídeo</Button></div>}
   <input ref={image} type="file" accept="image/*" hidden onChange={e=>{pick(e.target.files?.[0]);e.target.value='';}}/>
   <input ref={camera} type="file" accept="image/*" capture="environment" hidden onChange={e=>{pick(e.target.files?.[0]);e.target.value='';}}/>
+  <input ref={videoCamera} aria-label="Vídeo da câmera" type="file" accept="video/*" capture="environment" hidden onChange={e=>{pick(e.target.files?.[0]);e.target.value='';}}/>
   <input ref={audio} type="file" accept="audio/*" hidden onChange={e=>{pick(e.target.files?.[0]);e.target.value='';}}/>
   <input ref={document} type="file" hidden onChange={e=>{pick(e.target.files?.[0]);e.target.value='';}}/>
  </footer>;

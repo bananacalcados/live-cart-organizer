@@ -5,6 +5,17 @@ import type { AttemptPayload } from '@/lib/chat/mobileSendAttempt';
 vi.mock('@/components/MediaAttachmentPicker', () => ({ uploadMediaToStorage: vi.fn(async () => 'https://example.test/audio') }));
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 describe('prévia antes do envio', () => {
+  it('vídeo da câmera só envia após confirmar e permanece no tipo vídeo', async () => {
+    const send = vi.fn(async (_payload: AttemptPayload) => true);
+    URL.createObjectURL = vi.fn(() => 'blob:video'); URL.revokeObjectURL = vi.fn();
+    render(<MobileWhatsappComposer disabled={false} quoted={null} cancelQuote={() => {}} send={send} openCatalog={() => {}} openReplies={() => {}} />);
+    fireEvent.change(screen.getByLabelText('Vídeo da câmera'), { target: { files: [new File(['video'], 'camera.mp4', { type: 'video/mp4' })] } });
+    expect(screen.getByLabelText('Prévia do vídeo')).toBeTruthy(); expect(send).not.toHaveBeenCalled();
+    fireEvent.change(screen.getByLabelText('Mensagem'), { target: { value: 'Legenda opcional' } });
+    fireEvent.click(screen.getByLabelText('Enviar mensagem'));
+    await waitFor(() => expect(send).toHaveBeenCalledTimes(1));
+    expect(send.mock.calls[0]?.[0]).toMatchObject({ mediaType: 'video', text: 'Legenda opcional' });
+  });
   it('parar gravação não envia; só o toque posterior despacha', async () => {
     const send = vi.fn(async (_payload: AttemptPayload) => true);
     const track = { stop: vi.fn() };
