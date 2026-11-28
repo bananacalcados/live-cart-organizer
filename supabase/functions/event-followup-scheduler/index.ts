@@ -26,7 +26,17 @@ Deno.serve(withAccessLog("event-followup-scheduler", async (req) => {
   );
 
   try {
-    if (await replacesLegacyFollowups(supabase)) return json(await scheduleGlobalFollowups(supabase));
+    if (await replacesLegacyFollowups(supabase)) {
+      const t0=Date.now();
+      try {
+        const out=await scheduleGlobalFollowups(supabase);
+        await supabase.rpc('queue_heartbeat',{p_worker:'live_followup_scheduler',p_ok:true,p_error:null,p_ms:Date.now()-t0});
+        return json(out);
+      } catch(e) {
+        await supabase.rpc('queue_heartbeat',{p_worker:'live_followup_scheduler',p_ok:false,p_error:e instanceof Error?e.message:'internal',p_ms:Date.now()-t0});
+        throw e;
+      }
+    }
     // Active configs (join events to skip archived/past events if needed)
     const { data: configs, error: cfgErr } = await supabase
       .from("event_followup_configs")

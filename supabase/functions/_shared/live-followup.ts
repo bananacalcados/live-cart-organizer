@@ -3,6 +3,7 @@ import { internalCallHeaders } from './requireAuth.ts';
 import { instagramFollowupMode } from './instagram-window.ts';
 import { followupFAllowed } from './register-dm-rules.ts';
 import { cancelScope } from './live-followup-cancel-scope.ts';
+import { D_STEP_SKIP_REASON, runInstanceLoops } from './live-followup-v2.ts';
 type Client = any;
 const MAX_SCHEDULE_BASE_AGE_MIN = 60;
 export async function followupConfig(sb: Client): Promise<FollowupConfig> {
@@ -123,32 +124,37 @@ export async function processGlobalFollowups(sb: Client) {
   const {data:jobs,error} = await sb.rpc('live_followup_claim',{p_limit:20});
   if(error) throw error;
   let sent=0;
-  for (const job of jobs || []) {
+  for (const job of jobs || []) { if (await processFollowupJob(sb,cfg,job,'v1')) sent++; }
+  return {processed:jobs?.length || 0,sent};
+}
+
+/** One claimed job. v1 keeps the old D rule; v2 applies the per-step D rule (skips only that step). */
+export async function processFollowupJob(sb: Client, cfg: FollowupConfig, job: any, mode: 'v1'|'v2'): Promise<boolean> {
     // Failed/uncertain sends are never reclaimed or retried automatically.
     let sendStarted=false;
     try {
       let context = await getContext();
       let reason = check(context);
-      if (reason) { await stop(reason); continue; }
-      if (!(await humanGate())) continue;
+      if (reason) { await stop(reason); return false; }
+      if (!(await humanGate())) return false;
       if(job.type==='E') {
         const next=crossellWindow(new Date());
         if(next.getTime()>Date.now()+1000) {
-          await sb.from('live_followup_jobs').update({status:'pending',claimed_at:null,scheduled_at:next.toISOString()}).eq('id',job.id).eq('status','processing'); continue;
+          await sb.from('live_followup_jobs').update({status:'pending',claimed_at:null,scheduled_at:next.toISOString()}).eq('id',job.id).eq('status','processing'); return false;
         }
       }
-      if(job.type==='F' && job.step>0 && !context.initial_sent_at){await stop('initial_not_sent');continue;}
+      if(job.type==='F' && job.step>0 && !context.initial_sent_at){await stop('initial_not_sent');return false;}
       const step=cfg.types[job.type as FollowupType]?.steps[job.step];
-      if(!step || job.variant==null) {await stop('config_changed');continue;}
+      if(!step || job.variant==null) {await stop('config_changed');return false;}
       const slug=context.event?.self_service_slug;
       const cart=slug && job.order_id ? `https://checkout.bananacalcados.com.br/pedido/${slug}/carrinho/${job.order_id.replace(/-/g,'')}` : context.order?.cart_link;
       const registration=slug ? `https://checkout.bananacalcados.com.br/pedido/${slug}` : '';
-      if(job.type==='A' ? !registration : !cart && !['D'].includes(job.type)) { await stop('missing_link');continue; }
+      if(job.type==='A' ? !registration : !cart && !['D'].includes(job.type)) { await stop('missing_link');return false; }
       const initialF=job.type==='F' && job.step===0;
       const buttonTitle=cfg.types.F.button_title || 'Quero meu link 🛍️';
       let text=renderFollowup(step.variants[job.variant],context.registration?.full_name || context.access?.form_draft?.full_name || context.customer?.full_name || '',registration,initialF ? `Toque em “${buttonTitle}” para receber seu link.` : cart || '');
       if (text===context.instance?.last_message) text=text.replace(/😊/g,'🙂').replace(/!/,'.');
-      if (!text.trim()) {await stop('empty_text');continue;}
+      if (!text.trim()) {await stop('empty_text');return false;}
       const headers={...(await internalCallHeaders()),'Content-Type':'application/json','x-force-instance':'true'};
       const url=Deno.env.get('SUPABASE_URL');
       async function call(fn: string, body: unknown) {
@@ -159,21 +165,21 @@ export async function processGlobalFollowups(sb: Client) {
       }
       if(context.number?.provider==='uazapi') {
         const valid=await call('uazapi-check-number',{phone:job.phone,whatsapp_number_id:job.whatsapp_number_id});
-        if(valid.exists!==true) { await stop('invalid_whatsapp');continue; }
+        if(valid.exists!==true) { await stop('invalid_whatsapp');return false; }
         const seconds=cfg.limits.typing_min+Math.floor(Math.random()*(cfg.limits.typing_max-cfg.limits.typing_min+1));
         await call('uazapi-presence',{phone:job.phone,whatsapp_number_id:job.whatsapp_number_id,presence:'composing',delay:seconds*1000}).catch(()=>null);
         await new Promise(r=>setTimeout(r,seconds*1000));
       }
       // Revalidate the global switch, payment and actual incoming/manual messages just before the external send.
       context=await getContext();reason=check(context);
-      if(reason) {await stop(reason);continue;}
-      if (!(await humanGate())) continue;
+      if(reason) {await stop(reason);return false;}
+      if (!(await humanGate())) return false;
       const stored=await sb.from('live_followup_jobs').update({message:text}).eq('id',job.id).eq('status','processing').select('id').maybeSingle();
       if(stored.error || !stored.data) throw new Error('claim_lost');
       if (job.type==='B' || job.type==='C') {
         const reserve=await sb.rpc('live_followup_cart_reserve',{p_job_id:job.id});
         if(reserve.error)throw reserve.error;
-        if(reserve.data!==true){await stop('cart_already_contacted');continue;}
+        if(reserve.data!==true){await stop('cart_already_contacted');return false;}
       }
       sendStarted=true;
       const provider=context.number?.provider;
@@ -194,10 +200,10 @@ export async function processGlobalFollowups(sb: Client) {
       const finish=await sb.from('live_followup_jobs').update({status:'sent',sent_at:new Date().toISOString(),message_id:mid,...(initialF?{reason:'aguardando_toque',button_expires_at:new Date(Date.now()+24*3600000).toISOString()}:{})}).eq('id',job.id).eq('status','processing');
       if(finish.error) throw new Error('sent_persistence_uncertain');
       await sb.from('live_followup_instances').update({consecutive_errors:0,last_message:text}).eq('whatsapp_number_id',job.whatsapp_number_id);
-      sent++;
+      return true;
     } catch(e) {
       const reason=String(e instanceof Error ? e.message : 'internal_failure').slice(0,200);
-      await sb.rpc('live_followup_failure',{p_job_id:job.id,p_reason:reason,p_uncertain:sendStarted});
+      await sb.rpc(mode==='v2'?'live_followup_failure_v2':'live_followup_failure',{p_job_id:job.id,p_reason:reason,p_uncertain:sendStarted});
     }
     // Manual staff messages postpone (never cancel) the step; the RPC shifts later steps and cancels after 3h.
     async function humanGate() { const r=await sb.rpc('live_followup_postpone',{p_job_id:job.id});if(r.error) throw r.error;return (r.data as any)?.action==='send'; }
@@ -206,8 +212,10 @@ export async function processGlobalFollowups(sb: Client) {
       if(!c) return 'context_missing';
       const o=c.order;
       if (c.linked_closed) return 'order_closed';
-      const basic=stopReason(job.type,{global:c.global_enabled,event:c.event?.live_followup_enabled===true,type:c.type_enabled,paid:!!(o?.is_paid || o?.paid_externally),cancelled:!!(job.order_id && (!o || ['cancelled','paid','completed','shipped','refunded'].includes(o.stage) || o.merged_into_order_id || !(o.products || []).length)),replied:c.customer_replied,registered:!!(c.access?.registered_at || c.access?.whatsapp_confirmed_at),manualRecent:false,optedOut:c.opted_out,lateMinutes:(Date.now()-Date.parse(job.scheduled_at))/60000});
+      const basic=stopReason(job.type,{global:c.global_enabled,event:c.event?.live_followup_enabled===true,type:c.type_enabled,paid:!!(o?.is_paid || o?.paid_externally),cancelled:!!(job.order_id && (!o || ['cancelled','paid','completed','shipped','refunded'].includes(o.stage) || o.merged_into_order_id || !(o.products || []).length)),replied:(mode==='v2' && job.type==='D') ? false : c.customer_replied,registered:!!(c.access?.registered_at || c.access?.whatsapp_confirmed_at),manualRecent:false,optedOut:c.opted_out,lateMinutes:(Date.now()-Date.parse(job.scheduled_at))/60000});
       if(basic)return basic;
+      // Regra do D aprovada em 28/11/2026 (só v2): resposta desde o envio anterior pula só esta etapa.
+      if(mode==='v2' && job.type==='D' && c.replied_since_previous)return D_STEP_SKIP_REASON;
       if(job.channel==='whatsapp' && c.event?.whatsapp_number_id!==job.whatsapp_number_id)return 'instance_changed';
       if(!job.whatsapp_number_id)return 'live_without_number';
       if(!c.number?.is_active || c.number?.is_online===false)return 'instance_disconnected';
@@ -222,7 +230,7 @@ export async function processGlobalFollowups(sb: Client) {
       return null;
     }
     async function stop(reason: string) {
-      if(reason==='late_step') {
+      if(reason==='late_step' || reason===D_STEP_SKIP_REASON) {
         await sb.from('live_followup_jobs').update({status:'skipped',reason}).eq('id',job.id).eq('status','processing');
         return;
       }
@@ -232,6 +240,24 @@ export async function processGlobalFollowups(sb: Client) {
       scope.eq(cancellation.column,cancellation.value);
       await scope;
     }
-  }
-  return {processed:jobs?.length || 0,sent};
+    return false;
+
+}
+/**
+ * Enviador v2 (28/11/2026): cada instância tem seu próprio laço e reserva UMA mensagem por vez
+ * (live_followup_claim_one). Instância lenta não atrasa a outra; ritmo anti-ban continua no banco.
+ */
+export async function processGlobalFollowupsV2(sb: Client, budgetMs = 55_000) {
+  const cfg = await followupConfig(sb);
+  const {data,error} = await sb.rpc('live_followup_due_instances');
+  if(error) throw error;
+  const ids=((data || []) as any[]).map(r=>typeof r==='string'?r:r.live_followup_due_instances).filter(Boolean);
+  return await runInstanceLoops(ids, {
+    claim: async (id: string) => { const r=await sb.rpc('live_followup_claim_one',{p_number_id:id}); if(r.error) throw r.error; return (r.data || [])[0] || null; },
+    process: (job: any) => processFollowupJob(sb,cfg,job,'v2'),
+    nextSendAt: async (id: string) => { const r=await sb.from('live_followup_instances').select('next_send_at,paused').eq('whatsapp_number_id',id).maybeSingle(); return r.data?.paused ? null : (r.data?.next_send_at ? Date.parse(r.data.next_send_at) : null); },
+    hasDue: async (id: string) => { const r=await sb.from('live_followup_jobs').select('id').eq('whatsapp_number_id',id).eq('status','pending').lte('scheduled_at',new Date().toISOString()).limit(1); return !!r.data?.length; },
+    now: () => Date.now(),
+    sleep: (ms: number) => new Promise(r=>setTimeout(r,ms)),
+  }, budgetMs);
 }

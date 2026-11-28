@@ -2,7 +2,7 @@ import { withAccessLog } from "../_shared/withAccessLog.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { issueMagicLink } from "../_shared/member-magic-link.ts";
 import { isAuthorizedCron } from '../_shared/cron-guard.ts';
-import { replacesLegacyFollowups, processGlobalFollowups } from '../_shared/live-followup.ts';
+import { replacesLegacyFollowups, processGlobalFollowups, processGlobalFollowupsV2 } from '../_shared/live-followup.ts';
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -23,8 +23,21 @@ Deno.serve(withAccessLog("event-followup-dispatcher", async (req) => {
   const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
   const supabase = createClient(SUPABASE_URL, SERVICE_KEY);
   if (await replacesLegacyFollowups(supabase)) {
-    try { return json(await processGlobalFollowups(supabase)); }
-    catch(e) { console.error('[global-followup]', e instanceof Error?e.message:'internal');return json({error:'Follow-up indisponível'},500); }
+    const t0=Date.now();
+    try {
+      // Interruptor live_followup_settings.sender: 'v1' (lote antigo) | 'v2' (uma por instância). Voltar a 'v1' desfaz na hora.
+      const {data:sw}=await supabase.from('live_followup_settings').select('sender').eq('id',true).maybeSingle();
+      const v2=sw?.sender==='v2';
+      const out=v2 ? await processGlobalFollowupsV2(supabase) : await processGlobalFollowups(supabase);
+      await supabase.rpc('queue_heartbeat',{p_worker:'live_followup_sender',p_ok:true,p_error:null,p_ms:Date.now()-t0});
+      return json({sender:v2?'v2':'v1',...out});
+    }
+    catch(e) {
+      const msg=e instanceof Error?e.message:'internal';
+      console.error('[global-followup]', msg);
+      await supabase.rpc('queue_heartbeat',{p_worker:'live_followup_sender',p_ok:false,p_error:msg,p_ms:Date.now()-t0});
+      return json({error:'Follow-up indisponível'},500);
+    }
   }
 
   const nowIso = new Date().toISOString();

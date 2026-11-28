@@ -13775,16 +13775,19 @@ export type Database = {
       live_followup_settings: {
         Row: {
           id: boolean
+          sender: string
           updated_at: string
           value: Json
         }
         Insert: {
           id?: boolean
+          sender?: string
           updated_at?: string
           value: Json
         }
         Update: {
           id?: boolean
+          sender?: string
           updated_at?: string
           value?: Json
         }
@@ -24247,6 +24250,96 @@ export type Database = {
         }
         Relationships: []
       }
+      queue_alert_incidents: {
+        Row: {
+          closed_at: string | null
+          closed_notified: boolean
+          id: string
+          last_notified_at: string | null
+          last_send_error: string | null
+          notify_count: number
+          opened_at: string
+          summary: Json
+        }
+        Insert: {
+          closed_at?: string | null
+          closed_notified?: boolean
+          id?: string
+          last_notified_at?: string | null
+          last_send_error?: string | null
+          notify_count?: number
+          opened_at?: string
+          summary?: Json
+        }
+        Update: {
+          closed_at?: string | null
+          closed_notified?: boolean
+          id?: string
+          last_notified_at?: string | null
+          last_send_error?: string | null
+          notify_count?: number
+          opened_at?: string
+          summary?: Json
+        }
+        Relationships: []
+      }
+      queue_alert_settings: {
+        Row: {
+          alert_phone: string | null
+          heartbeat_minutes: number
+          id: boolean
+          overdue_minutes: number
+          renotify_minutes: number
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          alert_phone?: string | null
+          heartbeat_minutes?: number
+          id?: boolean
+          overdue_minutes?: number
+          renotify_minutes?: number
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          alert_phone?: string | null
+          heartbeat_minutes?: number
+          id?: boolean
+          overdue_minutes?: number
+          renotify_minutes?: number
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: []
+      }
+      queue_heartbeats: {
+        Row: {
+          last_duration_ms: number | null
+          last_error: string | null
+          last_ok_at: string | null
+          last_run_at: string | null
+          updated_at: string
+          worker: string
+        }
+        Insert: {
+          last_duration_ms?: number | null
+          last_error?: string | null
+          last_ok_at?: string | null
+          last_run_at?: string | null
+          updated_at?: string
+          worker: string
+        }
+        Update: {
+          last_duration_ms?: number | null
+          last_error?: string | null
+          last_ok_at?: string | null
+          last_run_at?: string | null
+          updated_at?: string
+          worker?: string
+        }
+        Relationships: []
+      }
       quick_replies: {
         Row: {
           category: string | null
@@ -34363,12 +34456,56 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      live_followup_claim_one: {
+        Args: { p_number_id: string }
+        Returns: {
+          access_id: string | null
+          base_at: string
+          button_clicked_at: string | null
+          button_expires_at: string | null
+          channel: string
+          claimed_at: string | null
+          created_at: string
+          customer_key: string
+          event_id: string
+          id: string
+          instagram: string | null
+          message: string | null
+          message_id: string | null
+          order_id: string | null
+          original_scheduled_at: string | null
+          phone: string | null
+          postponed_count: number
+          postponed_minutes: number
+          postponed_reason: string | null
+          reason: string | null
+          scheduled_at: string
+          sent_at: string | null
+          sequence_key: string
+          status: string
+          step: number
+          type: string
+          variant: number | null
+          whatsapp_number_id: string | null
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "live_followup_jobs"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
       live_followup_contact_aliases: {
         Args: { p_ig_id?: string; p_number: string; p_phone: string }
         Returns: string[]
       }
+      live_followup_due_instances: { Args: never; Returns: string[] }
       live_followup_enabled: { Args: { p_event_id?: string }; Returns: boolean }
       live_followup_failure: {
+        Args: { p_job_id: string; p_reason: string; p_uncertain?: boolean }
+        Returns: undefined
+      }
+      live_followup_failure_v2: {
         Args: { p_job_id: string; p_reason: string; p_uncertain?: boolean }
         Returns: undefined
       }
@@ -35018,6 +35155,16 @@ export type Database = {
           p_by: string
           p_confirm: boolean
           p_item_id: string
+        }
+        Returns: undefined
+      }
+      queue_health: { Args: { p_overdue_minutes?: number }; Returns: Json }
+      queue_heartbeat: {
+        Args: {
+          p_error?: string
+          p_ms?: number
+          p_ok: boolean
+          p_worker: string
         }
         Returns: undefined
       }

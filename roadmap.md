@@ -168,3 +168,10 @@
 - [x] Reexecutar suítes e cinco telas com gravações bloqueadas; Venda abre com caixa fechado, sem abrir caixa real
 - [ ] Obter evidência separada de tipos e build de produção — validação automática só expõe build OK; execução manual vedada pelo ambiente
 - [x] Dar veredito não, diferenças remanescentes e roteiro posterior; manter fontes Shopify e dados reais intactos
+
+## Follow-ups (28/11/2026)
+- [x] Fase 1 — saúde das filas, alarme e ponto do vigia externo.
+- [x] Fase 2 — enviador v2 por instância + regra nova do D (interruptor em v2).
+- [ ] Matthews: preencher o número do alarme e cadastrar o segredo do vigia (QUEUE_WATCH_SECRET).
+- [ ] Matthews decide a validade por tipo (docs/followups/AUDITORIA-2026-11-28.md §8).
+- [ ] Futuro aprovado: tela "Fila de Disparos" com "Enviar agora" (equipe toda); aumentar teto diário da IA.
