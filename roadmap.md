@@ -170,6 +170,10 @@
 - [x] Dar veredito não, diferenças remanescentes e roteiro posterior; manter fontes Shopify e dados reais intactos
 
 ## Follow-ups (28/11/2026)
+- [ ] Pré-requisito das três entregas: concluir implantação da prioridade D; bloqueado por live em andamento (75 comentários nos últimos 30 min, último às 15:17:59 UTC em 28/11).
+- [ ] Entrega 1 (commit próprio): validade v2 A/B/C >30 min, D >15 min, cross-sell >3 h; motivo distinto e implantação só sem live. Aguarda o pré-requisito.
+- [ ] Entrega 2 (commit próprio): auditar causa/data/impacto de 30 dias dos lembretes PDV, corrigir reserva/incerteza/motivos, propor validade e incluir saúde; não disparar backlog nem mensagens de teste. Aguarda Entrega 1.
+- [ ] Entrega 3 (commit próprio): Fila de Disparos somente leitura, consulta única paginada de 50, filtros/traduções/métricas, realtime sem polling, acesso Eventos/PDV e medição <300 ms; sem publicar. Aguarda Entrega 2.
 - [x] Prioridade v2 preparada: D 10 min primeiro, D 25/45 só com folga; v1 intacto e motivo próprio de congestionamento.
 - [x] Carga de 300 jobs/1h em 1 e 2 números independentes: 75/75 D iniciais, 5,10/1,06 min de atraso; limite e folga no SQL real, sem mensagens.
 - [ ] Implantar prioridade v2: bloqueada por comentários recentes (checagem de live); não aplicar nem agendar durante live.
@@ -177,5 +181,5 @@
 - [x] Fase 1 — saúde das filas, alarme e ponto do vigia externo.
 - [x] Fase 2 — enviador v2 por instância + regra nova do D (interruptor em v2).
 - [ ] Matthews: preencher o número do alarme e cadastrar o segredo do vigia (QUEUE_WATCH_SECRET).
-- [ ] Matthews decide a validade por tipo (docs/followups/AUDITORIA-2026-11-28.md §8).
+- [x] Matthews aprovou a validade A/B/C 30 min, D 15 min e cross-sell 3 h; aplicar na Entrega 1 após a prioridade D e sem live em andamento.
 - [ ] Futuro aprovado: tela "Fila de Disparos" com "Enviar agora" (equipe toda); aumentar teto diário da IA.
